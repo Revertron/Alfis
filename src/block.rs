@@ -4,14 +4,14 @@ extern crate num_bigint;
 extern crate num_traits;
 
 use super::*;
-use rand::{thread_rng, Rng};
 use std::fmt::Debug;
-use chrono::{Utc, DateTime};
+use chrono::Utc;
 use serde::{Serialize, Deserialize};
 use num_bigint::BigUint;
 use num_traits::One;
-use crypto::sha2::Sha512;
+use crypto::sha2::Sha256;
 use crypto::digest::Digest;
+use crate::keys::Key;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Block {
@@ -24,13 +24,13 @@ pub struct Block {
     pub nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction: Option<Transaction>,
-    pub prev_block_hash: Hash,
-    #[serde(skip_serializing_if = "Hash::is_default")]
-    pub hash: Hash,
+    pub prev_block_hash: Key,
+    #[serde(default, skip_serializing_if = "Key::is_empty")]
+    pub hash: Key,
 }
 
 impl Block {
-    pub fn new(index: u64, timestamp: i64, chain_id: u32, version: u32, prev_block_hash: Hash, transaction: Option<Transaction>) -> Self {
+    pub fn new(index: u64, timestamp: i64, chain_id: u32, version: u32, prev_block_hash: Key, transaction: Option<Transaction>) -> Self {
         Block {
             index,
             timestamp,
@@ -41,7 +41,7 @@ impl Block {
             nonce: 0,
             transaction,
             prev_block_hash,
-            hash: Hash::default(),
+            hash: Key::default(),
         }
     }
 
@@ -60,16 +60,16 @@ impl Block {
         }
     }
 
-    pub fn hash(data: &[u8]) -> Hash {
-        let mut buf: [u8; 64] = [0; 64];
-        let mut digest = Sha512::new();
+    pub fn hash(data: &[u8]) -> Key {
+        let mut buf: [u8; 32] = [0; 32];
+        let mut digest = Sha256::new();
         digest.input(data);
         digest.result(&mut buf);
-        Hash::from_vec(&buf.to_vec())
+        Key::new(buf.to_vec())
     }
 
     pub fn is_genesis(&self) -> bool {
-        self.index == 0 && self.transaction.is_none() && self.prev_block_hash == Hash::default()
+        self.index == 0 && self.transaction.is_none() && self.prev_block_hash == Key::default()
     }
 }
 

@@ -1,5 +1,5 @@
 [package]
-name = "Wyrd"
+name = "wyrd_ns"
 version = "0.1.0"
 authors = ["Revertron <rev@revertron.com>"]
 edition = "2018"

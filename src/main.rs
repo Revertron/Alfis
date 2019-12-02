@@ -1,5 +1,4 @@
-use Wyrd::{Blockchain, Block, Transaction, Signature, Hash};
-use Wyrd::transaction::Action;
+use wyrd_ns::{Blockchain, Block, Action, Transaction, Signature, Key};
 
 fn main() {
     println!("Wyrd DNS 0.1.0");
@@ -17,7 +16,7 @@ fn test_blockchain() -> () {
 
     // Signing it with private key from Signature
     let sign_hash = signature.sign(&transaction.get_bytes());
-    transaction.set_signature(Hash::new(sign_hash));
+    transaction.set_signature(Key::from_bytes(&sign_hash));
 
     // Creating a block with that signed transaction
     let mut block = blockchain.new_block(transaction);
@@ -30,6 +29,9 @@ fn test_blockchain() -> () {
     println!("Serialized block:\n{}", s);
     blockchain.add_block(block);
     println!("Second block added");
+
+    let block2: Block = serde_json::from_str(&s).unwrap();
+    println!("DeSerialized block:\n{:?}", block2);
 
     // Let's check if the blockchain is valid
     if blockchain.check() {

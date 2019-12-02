@@ -1,4 +1,3 @@
-use super::*;
 use crate::transaction::Action::{MoveDomain, RenewDomain, ChangeDomain, NewDomain};
 use crate::keys::*;
 extern crate serde;
@@ -7,15 +6,14 @@ extern crate serde_json;
 use serde::{Serialize, Deserialize, Serializer};
 use serde::ser::SerializeStruct;
 use std::fmt;
-use crypto::util::fixed_time_eq;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type")]
 pub enum Action {
-    NewDomain { name: String, owner: KeyPublic, #[serde(skip_serializing_if = "Vec::is_empty")] records: Vec<String>, #[serde(skip_serializing_if = "Vec::is_empty")] tags: Vec<String>, days: u16 },
+    NewDomain { name: String, owner: Key, #[serde(default, skip_serializing_if = "Vec::is_empty")] records: Vec<String>, #[serde(default, skip_serializing_if = "Vec::is_empty")] tags: Vec<String>, days: u16 },
     ChangeDomain { name: String, records: Vec<String>, tags: Vec<String> },
     RenewDomain { name: String, days: u16 },
-    MoveDomain { name: String, new_owner: KeyPublic },
+    MoveDomain { name: String, new_owner: Key },
 }
 
 impl Action {
@@ -32,7 +30,7 @@ impl Action {
     }
 
     pub fn move_domain(name: String, new_owner: [u8; 32]) -> Self {
-        MoveDomain {name, new_owner: KeyPublic::new(&new_owner)}
+        MoveDomain {name, new_owner: Key::from_bytes(&new_owner)}
     }
 
     pub fn get_bytes(&self) -> Vec<u8> {
@@ -84,16 +82,16 @@ impl fmt::Debug for Action {
 #[derive(Clone, Deserialize, PartialEq)]
 pub struct Transaction {
     pub action: Action,
-    pub pub_key: KeyPublic,
-    pub signature: Hash,
+    pub pub_key: Key,
+    pub signature: Key,
 }
 
 impl Transaction {
-    pub fn new(action: Action, pub_key: KeyPublic) -> Self {
-        Transaction {action, pub_key, signature: Hash::new([0u8; 64])}
+    pub fn new(action: Action, pub_key: Key) -> Self {
+        Transaction {action, pub_key, signature: Key::zero64()}
     }
 
-    pub fn set_signature(&mut self, hash: Hash) {
+    pub fn set_signature(&mut self, hash: Key) {
         self.signature = hash;
     }
 
@@ -106,6 +104,7 @@ impl Transaction {
 impl fmt::Debug for Transaction {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("Transaction")
+            .field("action", &self.action)
             .field("pub", &&self.pub_key)
             .field("sign", &&self.signature)
             .finish()

@@ -1,5 +1,5 @@
-use crate::{Block, Transaction, Hash};
-use chrono::{Utc, DateTime};
+use crate::{Block, Transaction, Key};
+use chrono::Utc;
 
 pub struct Blockchain {
     pub chain_id: u32,
@@ -23,7 +23,7 @@ impl Blockchain {
     }
 
     pub fn genesis(chain_id: u32, version: u32) -> Block {
-        Block::new(0, Utc::now().timestamp(), chain_id, version, Hash::default(), None)
+        Block::new(0, Utc::now().timestamp(), chain_id, version, Key::zero32(), None)
     }
 
     pub fn add_block(&mut self, block: Block) {
@@ -61,7 +61,7 @@ impl Blockchain {
     pub fn check_block_hash(block: &Block) -> bool {
         // We need to clear Hash value to rehash it without it for check :(
         let mut copy: Block = block.clone();
-        copy.hash = Hash::default();
+        copy.hash = Key::default();
         let data = serde_json::to_string(&copy).unwrap();
         Block::hash(data.as_bytes()) == block.hash
     }

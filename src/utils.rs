@@ -1,3 +1,4 @@
+use std::num;
 
 /// Convert bytes array to HEX format
 pub fn to_hex(buf: &[u8]) -> String {
@@ -6,6 +7,19 @@ pub fn to_hex(buf: &[u8]) -> String {
         result.push_str(&format!("{:01$X}", x, 2));
     }
     result
+}
+
+pub fn from_hex(string: &str) -> Result<Vec<u8>, num::ParseIntError> {
+    split_n(&string.trim()[..], 2)
+        .iter()
+        .map(|b| u8::from_str_radix(b, 16))
+        .collect()
+}
+
+fn split_n(s: &str, n: usize) -> Vec<&str> {
+    (0..=(s.len() - n + 1) / 2)
+        .map(|i| &s[2 * i..2 * i + n])
+        .collect()
 }
 
 /// There is no default PartialEq implementation for arrays > 32 in size
