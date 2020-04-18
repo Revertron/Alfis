@@ -1,4 +1,3 @@
-use crate::transaction::Action::{MoveDomain, RenewDomain, ChangeDomain, NewDomain};
 use crate::keys::*;
 extern crate serde;
 extern crate serde_json;
@@ -10,27 +9,43 @@ use std::fmt;
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type")]
 pub enum Action {
+    ClaimName { hash: String, owner: Key },
     NewDomain { name: String, owner: Key, #[serde(default, skip_serializing_if = "Vec::is_empty")] records: Vec<String>, #[serde(default, skip_serializing_if = "Vec::is_empty")] tags: Vec<String>, days: u16 },
     ChangeDomain { name: String, records: Vec<String>, tags: Vec<String> },
     RenewDomain { name: String, days: u16 },
     MoveDomain { name: String, new_owner: Key },
+    NewZone { name: String, difficulty: u16},
+    ChangeZone { name: String, difficulty: u16},
 }
 
 impl Action {
-    pub fn new_domain(name: String, signature: &Signature, records: Vec<String>, tags: Vec<String>, days: u16) -> Self {
-        NewDomain {name, owner: signature.get_public(), records, tags, days}
+    pub fn claim_name(name: String, salt: String, signature: &Keystore) -> Self {
+        let hash = format!("{} {}", salt, name);
+        Action::ClaimName {hash, owner: signature.get_public()}
+    }
+
+    pub fn new_domain(name: String, signature: &Keystore, records: Vec<String>, tags: Vec<String>, days: u16) -> Self {
+        Action::NewDomain {name, owner: signature.get_public(), records, tags, days}
     }
 
     pub fn change_domain(name: String, records: Vec<String>, tags: Vec<String>) -> Self {
-        ChangeDomain {name, records, tags}
+        Action::ChangeDomain {name, records, tags}
     }
 
     pub fn renew_domain(name: String, days: u16) -> Self {
-        RenewDomain {name, days}
+        Action::RenewDomain {name, days}
     }
 
     pub fn move_domain(name: String, new_owner: [u8; 32]) -> Self {
-        MoveDomain {name, new_owner: Key::from_bytes(&new_owner)}
+        Action::MoveDomain {name, new_owner: Key::from_bytes(&new_owner)}
+    }
+
+    pub fn new_zone(name: String, difficulty: u16) -> Self {
+        Action::NewZone {name, difficulty}
+    }
+
+    pub fn change_zone(name: String, difficulty: u16) -> Self {
+        Action::ChangeZone {name, difficulty}
     }
 
     pub fn get_bytes(&self) -> Vec<u8> {
@@ -47,6 +62,12 @@ impl Action {
 impl fmt::Debug for Action {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Action::ClaimName { hash, owner } => {
+                fmt.debug_struct("ClaimName")
+                    .field("hash", hash)
+                    .field("owner", owner)
+                    .finish()
+            },
             Action::NewDomain { name, owner, records, tags, days } => {
                 fmt.debug_struct("NewDomain")
                     .field("name", name)
@@ -75,6 +96,18 @@ impl fmt::Debug for Action {
                     .field("new_owner", new_owner)
                     .finish()
             },
+            Action::NewZone { name, difficulty } => {
+                fmt.debug_struct("NewZone")
+                    .field("name", name)
+                    .field("difficulty", difficulty)
+                    .finish()
+            },
+            Action::ChangeZone { name, difficulty } => {
+                fmt.debug_struct("ChangeZone")
+                    .field("name", name)
+                    .field("difficulty", difficulty)
+                    .finish()
+            }
         }
     }
 }

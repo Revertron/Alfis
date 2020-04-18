@@ -10,9 +10,6 @@ pub struct Blockchain {
 impl Blockchain {
     pub fn new(chain_id: u32, version: u32) -> Self {
         let mut blockchain = Blockchain{chain_id, version, blocks: Vec::new()};
-        let mut genesis = Self::genesis(chain_id, version);
-        genesis.mine();
-        blockchain.add_block(genesis);
         blockchain
     }
 
@@ -24,6 +21,12 @@ impl Blockchain {
 
     pub fn genesis(chain_id: u32, version: u32) -> Block {
         Block::new(0, Utc::now().timestamp(), chain_id, version, Key::zero32(), None)
+    }
+
+    pub fn make_genesis(&mut self) {
+        let mut genesis = Self::genesis(self.chain_id, self.version);
+        genesis.mine();
+        self.add_block(genesis);
     }
 
     pub fn add_block(&mut self, block: Block) {

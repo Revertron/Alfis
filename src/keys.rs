@@ -12,23 +12,25 @@ use serde::de::{Error as DeError, Visitor};
 use serde::export::Formatter;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Signature {
+pub struct Keystore {
     private_key: Key,
     public_key: Key,
+    #[serde(skip)]
+    seed: Vec<u8>
 }
 
-impl Signature {
+impl Keystore {
     pub fn new() -> Self {
         let mut buf = [0u8; 64];
         let mut rng = thread_rng();
         rng.fill(&mut buf);
         let (private, public) = keypair(&buf);
-        Signature {private_key: Key::from_bytes(&private), public_key: Key::from_bytes(&public)}
+        Keystore {private_key: Key::from_bytes(&private), public_key: Key::from_bytes(&public), seed: Vec::from(&buf[..])}
     }
 
     pub fn from_bytes(seed: &[u8]) -> Self {
         let (private, public) = keypair(&seed);
-        Signature {private_key: Key::from_bytes(&private), public_key: Key::from_bytes(&public)}
+        Keystore {private_key: Key::from_bytes(&private), public_key: Key::from_bytes(&public), seed: Vec::from(seed)}
     }
 
     pub fn from_file(filename: &str, _password: &str) -> Option<Self> {

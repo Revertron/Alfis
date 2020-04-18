@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Wyrd</title>
+    {styles}
+    <script defer src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
+    {scripts}
+</head>
+<body>
+<div class="container">
+    <br/>
+    <div class="columns">
+        <div class="column is-one-fifth">
+            <div class="menu">
+                <ul class="menu-list">
+                    <li><a class="is-active" onclick="openTab(this, 'main')">Main</a></li>
+                </ul>
+                <p class="menu-label">Key management</p>
+                <ul class="menu-list">
+                    <li><a onclick="openTab(this, 'key_load')">Load key</a></li>
+                    <li><a onclick="openTab(this, 'key_create')">Create key</a></li>
+                    <li><a onclick="openTab(this, 'key_passwd')">Change password</a></li>
+                </ul>
+                <p class="menu-label">Domain management</p>
+                <ul class="menu-list">
+                    <li><a onclick="openTab(this, 'dom_new')">Create domain</a></li>
+                    <li><a onclick="openTab(this, 'dom_edit')">Manage domain</a></li>
+                    <li><a onclick="openTab(this, 'dom_renew')">Renew domain</a></li>
+                    <li><a onclick="openTab(this, 'dom_transfer')">Transfer domain</a></li>
+                </ul>
+            </div>
+        </div><!--column-->
+
+        <div class="column auto">
+            <div class="content center" id="main">This screen in now yet implemented</div>
+
+            <div class="content is-hidden" id="key_load">
+                <form action="#">
+                    <div class="field">
+                        <label class="label">Key file name</label>
+                        <div class="control">
+                            <input class="input" type="text" placeholder="default.key" id="load_key_name">
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">Key password</label>
+                        <div class="control">
+                            <input class="input" type="password" placeholder="123456" id="load_key_password">
+                        </div>
+                    </div>
+
+                    <div class="field is-grouped">
+                        <div class="control">
+                            <button class="button is-link" onclick="loadKey();">Load</button>
+                        </div>
+                        <div class="control">
+                            <button class="button is-link is-light">Cancel</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+
+            <div class="content is-hidden" id="key_create">
+                <form action="#">
+                    <div class="field">
+                        <label class="label">Key file name</label>
+                        <div class="control">
+                            <input class="input" type="text" placeholder="default.key" id="create_key_name">
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">Key password</label>
+                        <div class="control">
+                            <input class="input" type="password" placeholder="123456" id="create_key_password">
+                        </div>
+                    </div>
+
+                    <div class="field is-grouped">
+                        <div class="control">
+                            <button class="button is-link" onclick="createKey();">Create</button>
+                        </div>
+                        <div class="control">
+                            <button class="button is-link is-light">Cancel</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+
+            <div class="content is-hidden" id="key_passwd">
+                <form action="#">
+                    <div class="field">
+                        <label class="label">Key file name</label>
+                        <div class="control">
+                            <input class="input" type="text" placeholder="default.key" id="change_key_name">
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">Old key password</label>
+                        <div class="control">
+                            <input class="input" type="password" placeholder="123456" id="change_key_password">
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">New key password</label>
+                        <div class="control">
+                            <input class="input" type="password" placeholder="123456" id="change_key_password_new">
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">Repeat key password</label>
+                        <div class="control">
+                            <input class="input" type="password" placeholder="123456" id="change_key_password_repeat">
+                        </div>
+                    </div>
+
+                    <div class="field is-grouped">
+                        <div class="control">
+                            <button class="button is-link">Change password</button>
+                        </div>
+                        <div class="control">
+                            <button class="button is-link is-light">Cancel</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+
+
+            <div class="content is-hidden" id="dom_new">
+                <form action="#">
+                    <div class="field">
+                        <label class="label">New domain name</label>
+                        <div class="control">
+                            <input class="input" type="text" placeholder="example.ygg" id="new_domain">
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">Domain records</label>
+                        <div class="control">
+                            <textarea class="textarea" placeholder="@ IN AAAA 200:1111:2222:3333:4444:5555:6666:7777" id="new_domain_records"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">Domain tags (will be used for search)</label>
+                        <div class="control">
+                            <input class="input" type="text" placeholder="blog, community, friendship" id="new_domain_tags">
+                        </div>
+                    </div>
+
+                    <div class="field is-grouped">
+                        <div class="control">
+                            <button class="button is-link" onclick="createDomain();">Create domain</button>
+                        </div>
+                        <div class="control">
+                            <button class="button is-link is-light">Cancel</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+
+            <div class="content is-hidden" id="dom_edit">
+                <form action="#">
+                    <div class="field">
+                        <label class="label">Your existing domain name</label>
+                        <div class="control">
+                            <input class="input" type="text" placeholder="example.ygg" id="change_domain">
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">All new domain records</label>
+                        <div class="control">
+                            <textarea class="textarea" placeholder="@ IN AAAA 200:1111:2222:3333:4444:5555:6666:7777" id="change_domain_records"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">Domain tags (will be used for search)</label>
+                        <div class="control">
+                            <input class="input" type="text" placeholder="blog, community, friendship" id="change_domain_tags">
+                        </div>
+                    </div>
+
+                    <div class="field is-grouped">
+                        <div class="control">
+                            <button class="button is-link" onclick="changeDomain();">Replace records</button>
+                        </div>
+                        <div class="control">
+                            <button class="button is-link is-light">Cancel</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+
+            <div class="content is-hidden" id="dom_renew">
+                <form action="#">
+                    <div class="field">
+                        <label class="label">Your existing domain name</label>
+                        <div class="control">
+                            <input class="input" type="text" placeholder="example.ygg" id="renew_domain">
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">Days to add</label>
+                        <div class="control">
+                            <input class="input" type="text" placeholder="365" value="365" id="renew_domain_extend_days" disabled>
+                        </div>
+                    </div>
+
+                    <div class="field is-grouped">
+                        <div class="control">
+                            <button class="button is-link" onclick="renewDomain();">Renew domain</button>
+                        </div>
+                        <div class="control">
+                            <button class="button is-link is-light">Cancel</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+
+            <div class="content is-hidden" id="dom_transfer">
+                <form action="#">
+                    <div class="field">
+                        <label class="label">Your existing domain name</label>
+                        <div class="control">
+                            <input class="input" type="text" placeholder="example.ygg" id="transfer_domain">
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">Public key of new owner</label>
+                        <div class="control">
+                            <input class="input" type="text" placeholder="3764ef954577a1815db3cc65aa3e2b18a52f12a3f6fcbd6a10d9ce8d06741ddd" id="transfer_domain_transfer_owner">
+                        </div>
+                    </div>
+
+                    <div class="field is-grouped">
+                        <div class="control">
+                            <button class="button is-link" onclick="transferDomain();">Transfer domain</button>
+                        </div>
+                        <div class="control">
+                            <button class="button is-link is-light">Cancel</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+
+        </div>
+
+    </div> <!-- columns -->
+</div>
+
+<div class="footer is-hidden">Some footer text is here</div>
+</body>
+</html>
