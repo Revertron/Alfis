@@ -1,12 +1,14 @@
 use crate::{Transaction, Block, Keystore, Key, Context};
-use std::sync::{Mutex, Arc};
+use std::sync::{Mutex, Arc, Condvar};
 use crypto::digest::Digest;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering, AtomicU32};
 use chrono::Utc;
 use num_bigint::BigUint;
 use num_traits::One;
 use crypto::sha2::Sha256;
 use std::thread;
+use std::time::Duration;
+use num_cpus;
 
 pub struct Miner {
     context: Arc<Mutex<Context>>,
@@ -16,6 +18,8 @@ pub struct Miner {
     transactions: Arc<Mutex<Vec<Transaction>>>,
     last_block: Option<Block>,
     running: Arc<AtomicBool>,
+    mining: Arc<AtomicBool>,
+    cond_var: Arc<Condvar>
 }
 
 impl Miner {
@@ -29,83 +33,145 @@ impl Miner {
             transactions: Arc::new(Mutex::new(Vec::new())),
             last_block: c.blockchain.blocks.last().cloned(),
             running: Arc::new(AtomicBool::new(false)),
+            mining: Arc::new(AtomicBool::new(false)),
+            cond_var: Arc::new(Condvar::new())
         }
     }
 
     pub fn add_transaction(&mut self, transaction: Transaction) {
         self.transactions.lock().unwrap().push(transaction);
+        self.cond_var.notify_one();
     }
 
     pub fn stop(&mut self) {
+        self.mining.store(false, Ordering::Relaxed);
         self.running.store(false, Ordering::Relaxed);
+        self.cond_var.notify_all();
     }
 
-    pub fn mine(&mut self) {
-        let transaction = { self.transactions.lock().unwrap().first().cloned() };
-        match transaction {
-            Some(transaction) => {
-                self.mine_internal(transaction);
-            },
-            None => {
-                println!("Nothing to mine");
-            },
-        }
+    pub fn start_mining_thread(&mut self) {
+        let context = self.context.clone();
+        let transactions = self.transactions.clone();
+        let running = self.running.clone();
+        let mining = self.mining.clone();
+        let cond_var = self.cond_var.clone();
+        thread::spawn(move || {
+            running.store(true, Ordering::Relaxed);
+            while running.load(Ordering::Relaxed) {
+                // If some transaction is being mined now, we yield
+                if mining.load(Ordering::Relaxed) {
+                    thread::sleep(Duration::from_millis(100));
+                    continue;
+                }
+
+                let mut lock = transactions.lock().unwrap();
+                if lock.len() > 0 {
+                    println!("Starting to mine some transaction");
+                    let transaction = lock.remove(0);
+                    mining.store(true, Ordering::Relaxed);
+                    Miner::mine_internal(context.clone(), transactions.clone(), transaction, mining.clone(), cond_var.clone());
+                } else {
+                    println!("Waiting for transactions");
+                    cond_var.wait(lock);
+                    println!("Got notified on new transaction");
+                }
+            }
+        });
     }
 
     pub fn is_mining(&self) -> bool {
         self.running.load(Ordering::Relaxed)
     }
 
-    fn mine_internal(&mut self, mut transaction: Transaction) {
+    fn mine_internal(context: Arc<Mutex<Context>>, transactions: Arc<Mutex<Vec<Transaction>>>, mut transaction: Transaction, mining: Arc<AtomicBool>, cond_var: Arc<Condvar>) {
         let mut last_block_time = 0i64;
+        let mut chain_id = 0u32;
+        let mut version = 0u32;
+        {
+            let c = context.lock().unwrap();
+            chain_id = c.settings.chain_id;
+            version = c.settings.version;
+        }
         let block = {
-            // Signing it with private key from Keystore
-            let sign_hash = self.keystore.sign(&transaction.get_bytes());
-            transaction.set_signature(Key::from_bytes(&sign_hash));
+            if transaction.signature.is_zero() {
+                // Signing it with private key from Keystore
+                let c = context.lock().unwrap();
+                let sign_hash = c.keystore.sign(&transaction.get_bytes());
+                transaction.set_signature(Key::from_bytes(&sign_hash));
+            }
 
-            match &self.last_block {
+            // Get last block for mining
+            let last_block = { context.lock().unwrap().blockchain.blocks.last().cloned() };
+            match last_block {
                 None => {
+                    println!("Mining genesis block");
                     // Creating a block with that signed transaction
-                    Block::new(0,Utc::now().timestamp(), self.chain_id, self.version, Key::zero32(), Some(transaction))
+                    Block::new(0, Utc::now().timestamp(), chain_id, version, Key::zero32(), Some(transaction.clone()))
                 },
                 Some(block) => {
                     last_block_time = block.timestamp;
                     // Creating a block with that signed transaction
-                    Block::new(block.index + 1,Utc::now().timestamp(), self.chain_id, self.version, block.hash.clone(), Some(transaction))
+                    Block::new(block.index + 1, Utc::now().timestamp(), chain_id, version, block.hash.clone(), Some(transaction.clone()))
                 },
             }
         };
-        //let blockchain = self.blockchain.clone();
-        let transactions = self.transactions.clone();
-        let running = self.running.clone();
-        running.store(true, Ordering::Relaxed);
-        let context = self.context.clone();
-        thread::spawn(move || {
-            match find_hash(&mut Sha256::new(), block, last_block_time, running.clone()) {
-                None => {
-                    println!("Mining stopped");
-                },
-                Some(block) => {
-                    //blockchain.lock().unwrap().add_block(block);
-                    transactions.lock().unwrap().remove(0);
-                    running.store(false, Ordering::Relaxed);
-                    context.lock().unwrap().blockchain.add_block(block);
-                },
-            }
-        });
+
+        let live_threads = Arc::new(AtomicU32::new(0u32));
+        let cpus = num_cpus::get();
+        println!("Starting {} threads for mining", cpus);
+        for _ in 0..cpus {
+            let transactions = transactions.clone();
+            let context = context.clone();
+            let transaction = transaction.clone();
+            let block = block.clone();
+            let mining = mining.clone();
+            let live_threads = live_threads.clone();
+            let cond_var = cond_var.clone();
+            thread::spawn(move || {
+                live_threads.fetch_add(1, Ordering::Relaxed);
+                let mut count = 0u32;
+                match find_hash(&mut Sha256::new(), block, last_block_time, mining.clone()) {
+                    None => {
+                        println!("Mining did not find suitable hash or was stopped");
+                        count = live_threads.fetch_sub(1, Ordering::Relaxed);
+                        // If this is the last thread, but mining was not stopped by another thread
+                        if count == 0 && mining.load(Ordering::Relaxed) {
+                            // If all threads came empty with mining we return transaction to the queue
+                            transactions.lock().unwrap().push(transaction);
+                            mining.store(false, Ordering::Relaxed);
+                            cond_var.notify_one();
+                        }
+                    },
+                    Some(block) => {
+                        count = live_threads.fetch_sub(1, Ordering::Relaxed);
+                        context.lock().unwrap().blockchain.add_block(block);
+                        mining.store(false, Ordering::Relaxed);
+                    },
+                }
+            });
+        }
+    }
+
+    fn get_last_block(&self) -> Option<Block> {
+        let context = self.context.lock().unwrap();
+        context.blockchain.blocks.last().cloned()
     }
 }
 
 fn find_hash(digest: &mut dyn Digest, mut block: Block, prev_block_time: i64, running: Arc<AtomicBool>) -> Option<Block> {
     let mut buf: [u8; 32] = [0; 32];
     block.random = rand::random();
-    let start_difficulty = block.difficulty;
+    println!("Mining block {}", serde_json::to_string(&block).unwrap());
+    //let start_difficulty = block.difficulty;
     for nonce in 0..std::u64::MAX {
         if !running.load(Ordering::Relaxed) {
             return None;
         }
         block.timestamp = Utc::now().timestamp();
         block.nonce = nonce;
+        // if nonce % 1000 == 0 {
+        //     println!("Nonce {}", nonce);
+        // }
         // TODO uncomment for real run
         //block.difficulty = start_difficulty + get_time_difficulty(prev_block_time, block.timestamp);
 

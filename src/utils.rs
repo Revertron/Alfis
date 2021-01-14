@@ -1,4 +1,5 @@
 use std::num;
+use rand::Rng;
 
 /// Convert bytes array to HEX format
 pub fn to_hex(buf: &[u8]) -> String {
@@ -30,4 +31,17 @@ pub fn same_hash(left: &[u8], right: &[u8]) -> bool {
         }
     }
     true
+}
+
+/// Generates random string of given length
+pub fn random_string(length: usize) -> String {
+    let chars: Vec<char> = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?".chars().collect();
+    let mut rng = rand::thread_rng();
+    let mut result = String::with_capacity(length);
+    for x in 0..length {
+        let position: usize = rng.gen::<usize>() % chars.len();
+        let c: char = *chars.get(position).unwrap();
+        result.push(c);
+    }
+    result
 }

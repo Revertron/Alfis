@@ -34,6 +34,14 @@ impl Context {
     pub fn set_keystore(&mut self, keystore: Keystore) {
         self.keystore = keystore;
     }
+
+    pub fn get_blockchain(&self) -> &Blockchain {
+        &self.blockchain
+    }
+
+    pub fn add_salt(&mut self, name: String, salt: String) {
+        &self.settings.salts.insert(name, salt);
+    }
 }
 
 pub struct Settings {
@@ -44,7 +52,7 @@ pub struct Settings {
 
 impl Settings {
     /// TODO parse settings
-    pub fn new<S: Into<String>>(chain_id: u32, version: u32, settings: S) -> Settings {
-        Settings { chain_id, version, salts: HashMap::new() }
+    pub fn new<S: Into<String>>(settings: S) -> Settings {
+        Settings { chain_id: 42, version: 0, salts: HashMap::new() }
     }
 }

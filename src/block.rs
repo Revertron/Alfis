@@ -24,8 +24,9 @@ pub struct Block {
     pub nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction: Option<Transaction>,
+    #[serde(default, skip_serializing_if = "Key::is_zero")]
     pub prev_block_hash: Key,
-    #[serde(default, skip_serializing_if = "Key::is_empty")]
+    #[serde(default, skip_serializing_if = "Key::is_zero")]
     pub hash: Key,
 }
 
@@ -36,7 +37,8 @@ impl Block {
             timestamp,
             chain_id,
             version,
-            difficulty: 18,
+            // TODO make difficulty parameter
+            difficulty: 20,
             random: 0,
             nonce: 0,
             transaction,

@@ -83,6 +83,18 @@ impl Key {
         self.data.is_empty()
     }
 
+    pub fn is_zero(&self) -> bool {
+        if self.data.is_empty() {
+            return true;
+        }
+        for x in self.data.iter() {
+            if *x != 0 {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /// Returns a byte slice of the hash contents.
     pub fn as_bytes(&self) -> &[u8] {
         &self.data
