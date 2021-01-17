@@ -1,27 +1,32 @@
 #![windows_subsystem = "windows"]
 extern crate web_view;
-use alfis::{Blockchain, Block, Action, Transaction, Keystore, Key, Settings, Context};
+use alfis::{Blockchain, Block, Transaction, Keystore, Bytes, Settings, Context};
 use alfis::miner::Miner;
-use alfis::utils::random_string;
 use web_view::*;
 use std::thread;
+use rand::{Rng, RngCore};
 
 use std::sync::{Arc, Mutex};
 extern crate serde;
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 extern crate serde_json;
 
 const ONE_YEAR: u16 = 365;
 const GENESIS_ZONE: &str = "ygg";
 const GENESIS_ZONE_DIFFICULTY: u16 = 20;
-const SALT_LENGTH: usize = 20;
+const KEYSTORE_DIFFICULTY: usize = 24;
+const SETTINGS_FILENAME: &str = "alfis.cfg";
 
 fn main() {
     println!("ALFIS 0.1.0");
-    let settings = Settings::new("");
-    let keystore: Keystore = Keystore::from_file("default.key", "").unwrap();
+    let settings = Settings::load(SETTINGS_FILENAME).expect("Error loading settings");
+    let keystore: Keystore = match Keystore::from_file(&settings.key_file, "") {
+        None => { generate_key(KEYSTORE_DIFFICULTY, Arc::new(AtomicBool::new(true))).expect("Could not load or generate keypair") }
+        Some(keystore) => { keystore }
+    };
     let blockchain: Blockchain = Blockchain::new(settings.chain_id, settings.version);
     let context: Arc<Mutex<Context>> = Arc::new(Mutex::new(Context::new(settings, keystore, blockchain)));
 
@@ -79,17 +84,14 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                     }
                 },
                 CreateKey { name, pass } => {
-                    let mut c = context.lock().unwrap();
-                    c.set_keystore(Keystore::new());
+                    create_key(context.clone(), &name, &pass);
                 }
                 CreateDomain { name, records, tags } => {
-                    let salt = random_string(SALT_LENGTH);
                     let keystore = {
                         let mut guard = context.lock().unwrap();
-                        guard.add_salt(name.clone(), salt.clone());
                         guard.get_keystore()
                     };
-                    create_domain(miner.clone(), name, salt, &keystore);
+                    create_domain(miner.clone(), name, records, &keystore);
                 }
                 ChangeDomain { name, records, tags } => {
                     let keystore = { context.lock().unwrap().get_keystore() };
@@ -106,77 +108,71 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
 }
 
 fn create_genesis<S: Into<String>>(miner: Arc<Mutex<Miner>>, name: S, keystore: &Keystore, difficulty: u16) {
-    // Creating transaction
-    // TODO Do we need to add here an owners key?
-    let action = Action::genesis(name.into(), Key::zero32(), difficulty);
-    let mut transaction = Transaction::new(action, keystore.get_public().clone());
+    let mut transaction = Transaction::from_str(name.into(), "zone".to_owned(), difficulty.to_string(), keystore.get_public().clone());
     // Signing it with private key from Signature
     let sign_hash = keystore.sign(&transaction.get_bytes());
-    transaction.set_signature(Key::from_bytes(&sign_hash));
+    transaction.set_signature(Bytes::from_bytes(&sign_hash));
     let mut miner_guard = miner.lock().unwrap();
     miner_guard.add_transaction(transaction);
 }
 
-fn create_domain<S: Into<String>>(miner: Arc<Mutex<Miner>>, name: S, salt: S, keystore: &Keystore) {
+fn create_domain<S: Into<String>>(miner: Arc<Mutex<Miner>>, name: S, data: S, keystore: &Keystore) {
+    let name = name.into();
+    println!("Generating domain {}", name);
     //let rec_vector: Vec<String> = records.into().trim().split("\n").map(|s| s.trim()).map(String::from).collect();
     //let tags_vector: Vec<String> = tags.into().trim().split(",").map(|s| s.trim()).map(String::from).collect();
-    let mut transaction = { transaction_new_domain(keystore, name.into(), salt.into()) };
+    let mut transaction = { create_transaction(keystore, name, "domain".into(), data.into()) };
     let mut miner_guard = miner.lock().unwrap();
     miner_guard.add_transaction(transaction);
 }
 
-fn create_zone<S: Into<String>>(miner: Arc<Mutex<Miner>>, name: S, salt: S, keystore: &Keystore) {
-    //let rec_vector: Vec<String> = records.into().trim().split("\n").map(|s| s.trim()).map(String::from).collect();
-    //let tags_vector: Vec<String> = tags.into().trim().split(",").map(|s| s.trim()).map(String::from).collect();
-    let mut transaction = { transaction_new_domain(keystore, name.into(), salt.into()) };
-    let mut miner_guard = miner.lock().unwrap();
-    miner_guard.add_transaction(transaction);
-}
-
-fn transaction_claim_name<S: Into<String>>(keystore: &Keystore, name: S, salt: S) -> Transaction {
+fn create_transaction<S: Into<String>>(keystore: &Keystore, name: S, method: S, data: S) -> Transaction {
     // Creating transaction
     // TODO Do not use owner for now, make a field in UI and use it if filled
-    let action = Action::new_domain(name.into(), salt.into(), Key::zero32());
-    let mut transaction = Transaction::new(action, keystore.get_public().clone());
+    let mut transaction = Transaction::from_str(name.into(), method.into(), data.into(), keystore.get_public().clone());
     // Signing it with private key from Signature
     let sign_hash = keystore.sign(&transaction.get_bytes());
-    transaction.set_signature(Key::from_bytes(&sign_hash));
+    transaction.set_signature(Bytes::from_bytes(&sign_hash));
     transaction
 }
 
-fn transaction_new_domain<S: Into<String>>(keystore: &Keystore, name: S, salt: S) -> Transaction {
-    let name_string = name.into();
-    let salt_string = salt.into();
-    println!("Generating domain {} with salt: {}", name_string, salt_string);
-    // Creating transaction
-    // TODO Do not use owner for now, make a field in UI and use it if filled
-    let action = Action::new_domain(name_string, salt_string, Key::zero32());
-    let mut transaction = Transaction::new(action, keystore.get_public().clone());
-    // Signing it with private key from Signature
-    let sign_hash = keystore.sign(&transaction.get_bytes());
-    transaction.set_signature(Key::from_bytes(&sign_hash));
-    transaction
+fn create_key(context: Arc<Mutex<Context>>, filename: &str, password: &str) {
+    let mut mining = Arc::new(AtomicBool::new(true));
+    for _ in 0..num_cpus::get() {
+        let context = context.clone();
+        let filename= filename.to_owned();
+        let password= password.to_owned();
+        let mining = mining.clone();
+        thread::spawn(move || {
+            match generate_key(KEYSTORE_DIFFICULTY, mining.clone()) {
+                None => { println!("Keystore mining finished"); }
+                Some(keystore) => {
+                    let mut c = context.lock().unwrap();
+                    mining.store(false,Ordering::Relaxed);
+                    keystore.save(&filename, &password);
+                    c.set_keystore(keystore);
+                }
+            }
+        });
+    }
 }
 
-/*fn transaction_claim_zone<S: Into<String>>(keystore: &Keystore, hash: S, difficulty: u16) -> Transaction {
-    // Creating transaction
-    let action = Action::new_zone(hash.into(), salt.into(), &keystore, difficulty);
-    let mut transaction = Transaction::new(action, keystore.get_public().clone());
-    // Signing it with private key from Signature
-    let sign_hash = keystore.sign(&transaction.get_bytes());
-    transaction.set_signature(Key::from_bytes(&sign_hash));
-    transaction
-}*/
-
-/*fn transaction_new_zone<S: Into<String>>(keystore: &Keystore, name: S, salt: S, records: Vec<String>, tags: Vec<String>, days: u16) -> Transaction {
-    // Creating transaction
-    let action = Action::fill_domain(name.into(), salt.into(), &keystore, records, tags, days);
-    let mut transaction = Transaction::new(action, keystore.get_public().clone());
-    // Signing it with private key from Signature
-    let sign_hash = keystore.sign(&transaction.get_bytes());
-    transaction.set_signature(Key::from_bytes(&sign_hash));
-    transaction
-}*/
+fn generate_key(difficulty: usize, mining: Arc<AtomicBool>) -> Option<Keystore> {
+    let mut rng = rand::thread_rng();
+    let mut buf = [0u8; 64];
+    loop {
+        rng.fill_bytes(&mut buf);
+        let keystore = Keystore::from_bytes(&buf);
+        if keystore.hash_is_good(difficulty) {
+            println!("Generated keypair: {:?}", &keystore);
+            return Some(keystore);
+        }
+        if !mining.load(Ordering::Relaxed) {
+            return None;
+        }
+    }
+    None
+}
 
 #[derive(Deserialize)]
 #[serde(tag = "cmd", rename_all = "camelCase")]

@@ -1,4 +1,4 @@
-use crate::{Block, Transaction, Key};
+use crate::{Block, Transaction, Bytes};
 use chrono::Utc;
 
 pub struct Blockchain {
@@ -54,7 +54,7 @@ impl Blockchain {
     pub fn check_block_hash(block: &Block) -> bool {
         // We need to clear Hash value to rehash it without it for check :(
         let mut copy: Block = block.clone();
-        copy.hash = Key::default();
+        copy.hash = Bytes::default();
         let data = serde_json::to_string(&copy).unwrap();
         Block::hash(data.as_bytes()) == block.hash
     }

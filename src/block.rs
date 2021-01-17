@@ -11,7 +11,7 @@ use num_bigint::BigUint;
 use num_traits::One;
 use crypto::sha2::Sha256;
 use crypto::digest::Digest;
-use crate::keys::Key;
+use crate::keys::Bytes;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Block {
@@ -24,14 +24,14 @@ pub struct Block {
     pub nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction: Option<Transaction>,
-    #[serde(default, skip_serializing_if = "Key::is_zero")]
-    pub prev_block_hash: Key,
-    #[serde(default, skip_serializing_if = "Key::is_zero")]
-    pub hash: Key,
+    #[serde(default, skip_serializing_if = "Bytes::is_zero")]
+    pub prev_block_hash: Bytes,
+    #[serde(default, skip_serializing_if = "Bytes::is_zero")]
+    pub hash: Bytes,
 }
 
 impl Block {
-    pub fn new(index: u64, timestamp: i64, chain_id: u32, version: u32, prev_block_hash: Key, transaction: Option<Transaction>) -> Self {
+    pub fn new(index: u64, timestamp: i64, chain_id: u32, version: u32, prev_block_hash: Bytes, transaction: Option<Transaction>) -> Self {
         Block {
             index,
             timestamp,
@@ -43,41 +43,19 @@ impl Block {
             nonce: 0,
             transaction,
             prev_block_hash,
-            hash: Key::default(),
+            hash: Bytes::default(),
         }
     }
 
-    pub fn mine(&mut self) {
-        self.random = rand::random();
-        let data = serde_json::to_string(&self).unwrap();
-        println!("Mining block:\n{}", data);
-        for nonce_attempt in 0..std::u64::MAX {
-            self.nonce = nonce_attempt;
-            self.timestamp = Utc::now().timestamp();
-            let hash = Self::hash(serde_json::to_string(&self).unwrap().as_bytes());
-            if hash_is_good(&hash.as_bytes(), self.difficulty) {
-                self.hash = hash;
-                return;
-            }
-        }
-    }
-
-    pub fn hash(data: &[u8]) -> Key {
+    pub fn hash(data: &[u8]) -> Bytes {
         let mut buf: [u8; 32] = [0; 32];
         let mut digest = Sha256::new();
         digest.input(data);
         digest.result(&mut buf);
-        Key::new(buf.to_vec())
+        Bytes::new(buf.to_vec())
     }
 
     pub fn is_genesis(&self) -> bool {
-        self.index == 0 && self.transaction.is_none() && self.prev_block_hash == Key::default()
+        self.index == 0 && self.transaction.is_none() && self.prev_block_hash == Bytes::default()
     }
-}
-
-fn hash_is_good(hash: &[u8], difficulty: usize) -> bool {
-    let target = BigUint::one() << ((hash.len() << 3) - difficulty);
-    let hash_int = BigUint::from_bytes_be(&hash);
-
-    return hash_int < target;
 }

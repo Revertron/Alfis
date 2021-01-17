@@ -1,10 +1,8 @@
-use crate::{Transaction, Block, Keystore, Key, Context};
+use crate::{Transaction, Block, Keystore, Bytes, Context, hash_is_good};
 use std::sync::{Mutex, Arc, Condvar};
 use crypto::digest::Digest;
 use std::sync::atomic::{AtomicBool, Ordering, AtomicU32};
 use chrono::Utc;
-use num_bigint::BigUint;
-use num_traits::One;
 use crypto::sha2::Sha256;
 use std::thread;
 use std::time::Duration;
@@ -97,7 +95,7 @@ impl Miner {
                 // Signing it with private key from Keystore
                 let c = context.lock().unwrap();
                 let sign_hash = c.keystore.sign(&transaction.get_bytes());
-                transaction.set_signature(Key::from_bytes(&sign_hash));
+                transaction.set_signature(Bytes::from_bytes(&sign_hash));
             }
 
             // Get last block for mining
@@ -106,7 +104,7 @@ impl Miner {
                 None => {
                     println!("Mining genesis block");
                     // Creating a block with that signed transaction
-                    Block::new(0, Utc::now().timestamp(), chain_id, version, Key::zero32(), Some(transaction.clone()))
+                    Block::new(0, Utc::now().timestamp(), chain_id, version, Bytes::zero32(), Some(transaction.clone()))
                 },
                 Some(block) => {
                     last_block_time = block.timestamp;
@@ -179,7 +177,7 @@ fn find_hash(digest: &mut dyn Digest, mut block: Block, prev_block_time: i64, ru
         digest.input(serde_json::to_string(&block).unwrap().as_bytes());
         digest.result(&mut buf);
         if hash_is_good(&buf, block.difficulty) {
-            block.hash = Key::from_bytes(&buf);
+            block.hash = Bytes::from_bytes(&buf);
             return Some(block);
         }
     }
@@ -193,11 +191,4 @@ fn get_time_difficulty(prev_time: i64, now: i64) -> usize {
     } else {
         0
     }
-}
-
-fn hash_is_good(hash: &[u8], difficulty: usize) -> bool {
-    let target = BigUint::one() << ((hash.len() << 3) - difficulty);
-    let hash_int = BigUint::from_bytes_be(&hash);
-
-    return hash_int < target;
 }
