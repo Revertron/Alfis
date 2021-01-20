@@ -21,6 +21,7 @@ groestl = "0.8.0"
 base64 = "0.11.0"
 chrono = "0.4.9"
 rand = "0.7.2"
+sqlite = "0.25.3"
 eventbus = "0.5.1"
 
 [build-dependencies]

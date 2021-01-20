@@ -17,8 +17,8 @@ use crate::keys::Bytes;
 pub struct Block {
     pub index: u64,
     pub timestamp: i64,
-    pub chain_id: u32,
-    pub version: u32,
+    pub chain_name: String,
+    pub version_flags: u32,
     pub difficulty: usize,
     pub random: u32,
     pub nonce: u64,
@@ -31,12 +31,12 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(index: u64, timestamp: i64, chain_id: u32, version: u32, prev_block_hash: Bytes, transaction: Option<Transaction>) -> Self {
+    pub fn new(index: u64, timestamp: i64, chain_name: &str, version_flags: u32, prev_block_hash: Bytes, transaction: Option<Transaction>) -> Self {
         Block {
             index,
             timestamp,
-            chain_id,
-            version,
+            chain_name: chain_name.to_owned(),
+            version_flags,
             // TODO make difficulty parameter
             difficulty: 20,
             random: 0,
@@ -44,6 +44,21 @@ impl Block {
             transaction,
             prev_block_hash,
             hash: Bytes::default(),
+        }
+    }
+
+    pub fn from_all_params(index: u64, timestamp: i64, chain_name: &str, version_flags: u32, difficulty: usize, random: u32, nonce: u64, prev_block_hash: Bytes, hash: Bytes, transaction: Option<Transaction>) -> Self {
+        Block {
+            index,
+            timestamp,
+            chain_name: chain_name.to_owned(),
+            version_flags,
+            difficulty,
+            random,
+            nonce,
+            transaction,
+            prev_block_hash,
+            hash,
         }
     }
 

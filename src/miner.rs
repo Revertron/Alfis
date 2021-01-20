@@ -11,8 +11,8 @@ use num_cpus;
 pub struct Miner {
     context: Arc<Mutex<Context>>,
     keystore: Keystore,
-    chain_id: u32,
-    version: u32,
+    chain_name: String,
+    version_flags: u32,
     transactions: Arc<Mutex<Vec<Transaction>>>,
     last_block: Option<Block>,
     running: Arc<AtomicBool>,
@@ -26,8 +26,8 @@ impl Miner {
         Miner {
             context: context.clone(),
             keystore: c.keystore.clone(),
-            chain_id: c.settings.chain_id,
-            version: c.settings.version,
+            chain_name: c.settings.chain_name.clone(),
+            version_flags: c.settings.version_flags,
             transactions: Arc::new(Mutex::new(Vec::new())),
             last_block: c.blockchain.blocks.last().cloned(),
             running: Arc::new(AtomicBool::new(false)),
@@ -83,12 +83,12 @@ impl Miner {
 
     fn mine_internal(context: Arc<Mutex<Context>>, transactions: Arc<Mutex<Vec<Transaction>>>, mut transaction: Transaction, mining: Arc<AtomicBool>, cond_var: Arc<Condvar>) {
         let mut last_block_time = 0i64;
-        let mut chain_id = 0u32;
-        let mut version = 0u32;
+        let mut chain_name= String::new();
+        let mut version_flags= 0u32;
         {
             let c = context.lock().unwrap();
-            chain_id = c.settings.chain_id;
-            version = c.settings.version;
+            chain_name = c.settings.chain_name.clone();
+            version_flags = c.settings.version_flags;
         }
         let block = {
             if transaction.signature.is_zero() {
@@ -99,17 +99,17 @@ impl Miner {
             }
 
             // Get last block for mining
-            let last_block = { context.lock().unwrap().blockchain.blocks.last().cloned() };
+            let last_block = { context.lock().unwrap().blockchain.get_last_block() };
             match last_block {
                 None => {
                     println!("Mining genesis block");
                     // Creating a block with that signed transaction
-                    Block::new(0, Utc::now().timestamp(), chain_id, version, Bytes::zero32(), Some(transaction.clone()))
+                    Block::new(0, Utc::now().timestamp(), &chain_name, version_flags, Bytes::zero32(), Some(transaction.clone()))
                 },
                 Some(block) => {
                     last_block_time = block.timestamp;
                     // Creating a block with that signed transaction
-                    Block::new(block.index + 1, Utc::now().timestamp(), chain_id, version, block.hash.clone(), Some(transaction.clone()))
+                    Block::new(block.index + 1, Utc::now().timestamp(), &chain_name, version_flags, block.hash.clone(), Some(transaction.clone()))
                 },
             }
         };
@@ -148,11 +148,6 @@ impl Miner {
                 }
             });
         }
-    }
-
-    fn get_last_block(&self) -> Option<Block> {
-        let context = self.context.lock().unwrap();
-        context.blockchain.blocks.last().cloned()
     }
 }
 

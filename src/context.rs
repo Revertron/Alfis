@@ -46,8 +46,8 @@ impl Context {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Settings {
-    pub chain_id: u32,
-    pub version: u32,
+    pub chain_name: String,
+    pub version_flags: u32,
     pub key_file: String
 }
 

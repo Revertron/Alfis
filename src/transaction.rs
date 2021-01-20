@@ -31,6 +31,13 @@ impl Transaction {
         Transaction { identity, method, data, pub_key, signature: Bytes::zero64() }
     }
 
+    pub fn from_json(json: &str) -> Option<Self> {
+        match serde_json::from_str(json) {
+            Ok(transaction) => Some(transaction),
+            Err(_) => None
+        }
+    }
+
     pub fn set_signature(&mut self, hash: Bytes) {
         self.signature = hash;
     }
@@ -38,6 +45,11 @@ impl Transaction {
     pub fn get_bytes(&self) -> Vec<u8> {
         // Let it panic if something is not okay
         serde_json::to_vec(&self).unwrap()
+    }
+
+    pub fn to_string(&self) -> String {
+        // Let it panic if something is not okay
+        serde_json::to_string(&self).unwrap()
     }
 }
 

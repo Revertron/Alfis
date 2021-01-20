@@ -27,7 +27,7 @@ fn main() {
         None => { generate_key(KEYSTORE_DIFFICULTY, Arc::new(AtomicBool::new(true))).expect("Could not load or generate keypair") }
         Some(keystore) => { keystore }
     };
-    let blockchain: Blockchain = Blockchain::new(settings.chain_id, settings.version);
+    let blockchain: Blockchain = Blockchain::new(&settings.chain_name, settings.version_flags);
     let context: Arc<Mutex<Context>> = Arc::new(Mutex::new(Context::new(settings, keystore, blockchain)));
 
     let mut miner_obj = Miner::new(context.clone());
@@ -40,19 +40,10 @@ fn main() {
 
 fn create_genesis_if_needed(context: &Arc<Mutex<Context>>, miner: &Arc<Mutex<Miner>>) {
     // TODO check settings and if there is no mention of bootstrap nodes, generate genesis block
-    let keystore = {
-        // This code block makes it possible to contain quick lock here, and let the miner below work
-        let context_guard = context.lock().unwrap();
-        if context_guard.get_blockchain().blocks.is_empty() {
-            // If blockchain is empty, we are going to mine a Genesis block
-            Some(context_guard.get_keystore())
-        } else {
-            None
-        }
-    };
-
-    if keystore.is_some() {
-        create_genesis(miner.clone(), GENESIS_ZONE, &keystore.unwrap(), GENESIS_ZONE_DIFFICULTY);
+    let context_guard = context.lock().unwrap();
+    if context_guard.get_blockchain().get_last_block().is_none() {
+        // If blockchain is empty, we are going to mine a Genesis block
+        create_genesis(miner.clone(), GENESIS_ZONE, &context_guard.get_keystore(), GENESIS_ZONE_DIFFICULTY);
     }
 }
 
@@ -191,31 +182,4 @@ fn inline_style(s: &str) -> String {
 
 fn inline_script(s: &str) -> String {
     format!(r#"<script type="text/javascript">{}</script>"#, s)
-}
-
-fn test_blockchain() -> () {
-    let mut blockchain = Blockchain::new(42, 0);
-    println!("Blockchain with genesis block has been created");
-    let keystore = Keystore::from_file("default.key", "").unwrap();
-
-    /*let mut block = create_transaction(&mut blockchain, keystore.clone(), "test.zz", vec!["AAAA IN 301:2925::1".to_owned()], vec!["testing".to_owned(), "example".to_owned()], 365);
-
-    // Mining the nonce
-    block.mine();
-
-    // Our block is ready, we can print it and add to Blockchain
-    let s = serde_json::to_string(&block).unwrap();
-    println!("Serialized block:\n{}", s);
-    blockchain.add_block(block);
-    println!("Second block added");
-
-    let block2: Block = serde_json::from_str(&s).unwrap();
-    println!("DeSerialized block:\n{:?}", block2);*/
-
-    // Let's check if the blockchain is valid
-    if blockchain.check() {
-        println!("Blockchain is correct");
-    } else {
-        println!("Blockchain is corrupted, aborting");
-    }
 }
