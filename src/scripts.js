@@ -1,3 +1,7 @@
+function onLoad() {
+    external.invoke(JSON.stringify({cmd: 'loaded'}));
+}
+
 function openTab(element, tabName) {
     // Declare all variables
     var i, tabContent, tabLinks;
@@ -59,4 +63,56 @@ function transferDomain() {
 
 function sendAction(param) {
     external.invoke(JSON.stringify(param));
+}
+
+function onDomainChange(element) {
+    external.invoke(JSON.stringify({cmd: 'checkDomain', name: element.value}));
+}
+
+function domainAvailable(available) {
+    input = document.getElementById("new_domain");
+    button = document.getElementById("new_domain_button");
+    if (available) {
+        input.className = "input";
+        button.disabled = false
+    } else {
+        input.className = "input is-danger";
+        button.disabled = true
+    }
+}
+
+function showModalDialog(text, callback) {
+    message = document.getElementById("modal_text");
+    message.textContent = text;
+
+    button_positive = document.getElementById("modal_positive_button");
+    button_positive.onclick = function() {
+        callback();
+        dialog = document.getElementById("modal_dialog");
+        dialog.className = "modal";
+    };
+
+    button_negative = document.getElementById("modal_negative_button");
+    button_negative.onclick = function() {
+        dialog = document.getElementById("modal_dialog");
+        dialog.className = "modal";
+    }
+
+    dialog = document.getElementById("modal_dialog");
+    dialog.className = "modal is-active";
+}
+
+function showMiningIndicator(visible) {
+    indicator = document.getElementById("mining_indicator");
+    if (visible) {
+        indicator.style.visibility = 'visible';
+    } else {
+        indicator.style.visibility = 'hidden';
+    }
+}
+
+function miningIndicatorClick(element) {
+    showModalDialog("Do you really want to stop mining?", function() {
+        external.invoke(JSON.stringify({cmd: 'stopMining'}));
+    });
 }

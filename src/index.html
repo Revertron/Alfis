@@ -8,9 +8,27 @@
     <script defer src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
     {scripts}
 </head>
-<body>
+<body onload="onLoad();">
+<div class="mining_indicator" id="mining_indicator" onclick="miningIndicatorClick(this)">
+    <span></span>
+    <span></span>
+</div>
+
+<div id="modal_dialog" class="modal">
+    <div class="modal-background"></div>
+    <div class="modal-content">
+        <div class="box">
+            <p id="modal_text" class="is-centered">Do you really want to cancel mining?</p>
+            <br/>
+            <div class="buttons is-grouped is-centered">
+                <button class="button is-link" id="modal_positive_button" onclick="positiveButton();">Ok</button>
+                <button class="button is-link is-light" id="modal_negative_button" onclick="cancelButton();">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="container">
-    <br/>
     <div class="columns">
         <div class="column is-one-fifth">
             <div class="menu">
@@ -134,7 +152,7 @@
                     <div class="field">
                         <label class="label">New domain name</label>
                         <div class="control">
-                            <input class="input" type="text" placeholder="example.ygg" id="new_domain">
+                            <input class="input" type="text" placeholder="example.ygg" id="new_domain" oninput="onDomainChange(this)">
                         </div>
                     </div>
 
@@ -154,7 +172,7 @@
 
                     <div class="field is-grouped">
                         <div class="control">
-                            <button class="button is-link" onclick="createDomain();">Create domain</button>
+                            <button class="button is-link" id="new_domain_button" onclick="createDomain();" disabled>Create domain</button>
                         </div>
                     </div>
                 </form>

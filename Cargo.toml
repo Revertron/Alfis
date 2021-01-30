@@ -22,7 +22,7 @@ base64 = "0.11.0"
 chrono = "0.4.9"
 rand = "0.7.2"
 sqlite = "0.25.3"
-eventbus = "0.5.1"
+uuid = { version = "0.8.2", features = ["serde", "v4"] }
 
 [build-dependencies]
 winres = "0.1"

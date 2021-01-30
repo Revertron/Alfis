@@ -1,17 +1,20 @@
 #![windows_subsystem = "windows"]
 extern crate web_view;
-use alfis::{Blockchain, Block, Transaction, Keystore, Bytes, Settings, Context};
-use alfis::miner::Miner;
-use web_view::*;
-use std::thread;
-use rand::{Rng, RngCore};
 
-use std::sync::{Arc, Mutex};
-extern crate serde;
-use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
 
+use rand::{Rng, RngCore};
+use serde::{Deserialize, Serialize};
+use web_view::*;
+
+use alfis::{Block, Blockchain, Bytes, Context, Keystore, Settings, Transaction};
+use alfis::event::Event;
+use alfis::miner::Miner;
+
+extern crate serde;
 extern crate serde_json;
 
 const ONE_YEAR: u16 = 365;
@@ -49,33 +52,60 @@ fn create_genesis_if_needed(context: &Arc<Mutex<Context>>, miner: &Arc<Mutex<Min
 
 fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let file_content = include_str!("index.html");
-    let styles = inline_style(include_str!("bulma.css"));
+    let mut styles= inline_style(include_str!("bulma.css"));
+    styles.push_str(&inline_style(include_str!("loader.css")));
     let scripts = inline_script(include_str!("scripts.js"));
 
+    let html = Content::Html(file_content.to_owned().replace("{styles}", &styles).replace("{scripts}", &scripts));
     web_view::builder()
         .title("ALFIS 0.1.0")
-        .content(Content::Html(file_content.to_owned().replace("{styles}", &styles).replace("{scripts}", &scripts)))
+        .content(html)
         .size(1024, 720)
         .resizable(true)
         .debug(true)
         .user_data(())
-        .invoke_handler(|_web_view, arg| {
+        .invoke_handler(|web_view, arg| {
             use Cmd::*;
             println!("Command {}", arg);
             match serde_json::from_str(arg).unwrap() {
+                Loaded => {
+                    web_view.eval("showMiningIndicator(false);");
+                    let mut handle = web_view.handle();
+                    let mut c = context.lock().unwrap();
+                    c.bus.register(move |_uuid, e| {
+                        println!("Got event from bus {:?}", &e);
+                        let visible = match e {
+                            Event::MinerStarted => { true }
+                            Event::KeyGeneratorStarted => { true }
+                            Event::MinerStopped => { false }
+                            Event::KeyGeneratorStopped => { false }
+                            _ => { false }
+                        };
+                        handle.dispatch(move |web_view| {
+                            web_view.eval(&format!("showMiningIndicator({});", visible));
+                            return WVResult::Ok(());
+                        });
+                        true
+                    });
+                }
                 LoadKey { name, pass } => {
                     match Keystore::from_file(&name, &pass) {
                         None => {
                             println!("Error loading keystore '{}'!", &name);
                         },
-                        Some(k) => {
+                        Some(keystore) => {
                             let mut c = context.lock().unwrap();
-                            c.set_keystore(k);
-                        },
+                            c.set_keystore(keystore);
+                        }
                     }
                 },
                 CreateKey { name, pass } => {
                     create_key(context.clone(), &name, &pass);
+                }
+                CheckDomain { name} => {
+                    let c = context.lock().unwrap();
+                    let available = c.get_blockchain().is_domain_available(&name, &c.get_keystore());
+                    web_view.eval(&format!("domainAvailable({})", available));
                 }
                 CreateDomain { name, records, tags } => {
                     let keystore = {
@@ -90,6 +120,9 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                 }
                 RenewDomain { name, days } => {}
                 TransferDomain { name, owner } => {}
+                StopMining => {
+                    context.lock().unwrap().bus.post(Event::ActionStopMining);
+                }
             }
             //dbg!(&signature);
             Ok(())
@@ -131,21 +164,32 @@ fn create_key(context: Arc<Mutex<Context>>, filename: &str, password: &str) {
     let mut mining = Arc::new(AtomicBool::new(true));
     for _ in 0..num_cpus::get() {
         let context = context.clone();
+        { context.lock().unwrap().bus.post(Event::KeyGeneratorStarted); }
         let filename= filename.to_owned();
         let password= password.to_owned();
         let mining = mining.clone();
         thread::spawn(move || {
             match generate_key(KEYSTORE_DIFFICULTY, mining.clone()) {
-                None => { println!("Keystore mining finished"); }
+                None => {
+                    println!("Keystore mining finished");
+                    context.lock().unwrap().bus.post(Event::KeyGeneratorStopped);
+                }
                 Some(keystore) => {
                     let mut c = context.lock().unwrap();
                     mining.store(false,Ordering::Relaxed);
                     keystore.save(&filename, &password);
                     c.set_keystore(keystore);
+                    c.bus.post(Event::KeyGeneratorStopped);
                 }
             }
         });
     }
+    context.lock().unwrap().bus.register(move |_uuid, e| {
+        if e == Event::ActionStopMining {
+            mining.store(false, Ordering::Relaxed);
+        }
+        false
+    });
 }
 
 fn generate_key(difficulty: usize, mining: Arc<AtomicBool>) -> Option<Keystore> {
@@ -168,12 +212,15 @@ fn generate_key(difficulty: usize, mining: Arc<AtomicBool>) -> Option<Keystore> 
 #[derive(Deserialize)]
 #[serde(tag = "cmd", rename_all = "camelCase")]
 pub enum Cmd {
+    Loaded,
     LoadKey{name: String, pass: String},
     CreateKey{name: String, pass: String},
+    CheckDomain{name: String},
     CreateDomain{name: String, records: String, tags: String},
     ChangeDomain{name: String, records: String, tags: String},
     RenewDomain{name: String, days: u16},
     TransferDomain{name: String, owner: String},
+    StopMining,
 }
 
 fn inline_style(s: &str) -> String {

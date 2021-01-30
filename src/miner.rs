@@ -1,12 +1,15 @@
-use crate::{Transaction, Block, Keystore, Bytes, Context, hash_is_good};
-use std::sync::{Mutex, Arc, Condvar};
-use crypto::digest::Digest;
-use std::sync::atomic::{AtomicBool, Ordering, AtomicU32};
-use chrono::Utc;
-use crypto::sha2::Sha256;
+use std::sync::{Arc, Condvar, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::thread;
 use std::time::Duration;
+
+use chrono::Utc;
+use crypto::digest::Digest;
+use crypto::sha2::Sha256;
 use num_cpus;
+
+use crate::{Block, Bytes, Context, hash_is_good, Keystore, Transaction};
+use crate::event::Event;
 
 pub struct Miner {
     context: Arc<Mutex<Context>>,
@@ -75,6 +78,13 @@ impl Miner {
                 }
             }
         });
+        let mining = self.mining.clone();
+        self.context.lock().unwrap().bus.register(move |uuid, e| {
+            if e == Event::ActionStopMining {
+                mining.store(false, Ordering::Relaxed);
+            }
+            false
+        });
     }
 
     pub fn is_mining(&self) -> bool {
@@ -86,7 +96,8 @@ impl Miner {
         let mut chain_name= String::new();
         let mut version_flags= 0u32;
         {
-            let c = context.lock().unwrap();
+            let mut c = context.lock().unwrap();
+            c.bus.post(Event::MinerStarted);
             chain_name = c.settings.chain_name.clone();
             version_flags = c.settings.version_flags;
         }
@@ -142,7 +153,9 @@ impl Miner {
                     },
                     Some(block) => {
                         count = live_threads.fetch_sub(1, Ordering::Relaxed);
-                        context.lock().unwrap().blockchain.add_block(block);
+                        let mut context = context.lock().unwrap();
+                        context.blockchain.add_block(block);
+                        context.bus.post(Event::MinerStopped);
                         mining.store(false, Ordering::Relaxed);
                     },
                 }

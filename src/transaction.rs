@@ -20,11 +20,8 @@ pub struct Transaction {
 
 impl Transaction {
     pub fn from_str(identity: String, method: String, data: String, pub_key: Bytes) -> Self {
-        let mut buf: [u8; 32] = [0; 32];
-        let mut digest = Sha256::new();
-        digest.input_str(&identity);
-        digest.result(&mut buf);
-        return Self::new(Bytes::from_bytes(&buf), method, data, pub_key);
+        let bytes = Self::hash_identity(&identity);
+        return Self::new(bytes, method, data, pub_key);
     }
 
     pub fn new(identity: Bytes, method: String, data: String, pub_key: Bytes) -> Self {
@@ -50,6 +47,14 @@ impl Transaction {
     pub fn to_string(&self) -> String {
         // Let it panic if something is not okay
         serde_json::to_string(&self).unwrap()
+    }
+
+    pub fn hash_identity(identity: &str) -> Bytes {
+        let mut buf: [u8; 32] = [0; 32];
+        let mut digest = Sha256::new();
+        digest.input_str(identity);
+        digest.result(&mut buf);
+        Bytes::from_bytes(&buf)
     }
 }
 

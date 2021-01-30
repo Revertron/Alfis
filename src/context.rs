@@ -1,4 +1,5 @@
-use crate::{Keystore, Blockchain};
+use crate::{Keystore, Blockchain, Bus};
+use crate::event::Event;
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
 use serde::de::Error;
@@ -9,12 +10,13 @@ pub struct Context {
     pub(crate) settings: Settings,
     pub(crate) keystore: Keystore,
     pub(crate) blockchain: Blockchain,
+    pub bus: Bus<Event>,
 }
 
 impl Context {
     /// Creating an essential context to work with
     pub fn new(settings: Settings, keystore: Keystore, blockchain: Blockchain) -> Context {
-        Context { settings, keystore, blockchain }
+        Context { settings, keystore, blockchain, bus: Bus::new() }
     }
 
     /// Load keystore and return Context
