@@ -110,7 +110,7 @@ impl Miner {
             }
 
             // Get last block for mining
-            let last_block = { context.lock().unwrap().blockchain.get_last_block() };
+            let last_block = { context.lock().unwrap().blockchain.last_block() };
             match last_block {
                 None => {
                     println!("Mining genesis block");

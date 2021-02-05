@@ -23,6 +23,7 @@ chrono = "0.4.9"
 rand = "0.7.2"
 sqlite = "0.25.3"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
+mio = { version = "0.7", features = ["os-poll", "net"] }
 
 [build-dependencies]
 winres = "0.1"

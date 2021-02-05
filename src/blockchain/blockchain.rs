@@ -1,6 +1,7 @@
-use crate::{Block, Transaction, Bytes, Keystore};
 use chrono::Utc;
-use sqlite::{Connection, State, Readable, Statement, Error};
+use sqlite::{Connection, Error, Readable, State, Statement};
+
+use crate::{Block, Bytes, Keystore, Transaction};
 
 const DB_NAME: &str = "blockchain.db";
 
@@ -112,6 +113,31 @@ impl Blockchain {
         statement.next().expect("Error adding transaction to DB");
     }
 
+    pub fn get_block(&self, index: u64) -> Option<Block> {
+        match self.db.prepare("SELECT * FROM blocks WHERE id=? LIMIT 1;") {
+            Ok(mut statement) => {
+                statement.bind(1, index as i64);
+                while statement.next().unwrap() == State::Row {
+                    return match Self::get_block_from_statement(&mut statement) {
+                        None => {
+                            println!("Something wrong with block in DB!");
+                            None
+                        }
+                        Some(block) => {
+                            println!("Loaded block: {:?}", &block);
+                            Some(block)
+                        }
+                    }
+                }
+                None
+            }
+            Err(_) => {
+                println!("Can't find block {}", index);
+                None
+            }
+        }
+    }
+
     pub fn is_domain_available(&self, domain: &str, keystore: &Keystore) -> bool {
         if domain.is_empty() {
             return false;
@@ -146,8 +172,17 @@ impl Blockchain {
         true
     }
 
-    pub fn get_last_block(&self) -> Option<Block> {
+    pub fn last_block(&self) -> Option<Block> {
         self.last_block.clone()
+    }
+
+    pub fn height(&self) -> u64 {
+        match self.last_block {
+            None => { 0u64 }
+            Some(ref block) => {
+                block.index
+            }
+        }
     }
 
     /*pub fn check(&self) -> bool {
@@ -163,6 +198,7 @@ impl Blockchain {
     }*/
 
     fn check_block(&self, block: &Block, prev_block: &Option<Block>) -> bool {
+        // TODO check if it is already stored, or its height is more than we need
         if !Self::check_block_hash(block) {
             return false;
         }

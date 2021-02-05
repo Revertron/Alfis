@@ -3,7 +3,6 @@ extern crate serde_json;
 extern crate num_bigint;
 extern crate num_traits;
 
-use super::*;
 use std::fmt::Debug;
 use chrono::Utc;
 use serde::{Serialize, Deserialize};
@@ -12,6 +11,7 @@ use num_traits::One;
 use crypto::sha2::Sha256;
 use crypto::digest::Digest;
 use crate::keys::Bytes;
+use crate::Transaction;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Block {

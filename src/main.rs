@@ -13,6 +13,7 @@ use web_view::*;
 use alfis::{Block, Blockchain, Bytes, Context, Keystore, Settings, Transaction};
 use alfis::event::Event;
 use alfis::miner::Miner;
+use alfis::p2p::Network;
 
 extern crate serde;
 extern crate serde_json;
@@ -37,6 +38,9 @@ fn main() {
     miner_obj.start_mining_thread();
     let miner: Arc<Mutex<Miner>> = Arc::new(Mutex::new(miner_obj));
 
+    let mut network = Network::new(context.clone());
+    network.start();
+
     create_genesis_if_needed(&context, &miner);
     run_interface(context.clone(), miner.clone());
 }
@@ -44,17 +48,17 @@ fn main() {
 fn create_genesis_if_needed(context: &Arc<Mutex<Context>>, miner: &Arc<Mutex<Miner>>) {
     // TODO check settings and if there is no mention of bootstrap nodes, generate genesis block
     let context_guard = context.lock().unwrap();
-    if context_guard.get_blockchain().get_last_block().is_none() {
+    if context_guard.get_blockchain().last_block().is_none() {
         // If blockchain is empty, we are going to mine a Genesis block
         create_genesis(miner.clone(), GENESIS_ZONE, &context_guard.get_keystore(), GENESIS_ZONE_DIFFICULTY);
     }
 }
 
 fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
-    let file_content = include_str!("index.html");
-    let mut styles= inline_style(include_str!("bulma.css"));
-    styles.push_str(&inline_style(include_str!("loader.css")));
-    let scripts = inline_script(include_str!("scripts.js"));
+    let file_content = include_str!("webview/index.html");
+    let mut styles= inline_style(include_str!("webview/bulma.css"));
+    styles.push_str(&inline_style(include_str!("webview/loader.css")));
+    let scripts = inline_script(include_str!("webview/scripts.js"));
 
     let html = Content::Html(file_content.to_owned().replace("{styles}", &styles).replace("{scripts}", &scripts));
     web_view::builder()

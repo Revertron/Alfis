@@ -50,7 +50,9 @@ impl Context {
 pub struct Settings {
     pub chain_name: String,
     pub version_flags: u32,
-    pub key_file: String
+    pub key_file: String,
+    pub listen: String,
+    pub peers: Vec<String>
 }
 
 impl Settings {
