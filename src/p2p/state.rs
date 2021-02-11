@@ -1,6 +1,7 @@
 use std::time::Instant;
 use crate::p2p::Message;
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum State {
     Connecting,
     Connected,
@@ -34,5 +35,26 @@ impl State {
     pub fn message(message: Message) -> Self {
         let response = serde_json::to_string(&message).unwrap();
         State::Message {data: Vec::from(response.as_bytes()) }
+    }
+
+    pub fn active(&self) -> bool {
+        match self {
+            State::Connecting => { true }
+            State::Connected => { true }
+            State::Idle { .. } => { true }
+            State::Message { .. } => { true }
+            _ => { false }
+        }
+    }
+
+    pub fn disabled(&self) -> bool {
+        match self {
+            State::Error => { true }
+            State::Banned => { true }
+            State::Offline { from, attempts } => {
+                from.elapsed().as_secs() < 60 // We check offline peers to become online every 5 minutes
+            }
+            _ => { false }
+        }
     }
 }

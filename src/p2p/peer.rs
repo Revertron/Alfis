@@ -1,13 +1,28 @@
 use crate::p2p::State;
+use std::net::SocketAddr;
+use mio::net::TcpStream;
+use std::sync::RwLock;
 
+#[derive(Debug)]
 pub struct Peer {
-    addr: String,
+    addr: SocketAddr,
+    stream: TcpStream,
     state: State,
+    inbound: bool,
+    public: bool,
 }
 
 impl Peer {
-    pub fn new(addr: String, state: State) -> Self {
-        Peer { addr, state }
+    pub fn new(addr: SocketAddr, stream: TcpStream, state: State, inbound: bool) -> Self {
+        Peer { addr, stream, state, inbound, public: false }
+    }
+
+    pub fn get_addr(&self) -> SocketAddr {
+        self.addr.clone()
+    }
+
+    pub fn get_stream(&mut self) -> &mut TcpStream {
+        &mut self.stream
     }
 
     pub fn get_state(&self) -> &State {
@@ -16,5 +31,31 @@ impl Peer {
 
     pub fn set_state(&mut self, state: State) {
         self.state = state;
+    }
+
+    pub fn is_public(&self) -> bool {
+        self.public
+    }
+
+    pub fn set_public(&mut self, public: bool) {
+        self.public = public;
+    }
+
+    pub fn active(&self) -> bool {
+        self.state.active()
+    }
+
+    pub fn disabled(&self) -> bool {
+        self.state.disabled()
+    }
+
+    pub fn equals(&self, addr: &SocketAddr) -> bool {
+        /// If loopback address then we care about ip and port.
+        /// If regular address then we only care about the ip and ignore the port.
+        if self.addr.ip().is_loopback() {
+            self.addr == *addr
+        } else {
+            self.addr.ip() == addr.ip()
+        }
     }
 }

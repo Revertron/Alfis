@@ -52,6 +52,7 @@ pub struct Settings {
     pub version_flags: u32,
     pub key_file: String,
     pub listen: String,
+    pub public: bool,
     pub peers: Vec<String>
 }
 

@@ -2,16 +2,17 @@ extern crate serde;
 extern crate serde_json;
 
 use serde::{Deserialize, Serialize};
+use crate::p2p::peer::Peer;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Message {
     Error,
-    Hand { chain: String, version: u32 },
+    Hand { chain: String, version: u32, public: bool },
     Shake { ok: bool, height: u64 },
     Ping { height: u64 },
     Pong { height: u64 },
     GetPeers,
-    Peers,
+    Peers { peers: Vec<String> },
     GetBlock { index: u64 },
     Block { index: u64, block: String },
 }
@@ -25,8 +26,8 @@ impl Message {
         }
     }
 
-    pub fn hand(chain: &str, version: u32) -> Self {
-        Message::Hand { chain: chain.to_owned(), version }
+    pub fn hand(chain: &str, version: u32, public: bool) -> Self {
+        Message::Hand { chain: chain.to_owned(), version, public }
     }
 
     pub fn shake(ok: bool, height: u64) -> Self {
