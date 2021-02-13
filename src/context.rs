@@ -1,4 +1,4 @@
-use crate::{Keystore, Blockchain, Bus};
+use crate::{Keystore, Blockchain, Bus, Bytes};
 use crate::event::Event;
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
@@ -7,9 +7,9 @@ use std::fs::File;
 use std::io::Read;
 
 pub struct Context {
-    pub(crate) settings: Settings,
-    pub(crate) keystore: Keystore,
-    pub(crate) blockchain: Blockchain,
+    pub settings: Settings,
+    pub keystore: Keystore,
+    pub blockchain: Blockchain,
     pub bus: Bus<Event>,
 }
 
@@ -48,8 +48,8 @@ impl Context {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Settings {
-    pub chain_name: String,
-    pub version_flags: u32,
+    pub origin: String,
+    pub version: u32,
     pub key_file: String,
     pub listen: String,
     pub public: bool,
@@ -75,5 +75,10 @@ impl Settings {
             },
             Err(..) => None
         }
+    }
+
+    pub fn get_origin(&self) -> Bytes {
+        let origin = crate::from_hex(&self.origin).expect("Wrong origin in settings");
+        Bytes::from_bytes(origin.as_slice())
     }
 }

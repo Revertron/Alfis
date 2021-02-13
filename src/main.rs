@@ -31,7 +31,7 @@ fn main() {
         None => { generate_key(KEYSTORE_DIFFICULTY, Arc::new(AtomicBool::new(true))).expect("Could not load or generate keypair") }
         Some(keystore) => { keystore }
     };
-    let blockchain: Blockchain = Blockchain::new(&settings.chain_name, settings.version_flags);
+    let blockchain: Blockchain = Blockchain::new(settings.origin.clone(), settings.version);
     let context: Arc<Mutex<Context>> = Arc::new(Mutex::new(Context::new(settings, keystore, blockchain)));
 
     let mut miner_obj = Miner::new(context.clone());
@@ -46,11 +46,14 @@ fn main() {
 }
 
 fn create_genesis_if_needed(context: &Arc<Mutex<Context>>, miner: &Arc<Mutex<Miner>>) {
-    // TODO check settings and if there is no mention of bootstrap nodes, generate genesis block
-    let context_guard = context.lock().unwrap();
-    if context_guard.get_blockchain().last_block().is_none() {
+    // If there is no origin in settings and no blockchain in DB, generate genesis block
+    let context = context.lock().unwrap();
+    // TODO compare first block's hash to origin
+    let last_block = context.get_blockchain().last_block();
+    let origin = context.settings.origin.clone();
+    if origin.eq("") && last_block.is_none() {
         // If blockchain is empty, we are going to mine a Genesis block
-        create_genesis(miner.clone(), GENESIS_ZONE, &context_guard.get_keystore(), GENESIS_ZONE_DIFFICULTY);
+        create_genesis(miner.clone(), GENESIS_ZONE, &context.get_keystore(), GENESIS_ZONE_DIFFICULTY);
     }
 }
 

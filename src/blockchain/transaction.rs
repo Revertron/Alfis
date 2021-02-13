@@ -12,6 +12,7 @@ use crypto::digest::Digest;
 #[derive(Clone, Deserialize, PartialEq)]
 pub struct Transaction {
     pub identity: Bytes,
+    pub confirmation: Bytes,
     pub method: String,
     pub data: String,
     pub pub_key: Bytes,
@@ -20,12 +21,13 @@ pub struct Transaction {
 
 impl Transaction {
     pub fn from_str(identity: String, method: String, data: String, pub_key: Bytes) -> Self {
-        let bytes = Self::hash_identity(&identity);
-        return Self::new(bytes, method, data, pub_key);
+        let hash = Self::hash_identity(&identity);
+        let confirmation = Self::hash_with_key(&identity, &pub_key);
+        return Self::new(hash, confirmation, method, data, pub_key);
     }
 
-    pub fn new(identity: Bytes, method: String, data: String, pub_key: Bytes) -> Self {
-        Transaction { identity, method, data, pub_key, signature: Bytes::zero64() }
+    pub fn new(identity: Bytes, confirmation: Bytes, method: String, data: String, pub_key: Bytes) -> Self {
+        Transaction { identity, confirmation, method, data, pub_key, signature: Bytes::zero64() }
     }
 
     pub fn from_json(json: &str) -> Option<Self> {
@@ -56,12 +58,22 @@ impl Transaction {
         digest.result(&mut buf);
         Bytes::from_bytes(&buf)
     }
+
+    pub fn hash_with_key(identity: &str, key: &Bytes) -> Bytes {
+        let mut buf: [u8; 32] = [0; 32];
+        let mut digest = Sha256::new();
+        digest.input_str(identity);
+        digest.input(key.as_bytes());
+        digest.result(&mut buf);
+        Bytes::from_bytes(&buf)
+    }
 }
 
 impl fmt::Debug for Transaction {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("Transaction")
             .field("identity", &self.identity)
+            .field("confirmation", &self.confirmation)
             .field("method", &self.method)
             .field("data", &self.data)
             .field("pub", &&self.pub_key)
@@ -71,10 +83,10 @@ impl fmt::Debug for Transaction {
 }
 
 impl Serialize for Transaction {
-    fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> where
-        S: Serializer {
-        let mut structure = serializer.serialize_struct("Transaction", 3).unwrap();
+    fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> where S: Serializer {
+        let mut structure = serializer.serialize_struct("Transaction", 6).unwrap();
         structure.serialize_field("identity", &self.identity);
+        structure.serialize_field("confirmation", &self.confirmation);
         structure.serialize_field("method", &self.method);
         structure.serialize_field("data", &self.data);
         structure.serialize_field("pub_key", &self.pub_key);

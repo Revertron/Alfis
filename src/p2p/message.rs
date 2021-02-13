@@ -7,8 +7,8 @@ use crate::p2p::peer::Peer;
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Message {
     Error,
-    Hand { chain: String, version: u32, public: bool },
-    Shake { ok: bool, height: u64 },
+    Hand { origin: String, version: u32, public: bool },
+    Shake { origin: String, version: u32, ok: bool, height: u64 },
     Ping { height: u64 },
     Pong { height: u64 },
     GetPeers,
@@ -26,12 +26,12 @@ impl Message {
         }
     }
 
-    pub fn hand(chain: &str, version: u32, public: bool) -> Self {
-        Message::Hand { chain: chain.to_owned(), version, public }
+    pub fn hand(origin: &str, version: u32, public: bool) -> Self {
+        Message::Hand { origin: origin.to_owned(), version, public }
     }
 
-    pub fn shake(ok: bool, height: u64) -> Self {
-        Message::Shake { ok, height }
+    pub fn shake(origin: &str, version: u32, ok: bool, height: u64) -> Self {
+        Message::Shake { origin: origin.to_owned(), version, ok, height }
     }
 
     pub fn ping(height: u64) -> Self {

@@ -176,7 +176,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                         println!("Sending hello to socket {}", event.token().0);
                         let data: String = {
                             let mut c = context.lock().unwrap();
-                            let message = Message::hand(&c.settings.chain_name, c.settings.version_flags, c.settings.public);
+                            let message = Message::hand(&c.settings.origin, c.settings.version, c.settings.public);
                             serde_json::to_string(&message).unwrap()
                         };
                         send_message(peer.get_stream(), &data.into_bytes());
@@ -255,17 +255,18 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
         context.blockchain.height()
     };
     match message {
-        Message::Hand { chain, version, public } => {
+        Message::Hand { origin: origin, version, public } => {
             let context = context.lock().unwrap();
-            if chain == context.settings.chain_name && version == context.settings.version_flags {
+            if origin == context.settings.origin && version == context.settings.version {
                 let mut peer = peers.get_mut_peer(token).unwrap();
                 peer.set_public(public);
-                State::message(Message::shake(true, context.blockchain.height()))
+                State::message(Message::shake(&context.settings.origin, context.settings.version, true, context.blockchain.height()))
             } else {
                 State::Error
             }
         }
-        Message::Shake { ok, height } => {
+        Message::Shake { origin, version, ok, height } => {
+            // TODO check origin and version for compatibility
             if ok {
                 if height > my_height {
                     State::message(Message::GetBlock { index: my_height + 1u64 })

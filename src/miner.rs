@@ -14,8 +14,7 @@ use crate::event::Event;
 pub struct Miner {
     context: Arc<Mutex<Context>>,
     keystore: Keystore,
-    chain_name: String,
-    version_flags: u32,
+    version: u32,
     transactions: Arc<Mutex<Vec<Transaction>>>,
     last_block: Option<Block>,
     running: Arc<AtomicBool>,
@@ -29,8 +28,7 @@ impl Miner {
         Miner {
             context: context.clone(),
             keystore: c.keystore.clone(),
-            chain_name: c.settings.chain_name.clone(),
-            version_flags: c.settings.version_flags,
+            version: c.settings.version,
             transactions: Arc::new(Mutex::new(Vec::new())),
             last_block: c.blockchain.blocks.last().cloned(),
             running: Arc::new(AtomicBool::new(false)),
@@ -93,13 +91,11 @@ impl Miner {
 
     fn mine_internal(context: Arc<Mutex<Context>>, transactions: Arc<Mutex<Vec<Transaction>>>, mut transaction: Transaction, mining: Arc<AtomicBool>, cond_var: Arc<Condvar>) {
         let mut last_block_time = 0i64;
-        let mut chain_name= String::new();
-        let mut version_flags= 0u32;
+        let mut version= 0u32;
         {
             let mut c = context.lock().unwrap();
             c.bus.post(Event::MinerStarted);
-            chain_name = c.settings.chain_name.clone();
-            version_flags = c.settings.version_flags;
+            version = c.settings.version;
         }
         let block = {
             if transaction.signature.is_zero() {
@@ -115,12 +111,12 @@ impl Miner {
                 None => {
                     println!("Mining genesis block");
                     // Creating a block with that signed transaction
-                    Block::new(0, Utc::now().timestamp(), &chain_name, version_flags, Bytes::zero32(), Some(transaction.clone()))
+                    Block::new(0, Utc::now().timestamp(), version, Bytes::zero32(), Some(transaction.clone()))
                 },
                 Some(block) => {
                     last_block_time = block.timestamp;
                     // Creating a block with that signed transaction
-                    Block::new(block.index + 1, Utc::now().timestamp(), &chain_name, version_flags, block.hash.clone(), Some(transaction.clone()))
+                    Block::new(block.index + 1, Utc::now().timestamp(), version, block.hash.clone(), Some(transaction.clone()))
                 },
             }
         };

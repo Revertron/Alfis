@@ -17,8 +17,7 @@ use crate::Transaction;
 pub struct Block {
     pub index: u64,
     pub timestamp: i64,
-    pub chain_name: String,
-    pub version_flags: u32,
+    pub version: u32,
     pub difficulty: usize,
     pub random: u32,
     pub nonce: u64,
@@ -31,12 +30,11 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(index: u64, timestamp: i64, chain_name: &str, version_flags: u32, prev_block_hash: Bytes, transaction: Option<Transaction>) -> Self {
+    pub fn new(index: u64, timestamp: i64, version: u32, prev_block_hash: Bytes, transaction: Option<Transaction>) -> Self {
         Block {
             index,
             timestamp,
-            chain_name: chain_name.to_owned(),
-            version_flags,
+            version,
             // TODO make difficulty parameter
             difficulty: 20,
             random: 0,
@@ -47,12 +45,11 @@ impl Block {
         }
     }
 
-    pub fn from_all_params(index: u64, timestamp: i64, chain_name: &str, version_flags: u32, difficulty: usize, random: u32, nonce: u64, prev_block_hash: Bytes, hash: Bytes, transaction: Option<Transaction>) -> Self {
+    pub fn from_all_params(index: u64, timestamp: i64, version: u32, difficulty: usize, random: u32, nonce: u64, prev_block_hash: Bytes, hash: Bytes, transaction: Option<Transaction>) -> Self {
         Block {
             index,
             timestamp,
-            chain_name: chain_name.to_owned(),
-            version_flags,
+            version,
             difficulty,
             random,
             nonce,
