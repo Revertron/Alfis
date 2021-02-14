@@ -9,7 +9,7 @@ use rand::RngCore;
 use serde::{Deserialize};
 use web_view::*;
 
-use alfis::{Blockchain, Bytes, Context, Keystore, Settings, Transaction};
+use alfis::{Blockchain, Bytes, Context, Keystore, Settings, Transaction, Block};
 use alfis::event::Event;
 use alfis::miner::Miner;
 use alfis::p2p::Network;
@@ -31,6 +31,10 @@ fn main() {
         Some(keystore) => { keystore }
     };
     let blockchain: Blockchain = Blockchain::new(&settings);
+    match blockchain.get_block(0) {
+        None => { println!("No blocks found in DB"); }
+        Some(block) => { println!("Loaded DB with origin {:?}", &block.hash); }
+    }
     let context: Arc<Mutex<Context>> = Arc::new(Mutex::new(Context::new(settings, keystore, blockchain)));
 
     let mut miner_obj = Miner::new(context.clone());

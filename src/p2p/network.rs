@@ -12,7 +12,7 @@ use mio::event::Event;
 use mio::net::{TcpListener, TcpStream};
 
 use crate::{Context, Block, p2p::Message, p2p::State, p2p::Peer, p2p::Peers};
-use std::net::{SocketAddr, IpAddr, SocketAddrV4};
+use std::net::{SocketAddr, IpAddr, SocketAddrV4, Shutdown};
 
 const SERVER: Token = Token(0);
 const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(3000));
@@ -82,6 +82,7 @@ impl Network {
                                 }
                                 Err(_) => {}
                             }
+                            poll.registry().reregister(&mut server, SERVER, Interest::READABLE).expect("Error reregistering server");
                         }
                         token => {
                             match peers.get_mut_peer(&token) {
@@ -89,7 +90,15 @@ impl Network {
                                     match handle_connection_event(context.clone(), &mut peers, &poll.registry(), &event) {
                                         Ok(result) => {
                                             if !result {
-                                                peers.remove_peer(&token);
+                                                match peers.remove_peer(&token) {
+                                                    None => {}
+                                                    Some(mut peer) => {
+                                                        let stream = peer.get_stream();
+                                                        poll.registry().deregister(stream);
+                                                        stream.shutdown(Shutdown::Both);
+                                                        println!("Peer connection {:?} has shut down", &peer.get_addr());
+                                                    }
+                                                }
                                             }
                                         }
                                         Err(_err) => {
@@ -102,6 +111,7 @@ impl Network {
                         }
                     }
                 }
+                events.clear();
 
                 // Send pings to idle peers
                 let height = { context.lock().unwrap().blockchain.height() };
@@ -258,6 +268,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 peer.set_public(public);
                 State::message(Message::shake(&origin, version, true, my_height))
             } else {
+                println!("Handshake from unsupported chain or version");
                 State::Error
             }
         }
@@ -267,7 +278,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             }
             if ok {
                 if height > my_height {
-                    State::message(Message::GetBlock { index: my_height + 1u64 })
+                    State::message(Message::GetBlock { index: my_height })
                 } else {
                     State::message(Message::GetPeers)
                 }
@@ -278,14 +289,14 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
         Message::Error => { State::Error }
         Message::Ping { height } => {
             if height > my_height {
-                State::message(Message::GetBlock { index: my_height + 1u64 })
+                State::message(Message::GetBlock { index: my_height })
             } else {
                 State::message(Message::pong(my_height))
             }
         }
         Message::Pong { height } => {
             if height > my_height {
-                State::message(Message::GetBlock { index: my_height + 1u64 })
+                State::message(Message::GetBlock { index: my_height })
             } else {
                 State::idle()
             }

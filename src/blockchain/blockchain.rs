@@ -183,7 +183,7 @@ impl Blockchain {
         match self.last_block {
             None => { 0u64 }
             Some(ref block) => {
-                block.index
+                block.index + 1
             }
         }
     }
