@@ -2,7 +2,6 @@ extern crate serde;
 extern crate serde_json;
 
 use serde::{Deserialize, Serialize};
-use crate::p2p::peer::Peer;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Message {

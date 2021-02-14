@@ -1,12 +1,11 @@
-use chrono::Utc;
-use sqlite::{Connection, Error, Readable, State, Statement};
+use sqlite::{Connection, State, Statement};
 
-use crate::{Block, Bytes, Keystore, Transaction};
+use crate::{Block, Bytes, Keystore, Transaction, Settings};
 
 const DB_NAME: &str = "blockchain.db";
 
 pub struct Blockchain {
-    origin: String,
+    origin: Bytes,
     pub version: u32,
     pub blocks: Vec<Block>,
     last_block: Option<Block>,
@@ -14,7 +13,10 @@ pub struct Blockchain {
 }
 
 impl Blockchain {
-    pub fn new(origin: String, version: u32) -> Self {
+    pub fn new(settings: &Settings) -> Self {
+        let origin = settings.get_origin();
+        let version = settings.version;
+
         let db = sqlite::open(DB_NAME).expect("Unable to open blockchain DB");
         let mut blockchain = Blockchain{ origin, version, blocks: Vec::new(), last_block: None, db};
         blockchain.init_db();
@@ -59,62 +61,65 @@ impl Blockchain {
         }
     }
 
-    pub fn add_block(&mut self, block: Block) {
-        if self.check_block(&block, &self.last_block) {
-            println!("Adding block:\n{:?}", &block);
-            self.blocks.push(block.clone());
-            self.last_block = Some(block.clone());
-            let transaction = block.transaction.clone();
+    pub fn add_block(&mut self, block: Block) -> Result<(), &str> {
+        if !self.check_block(&block, &self.last_block) {
+            println!("Bad block found, ignoring:\n{:?}", &block);
+            return Err("Bad block found, ignoring");
+        }
+        println!("Adding block:\n{:?}", &block);
+        self.blocks.push(block.clone());
+        self.last_block = Some(block.clone());
+        let transaction = block.transaction.clone();
 
-            {
-                // Adding block to DB
-                let mut statement = self.db.prepare("INSERT INTO blocks (\
+        {
+            // Adding block to DB
+            let mut statement = self.db.prepare("INSERT INTO blocks (\
                     id, timestamp, version, difficulty, random,\
                     nonce, 'transaction', prev_block_hash, hash)\
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);").unwrap();
-                statement.bind(1, block.index as i64);
-                statement.bind(2, block.timestamp as i64);
-                statement.bind(3, block.version as i64);
-                statement.bind(4, block.difficulty as i64);
-                statement.bind(5, block.random as i64);
-                statement.bind(6, block.nonce as i64);
-                match &transaction {
-                    None => { statement.bind(7, ""); }
-                    Some(transaction) => {
-                        statement.bind(7, transaction.to_string().as_ref() as &str);
-                    }
-                }
-                statement.bind(8, block.prev_block_hash.as_bytes());
-                statement.bind(9, block.hash.as_bytes());
-                statement.next().expect("Error adding block to DB");
-            }
-
+            statement.bind(1, block.index as i64).expect("Error in bind");
+            statement.bind(2, block.timestamp as i64).expect("Error in bind");
+            statement.bind(3, block.version as i64).expect("Error in bind");
+            statement.bind(4, block.difficulty as i64).expect("Error in bind");
+            statement.bind(5, block.random as i64).expect("Error in bind");
+            statement.bind(6, block.nonce as i64).expect("Error in bind");
             match &transaction {
-                None => {}
+                None => { statement.bind(7, "").expect("Error in bind"); }
                 Some(transaction) => {
-                    self.add_transaction(transaction);
+                    statement.bind(7, transaction.to_string().as_ref() as &str).expect("Error in bind");
                 }
             }
-        } else {
-            println!("Bad block found, ignoring:\n{:?}", &block);
+            statement.bind(8, block.prev_block_hash.as_bytes()).expect("Error in bind");
+            statement.bind(9, block.hash.as_bytes()).expect("Error in bind");
+            statement.next().expect("Error adding block to DB");
+        }
+
+        match &transaction {
+            None => {
+                Err("Error adding transaction!")
+            }
+            Some(transaction) => {
+                self.add_transaction(transaction);
+                Ok(())
+            }
         }
     }
 
     fn add_transaction(&mut self, t: &Transaction) {
         let mut statement = self.db.prepare("INSERT INTO transactions (identity, confirmation, method, data, pub_key, signature) VALUES (?, ?, ?, ?, ?, ?)").unwrap();
-        statement.bind(1, t.identity.as_bytes());
-        statement.bind(2, t.confirmation.as_bytes());
-        statement.bind(3, t.method.as_ref() as &str);
-        statement.bind(4, t.data.as_ref() as &str);
-        statement.bind(5, t.pub_key.as_bytes());
-        statement.bind(6, t.signature.as_bytes());
+        statement.bind(1, t.identity.as_bytes()).expect("Error in bind");
+        statement.bind(2, t.confirmation.as_bytes()).expect("Error in bind");
+        statement.bind(3, t.method.as_ref() as &str).expect("Error in bind");
+        statement.bind(4, t.data.as_ref() as &str).expect("Error in bind");
+        statement.bind(5, t.pub_key.as_bytes()).expect("Error in bind");
+        statement.bind(6, t.signature.as_bytes()).expect("Error in bind");
         statement.next().expect("Error adding transaction to DB");
     }
 
     pub fn get_block(&self, index: u64) -> Option<Block> {
         match self.db.prepare("SELECT * FROM blocks WHERE id=? LIMIT 1;") {
             Ok(mut statement) => {
-                statement.bind(1, index as i64);
+                statement.bind(1, index as i64).expect("Error in bind");
                 while statement.next().unwrap() == State::Row {
                     return match Self::get_block_from_statement(&mut statement) {
                         None => {
@@ -142,7 +147,7 @@ impl Blockchain {
         }
         let identity_hash = Transaction::hash_identity(domain);
         let mut statement = self.db.prepare("SELECT pub_key FROM transactions WHERE identity = ? ORDER BY id DESC LIMIT 1;").unwrap();
-        statement.bind(1, identity_hash.as_bytes());
+        statement.bind(1, identity_hash.as_bytes()).expect("Error in bind");
         while let State::Row = statement.next().unwrap() {
             let pub_key = Bytes::from_bytes(statement.read::<Vec<u8>>(0).unwrap().as_slice());
             if !pub_key.eq(&keystore.get_public()) {
@@ -159,7 +164,7 @@ impl Blockchain {
             // Checking for available zone, for this domain
             let identity_hash = Transaction::hash_identity(parts.first().unwrap());
             let mut statement = self.db.prepare("SELECT identity FROM transactions WHERE identity = ? ORDER BY id DESC LIMIT 1;").unwrap();
-            statement.bind(1, identity_hash.as_bytes());
+            statement.bind(1, identity_hash.as_bytes()).expect("Error in bind");
             while let State::Row = statement.next().unwrap() {
                 // If there is such a zone
                 return true;
@@ -196,15 +201,36 @@ impl Blockchain {
     }*/
 
     fn check_block(&self, block: &Block, prev_block: &Option<Block>) -> bool {
-        // TODO check if it is already stored, or its height is more than we need
-        if !Self::check_block_hash(block) {
+        if !check_block_hash(block) {
+            println!("{:?} has wrong hash! Ignoring!", &block);
             return false;
         }
-        if prev_block.is_none() {
-            return true;
+        // TODO make transaction not Optional
+        let transaction = block.transaction.as_ref().unwrap();
+        if !check_transaction_signature(&transaction) {
+            println!("{:?} has wrong signature! Ignoring block!", &transaction);
+            return false;
         }
+        match prev_block {
+            None => {
+                if block.index != 0 {
+                    return false;
+                }
 
-        return block.prev_block_hash == prev_block.as_ref().unwrap().hash;
+                if self.origin.is_zero() && block.index > 0 {
+                    panic!("Error adding block {} without origin! Please, fill in origin in config!", block.index);
+                }
+
+                self.origin.is_zero() || block.hash.eq(&self.origin)
+            }
+            Some(prev) => {
+                if block.index != prev.index + 1 {
+                    println!("Discarding block with index {} as not needed now", block.index);
+                    return false;
+                }
+                block.prev_block_hash.eq(&prev.hash)
+            }
+        }
     }
 
     fn get_block_from_statement(statement: &mut Statement) -> Option<Block> {
@@ -219,12 +245,18 @@ impl Blockchain {
         let hash = Bytes::from_bytes(statement.read::<Vec<u8>>(8).unwrap().as_slice());
         Some(Block::from_all_params(index, timestamp, version, difficulty, random, nonce, prev_block_hash, hash, transaction))
     }
+}
 
-    pub fn check_block_hash(block: &Block) -> bool {
-        // We need to clear Hash value to rehash it without it for check :(
-        let mut copy: Block = block.clone();
-        copy.hash = Bytes::default();
-        let data = serde_json::to_string(&copy).unwrap();
-        Block::hash(data.as_bytes()) == block.hash
-    }
+pub fn check_block_hash(block: &Block) -> bool {
+    let mut copy: Block = block.clone();
+    copy.hash = Bytes::default();
+    let data = serde_json::to_string(&copy).unwrap();
+    Block::hash(data.as_bytes()) == block.hash
+}
+
+pub fn check_transaction_signature(transaction: &Transaction) -> bool {
+    let mut copy = transaction.clone();
+    copy.signature = Bytes::zero64();
+    let data = copy.get_bytes();
+    Keystore::check(data.as_slice(), copy.pub_key.as_bytes(), transaction.signature.as_bytes())
 }

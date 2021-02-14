@@ -8,15 +8,12 @@ use crypto::digest::Digest;
 use crypto::sha2::Sha256;
 use num_cpus;
 
-use crate::{Block, Bytes, Context, hash_is_good, Keystore, Transaction};
+use crate::{Block, Bytes, Context, hash_is_good, Transaction};
 use crate::event::Event;
 
 pub struct Miner {
     context: Arc<Mutex<Context>>,
-    keystore: Keystore,
-    version: u32,
     transactions: Arc<Mutex<Vec<Transaction>>>,
-    last_block: Option<Block>,
     running: Arc<AtomicBool>,
     mining: Arc<AtomicBool>,
     cond_var: Arc<Condvar>
@@ -24,13 +21,9 @@ pub struct Miner {
 
 impl Miner {
     pub fn new(context: Arc<Mutex<Context>>) -> Self {
-        let c = context.lock().unwrap();
         Miner {
             context: context.clone(),
-            keystore: c.keystore.clone(),
-            version: c.settings.version,
             transactions: Arc::new(Mutex::new(Vec::new())),
-            last_block: c.blockchain.blocks.last().cloned(),
             running: Arc::new(AtomicBool::new(false)),
             mining: Arc::new(AtomicBool::new(false)),
             cond_var: Arc::new(Condvar::new())
@@ -65,19 +58,17 @@ impl Miner {
 
                 let mut lock = transactions.lock().unwrap();
                 if lock.len() > 0 {
-                    println!("Starting to mine some transaction");
+                    println!("Got new transaction to mine");
                     let transaction = lock.remove(0);
                     mining.store(true, Ordering::Relaxed);
                     Miner::mine_internal(context.clone(), transactions.clone(), transaction, mining.clone(), cond_var.clone());
                 } else {
-                    println!("Waiting for transactions");
-                    cond_var.wait(lock);
-                    println!("Got notified on new transaction");
+                    let _ = cond_var.wait(lock).expect("Error in wait lock!");
                 }
             }
         });
         let mining = self.mining.clone();
-        self.context.lock().unwrap().bus.register(move |uuid, e| {
+        self.context.lock().unwrap().bus.register(move |_uuid, e| {
             if e == Event::ActionStopMining {
                 mining.store(false, Ordering::Relaxed);
             }
@@ -90,13 +81,11 @@ impl Miner {
     }
 
     fn mine_internal(context: Arc<Mutex<Context>>, transactions: Arc<Mutex<Vec<Transaction>>>, mut transaction: Transaction, mining: Arc<AtomicBool>, cond_var: Arc<Condvar>) {
-        let mut last_block_time = 0i64;
-        let mut version= 0u32;
-        {
+        let version= {
             let mut c = context.lock().unwrap();
             c.bus.post(Event::MinerStarted);
-            version = c.settings.version;
-        }
+            c.settings.version
+        };
         let block = {
             if transaction.signature.is_zero() {
                 // Signing it with private key from Keystore
@@ -114,7 +103,6 @@ impl Miner {
                     Block::new(0, Utc::now().timestamp(), version, Bytes::zero32(), Some(transaction.clone()))
                 },
                 Some(block) => {
-                    last_block_time = block.timestamp;
                     // Creating a block with that signed transaction
                     Block::new(block.index + 1, Utc::now().timestamp(), version, block.hash.clone(), Some(transaction.clone()))
                 },
@@ -134,11 +122,10 @@ impl Miner {
             let cond_var = cond_var.clone();
             thread::spawn(move || {
                 live_threads.fetch_add(1, Ordering::Relaxed);
-                let mut count = 0u32;
-                match find_hash(&mut Sha256::new(), block, last_block_time, mining.clone()) {
+                match find_hash(&mut Sha256::new(), block, mining.clone()) {
                     None => {
                         println!("Mining did not find suitable hash or was stopped");
-                        count = live_threads.fetch_sub(1, Ordering::Relaxed);
+                        let count = live_threads.fetch_sub(1, Ordering::Relaxed);
                         // If this is the last thread, but mining was not stopped by another thread
                         if count == 0 && mining.load(Ordering::Relaxed) {
                             // If all threads came empty with mining we return transaction to the queue
@@ -148,9 +135,8 @@ impl Miner {
                         }
                     },
                     Some(block) => {
-                        count = live_threads.fetch_sub(1, Ordering::Relaxed);
                         let mut context = context.lock().unwrap();
-                        context.blockchain.add_block(block);
+                        context.blockchain.add_block(block).expect("Error adding fresh mined block!");
                         context.bus.post(Event::MinerStopped);
                         mining.store(false, Ordering::Relaxed);
                     },
@@ -160,22 +146,16 @@ impl Miner {
     }
 }
 
-fn find_hash(digest: &mut dyn Digest, mut block: Block, prev_block_time: i64, running: Arc<AtomicBool>) -> Option<Block> {
+fn find_hash(digest: &mut dyn Digest, mut block: Block, running: Arc<AtomicBool>) -> Option<Block> {
     let mut buf: [u8; 32] = [0; 32];
     block.random = rand::random();
     println!("Mining block {}", serde_json::to_string(&block).unwrap());
-    //let start_difficulty = block.difficulty;
     for nonce in 0..std::u64::MAX {
         if !running.load(Ordering::Relaxed) {
             return None;
         }
         block.timestamp = Utc::now().timestamp();
         block.nonce = nonce;
-        // if nonce % 1000 == 0 {
-        //     println!("Nonce {}", nonce);
-        // }
-        // TODO uncomment for real run
-        //block.difficulty = start_difficulty + get_time_difficulty(prev_block_time, block.timestamp);
 
         digest.reset();
         digest.input(serde_json::to_string(&block).unwrap().as_bytes());
@@ -186,13 +166,4 @@ fn find_hash(digest: &mut dyn Digest, mut block: Block, prev_block_time: i64, ru
         }
     }
     None
-}
-
-fn get_time_difficulty(prev_time: i64, now: i64) -> usize {
-    let diff = now - prev_time;
-    if diff < 900_000 {
-        (900_000 as usize - diff as usize) / 60_000
-    } else {
-        0
-    }
 }

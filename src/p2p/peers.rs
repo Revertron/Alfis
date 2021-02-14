@@ -80,7 +80,7 @@ impl Peers {
     }
 
     pub fn send_pings(&mut self, registry: &Registry, height: u64) {
-        for (token, mut peer) in self.peers.iter_mut() {
+        for (token, peer) in self.peers.iter_mut() {
             match peer.get_state() {
                 State::Idle { from } => {
                     if from.elapsed().as_secs() >= PING_PERIOD {
@@ -93,7 +93,7 @@ impl Peers {
                         };
 
                         peer.set_state(State::message(message));
-                        let mut stream = peer.get_stream();
+                        let stream = peer.get_stream();
                         registry.reregister(stream, token.clone(), Interest::WRITABLE).unwrap();
                     }
                 }

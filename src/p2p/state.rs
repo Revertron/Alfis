@@ -9,7 +9,7 @@ pub enum State {
     Message { data: Vec<u8> },
     Error,
     Banned,
-    Offline { from: Instant, attempts: usize },
+    Offline { from: Instant },
 }
 
 impl State {
@@ -17,19 +17,8 @@ impl State {
         Self::Idle { from: Instant::now() }
     }
 
-    pub fn offline(attempts: usize) -> Self {
-        Self::Offline { attempts, from: Instant::now() }
-    }
-
-    pub fn still_offline(state: Self) -> Self {
-        match state {
-            State::Offline { attempts, from } => {
-                Self::Offline { attempts: attempts + 1, from }
-            }
-            _ => {
-                Self::Offline { attempts: 1, from: Instant::now() }
-            }
-        }
+    pub fn offline() -> Self {
+        Self::Offline { from: Instant::now() }
     }
 
     pub fn message(message: Message) -> Self {
@@ -51,7 +40,7 @@ impl State {
         match self {
             State::Error => { true }
             State::Banned => { true }
-            State::Offline { from, attempts } => {
+            State::Offline { from} => {
                 from.elapsed().as_secs() < 60 // We check offline peers to become online every 5 minutes
             }
             _ => { false }

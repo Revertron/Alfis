@@ -2,7 +2,6 @@ extern crate serde;
 extern crate serde_json;
 
 use std::{io, thread};
-use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -11,11 +10,9 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use mio::{Events, Interest, Poll, Registry, Token};
 use mio::event::Event;
 use mio::net::{TcpListener, TcpStream};
-use serde::{Deserialize, Serialize};
 
 use crate::{Context, Block, p2p::Message, p2p::State, p2p::Peer, p2p::Peers};
 use std::net::{SocketAddr, IpAddr, SocketAddrV4};
-use std::borrow::BorrowMut;
 
 const SERVER: Token = Token(0);
 const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(3000));
@@ -88,7 +85,7 @@ impl Network {
                         }
                         token => {
                             match peers.get_mut_peer(&token) {
-                                Some(peer) => {
+                                Some(_peer) => {
                                     match handle_connection_event(context.clone(), &mut peers, &poll.registry(), &event) {
                                         Ok(result) => {
                                             if !result {
@@ -123,7 +120,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
 
     if event.is_readable() {
         let data = {
-            let mut peer = peers.get_mut_peer(&event.token()).expect("Error getting peer for connection");
+            let peer = peers.get_mut_peer(&event.token()).expect("Error getting peer for connection");
             let mut stream = peer.get_stream();
             read_message(&mut stream)
         };
@@ -134,8 +131,8 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                 Ok(message) => {
                     println!("Got message from socket {}: {:?}", &event.token().0, &message);
                     let new_state = handle_message(context.clone(), message, peers, &event.token());
-                    let mut peer = peers.get_mut_peer(&event.token()).unwrap();
-                    let mut stream = peer.get_stream();
+                    let peer = peers.get_mut_peer(&event.token()).unwrap();
+                    let stream = peer.get_stream();
                     match new_state {
                         State::Message { data } => {
                             if event.is_writable() {
@@ -154,7 +151,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                         State::Error => {}
                         State::Banned => {}
                         State::Offline { .. } => {
-                            peer.set_state(State::offline(1));
+                            peer.set_state(State::offline());
                         }
                     }
                 }
@@ -175,7 +172,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                     State::Connecting => {
                         println!("Sending hello to socket {}", event.token().0);
                         let data: String = {
-                            let mut c = context.lock().unwrap();
+                            let c = context.lock().unwrap();
                             let message = Message::hand(&c.settings.origin, c.settings.version, c.settings.public);
                             serde_json::to_string(&message).unwrap()
                         };
@@ -191,7 +188,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                         println!("Odd version of pings :)");
                         if from.elapsed().as_secs() >= 30 {
                             let data: String = {
-                                let mut c = context.lock().unwrap();
+                                let c = context.lock().unwrap();
                                 let message = Message::ping(c.blockchain.height());
                                 serde_json::to_string(&message).unwrap()
                             };
@@ -232,7 +229,7 @@ fn read_message(stream: &mut &mut TcpStream) -> Result<Vec<u8>, Vec<u8>> {
             Err(ref err) if would_block(err) => break,
             Err(ref err) if interrupted(err) => continue,
             // Other errors we'll consider fatal.
-            Err(err) => return Err(buf),
+            Err(_) => return Err(buf),
         }
     }
     if buf.len() == data_size {
@@ -244,29 +241,30 @@ fn read_message(stream: &mut &mut TcpStream) -> Result<Vec<u8>, Vec<u8>> {
 
 fn send_message(connection: &mut TcpStream, data: &Vec<u8>) {
     // TODO handle errors
-    connection.write_u32::<BigEndian>(data.len() as u32);
+    connection.write_u32::<BigEndian>(data.len() as u32).expect("Error sending message");
     connection.write_all(&data).expect("Error writing to socket");
-    connection.flush();
+    connection.flush().expect("Error sending message");
 }
 
 fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Peers, token: &Token) -> State {
-    let my_height = {
+    let (my_height, my_origin, my_version) = {
         let context = context.lock().unwrap();
-        context.blockchain.height()
+        (context.blockchain.height(), &context.settings.origin.clone(), context.settings.version)
     };
     match message {
-        Message::Hand { origin: origin, version, public } => {
-            let context = context.lock().unwrap();
-            if origin == context.settings.origin && version == context.settings.version {
-                let mut peer = peers.get_mut_peer(token).unwrap();
+        Message::Hand { origin, version, public } => {
+            if origin.eq(my_origin) && version == my_version {
+                let peer = peers.get_mut_peer(token).unwrap();
                 peer.set_public(public);
-                State::message(Message::shake(&context.settings.origin, context.settings.version, true, context.blockchain.height()))
+                State::message(Message::shake(&origin, version, true, my_height))
             } else {
                 State::Error
             }
         }
         Message::Shake { origin, version, ok, height } => {
-            // TODO check origin and version for compatibility
+            if origin.ne(my_origin) || version != my_version {
+                return State::Error;
+            }
             if ok {
                 if height > my_height {
                     State::message(Message::GetBlock { index: my_height + 1u64 })
@@ -308,6 +306,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             }
         }
         Message::Block { index, block } => {
+            println!("Received block {}", index);
             let block: Block = match serde_json::from_str(&block) {
                 Ok(block) => block,
                 Err(_) => return State::Error
@@ -316,8 +315,10 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             let context = context.clone();
             thread::spawn(move || {
                 let mut context = context.lock().unwrap();
-                context.blockchain.add_block(block);
-                context.bus.post(crate::event::Event::BlockchainChanged)
+                match context.blockchain.add_block(block) {
+                    Ok(_) => { context.bus.post(crate::event::Event::BlockchainChanged); }
+                    Err(_) => { println!("Error adding received block"); }
+                }
             });
             State::idle()
         }

@@ -1,4 +1,3 @@
-use crate::event::Event;
 use uuid::Uuid;
 use std::collections::HashMap;
 
@@ -11,7 +10,7 @@ impl<T: Clone> Bus<T> {
         Bus { listeners: HashMap::new() }
     }
 
-    pub fn register<F>(&mut self, mut closure: F) -> Uuid where F: FnMut(&Uuid, T) -> bool + Send + Sync + 'static {
+    pub fn register<F>(&mut self, closure: F) -> Uuid where F: FnMut(&Uuid, T) -> bool + Send + Sync + 'static {
         let uuid = Uuid::new_v4();
         self.listeners.insert(uuid.clone(), Box::new(closure));
         uuid
@@ -30,7 +29,6 @@ impl<T: Clone> Bus<T> {
 
 mod tests {
     use std::sync::{Arc, Mutex};
-    use std::sync::atomic::{AtomicI32, Ordering};
     use std::thread;
     use std::time::Duration;
 
@@ -39,8 +37,8 @@ mod tests {
 
     #[test]
     fn test1() {
-        let mut string = Arc::new(Mutex::new(String::from("start")));
-        let mut bus = Arc::new(Mutex::new(Bus::new()));
+        let string = Arc::new(Mutex::new(String::from("start")));
+        let bus = Arc::new(Mutex::new(Bus::new()));
         let string_copy = string.clone();
         {
             bus.lock().unwrap().register(move |_uuid, e| {
@@ -56,7 +54,7 @@ mod tests {
             bus2.lock().unwrap().post(Event::BlockchainChanged);
         });
 
-        let mut guard = string.lock().unwrap();
+        let guard = string.lock().unwrap();
         thread::sleep(Duration::from_millis(100));
         println!("string = {}", &guard);
     }

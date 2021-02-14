@@ -1,7 +1,6 @@
 use crate::p2p::State;
 use std::net::SocketAddr;
 use mio::net::TcpStream;
-use std::sync::RwLock;
 
 #[derive(Debug)]
 pub struct Peer {
@@ -49,9 +48,9 @@ impl Peer {
         self.state.disabled()
     }
 
+    /// If loopback address then we care about ip and port.
+    /// If regular address then we only care about the ip and ignore the port.
     pub fn equals(&self, addr: &SocketAddr) -> bool {
-        /// If loopback address then we care about ip and port.
-        /// If regular address then we only care about the ip and ignore the port.
         if self.addr.ip().is_loopback() {
             self.addr == *addr
         } else {

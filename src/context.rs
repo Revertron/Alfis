@@ -1,8 +1,6 @@
 use crate::{Keystore, Blockchain, Bus, Bytes};
 use crate::event::Event;
-use std::collections::HashMap;
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
-use serde::de::Error;
+use serde::{Serialize, Deserialize};
 use std::fs::File;
 use std::io::Read;
 
@@ -65,7 +63,7 @@ impl Settings {
         match File::open(file_name) {
             Ok(mut file) => {
                 let mut text = String::new();
-                file.read_to_string(&mut text);
+                file.read_to_string(&mut text).unwrap();
                 let loaded = serde_json::from_str(&text);
                 return if loaded.is_ok() {
                     Some(loaded.unwrap())
@@ -78,6 +76,9 @@ impl Settings {
     }
 
     pub fn get_origin(&self) -> Bytes {
+        if self.origin.eq("") {
+            return Bytes::zero32();
+        }
         let origin = crate::from_hex(&self.origin).expect("Wrong origin in settings");
         Bytes::from_bytes(origin.as_slice())
     }

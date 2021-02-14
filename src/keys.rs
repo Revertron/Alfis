@@ -7,7 +7,7 @@ use rand::{thread_rng, Rng};
 use std::fmt;
 use std::fs;
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::Path;
 use serde::export::fmt::Error;
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
@@ -26,7 +26,7 @@ pub struct Keystore {
 
 impl Keystore {
     pub fn new() -> Self {
-        let mut buf = [0u8; 64];
+        let mut buf = [0u8; 32];
         let mut rng = thread_rng();
         rng.fill(&mut buf);
         let (private, public) = keypair(&buf);
@@ -50,11 +50,11 @@ impl Keystore {
     }
 
     //TODO Implement error conditions
-    pub fn save(&self, filename: &str, password: &str) {
+    pub fn save(&self, filename: &str, _password: &str) {
         match File::create(Path::new(filename)) {
             Ok(mut f) => {
                 //TODO implement key encryption
-                f.write_all(&self.seed);
+                f.write_all(&self.seed).expect("Error saving keystore");
             }
             Err(_) => { println!("Error saving key file!"); }
         }
@@ -69,10 +69,10 @@ impl Keystore {
     }
 
     pub fn sign(&self, message: &[u8]) -> [u8; 64] {
-        signature(message, &self.private_key.data)
+        signature(message, self.private_key.data.as_slice())
     }
 
-    pub fn check(&self, message: &[u8], public_key: &[u8], signature: &[u8]) -> bool {
+    pub fn check(message: &[u8], public_key: &[u8], signature: &[u8]) -> bool {
         verify(message, public_key, signature)
     }
 
@@ -117,7 +117,7 @@ impl Bytes {
 
     /// Returns a byte slice of the hash contents.
     pub fn as_bytes(&self) -> &[u8] {
-        &self.data
+        self.data.as_slice()
     }
 
     pub fn zero32() -> Self {
@@ -188,4 +188,13 @@ impl<'dd> Deserialize<'dd> for Bytes {
     fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'dd>>::Error> where D: Deserializer<'dd> {
         deserializer.deserialize_str(BytesVisitor)
     }
+}
+
+#[test]
+pub fn test_signature() {
+    let keystore: Keystore = Keystore::new();
+    let data = b"{ identity: 178135D209C697625E3EC71DA5C760382E54936F824EE5083908DA66B14ECE18,\
+    confirmation: A4A0AFECD1A511825226F0D3437C6C6BDAE83554040AA7AEB49DEFEAB0AE9EA4 }";
+    let signature = keystore.sign(data);
+    assert!(Keystore::check(data, keystore.get_public().as_bytes(), &signature), "Wrong signature!")
 }

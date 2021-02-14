@@ -85,12 +85,12 @@ impl fmt::Debug for Transaction {
 impl Serialize for Transaction {
     fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> where S: Serializer {
         let mut structure = serializer.serialize_struct("Transaction", 6).unwrap();
-        structure.serialize_field("identity", &self.identity);
-        structure.serialize_field("confirmation", &self.confirmation);
-        structure.serialize_field("method", &self.method);
-        structure.serialize_field("data", &self.data);
-        structure.serialize_field("pub_key", &self.pub_key);
-        structure.serialize_field("signature", &self.signature);
+        structure.serialize_field("identity", &self.identity)?;
+        structure.serialize_field("confirmation", &self.confirmation)?;
+        structure.serialize_field("method", &self.method)?;
+        structure.serialize_field("data", &self.data)?;
+        structure.serialize_field("pub_key", &self.pub_key)?;
+        structure.serialize_field("signature", &self.signature)?;
         structure.end()
     }
 }

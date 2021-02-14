@@ -1,16 +1,15 @@
 #![windows_subsystem = "windows"]
 extern crate web_view;
 
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 
-use rand::{Rng, RngCore};
-use serde::{Deserialize, Serialize};
+use rand::RngCore;
+use serde::{Deserialize};
 use web_view::*;
 
-use alfis::{Block, Blockchain, Bytes, Context, Keystore, Settings, Transaction};
+use alfis::{Blockchain, Bytes, Context, Keystore, Settings, Transaction};
 use alfis::event::Event;
 use alfis::miner::Miner;
 use alfis::p2p::Network;
@@ -31,7 +30,7 @@ fn main() {
         None => { generate_key(KEYSTORE_DIFFICULTY, Arc::new(AtomicBool::new(true))).expect("Could not load or generate keypair") }
         Some(keystore) => { keystore }
     };
-    let blockchain: Blockchain = Blockchain::new(settings.origin.clone(), settings.version);
+    let blockchain: Blockchain = Blockchain::new(&settings);
     let context: Arc<Mutex<Context>> = Arc::new(Mutex::new(Context::new(settings, keystore, blockchain)));
 
     let mut miner_obj = Miner::new(context.clone());
@@ -39,7 +38,7 @@ fn main() {
     let miner: Arc<Mutex<Miner>> = Arc::new(Mutex::new(miner_obj));
 
     let mut network = Network::new(context.clone());
-    network.start();
+    network.start().expect("Error starting network component");
 
     create_genesis_if_needed(&context, &miner);
     run_interface(context.clone(), miner.clone());
@@ -76,8 +75,8 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
             println!("Command {}", arg);
             match serde_json::from_str(arg).unwrap() {
                 Loaded => {
-                    web_view.eval("showMiningIndicator(false);");
-                    let mut handle = web_view.handle();
+                    web_view.eval("showMiningIndicator(false);").expect("Error evaluating!");
+                    let handle = web_view.handle();
                     let mut c = context.lock().unwrap();
                     c.bus.register(move |_uuid, e| {
                         println!("Got event from bus {:?}", &e);
@@ -89,9 +88,9 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                             _ => { false }
                         };
                         handle.dispatch(move |web_view| {
-                            web_view.eval(&format!("showMiningIndicator({});", visible));
+                            web_view.eval(&format!("showMiningIndicator({});", visible)).expect("Error evaluating!");
                             return WVResult::Ok(());
-                        });
+                        }).expect("Error dispatching!");
                         true
                     });
                 }
@@ -112,11 +111,11 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                 CheckDomain { name} => {
                     let c = context.lock().unwrap();
                     let available = c.get_blockchain().is_domain_available(&name, &c.get_keystore());
-                    web_view.eval(&format!("domainAvailable({})", available));
+                    web_view.eval(&format!("domainAvailable({})", available)).expect("Error evaluating!");
                 }
                 CreateDomain { name, records, tags } => {
                     let keystore = {
-                        let mut guard = context.lock().unwrap();
+                        let guard = context.lock().unwrap();
                         guard.get_keystore()
                     };
                     create_domain(miner.clone(), name, records, &keystore);
@@ -152,7 +151,7 @@ fn create_domain<S: Into<String>>(miner: Arc<Mutex<Miner>>, name: S, data: S, ke
     println!("Generating domain {}", name);
     //let rec_vector: Vec<String> = records.into().trim().split("\n").map(|s| s.trim()).map(String::from).collect();
     //let tags_vector: Vec<String> = tags.into().trim().split(",").map(|s| s.trim()).map(String::from).collect();
-    let mut transaction = { create_transaction(keystore, name, "domain".into(), data.into()) };
+    let transaction = { create_transaction(keystore, name, "domain".into(), data.into()) };
     let mut miner_guard = miner.lock().unwrap();
     miner_guard.add_transaction(transaction);
 }
@@ -168,10 +167,10 @@ fn create_transaction<S: Into<String>>(keystore: &Keystore, name: S, method: S, 
 }
 
 fn create_key(context: Arc<Mutex<Context>>, filename: &str, password: &str) {
-    let mut mining = Arc::new(AtomicBool::new(true));
+    let mining = Arc::new(AtomicBool::new(true));
+    { context.lock().unwrap().bus.post(Event::KeyGeneratorStarted); }
     for _ in 0..num_cpus::get() {
         let context = context.clone();
-        { context.lock().unwrap().bus.post(Event::KeyGeneratorStarted); }
         let filename= filename.to_owned();
         let password= password.to_owned();
         let mining = mining.clone();
@@ -201,7 +200,7 @@ fn create_key(context: Arc<Mutex<Context>>, filename: &str, password: &str) {
 
 fn generate_key(difficulty: usize, mining: Arc<AtomicBool>) -> Option<Keystore> {
     let mut rng = rand::thread_rng();
-    let mut buf = [0u8; 64];
+    let mut buf = [0u8; 32];
     loop {
         rng.fill_bytes(&mut buf);
         let keystore = Keystore::from_bytes(&buf);
@@ -213,7 +212,6 @@ fn generate_key(difficulty: usize, mining: Arc<AtomicBool>) -> Option<Keystore> 
             return None;
         }
     }
-    None
 }
 
 #[derive(Deserialize)]
