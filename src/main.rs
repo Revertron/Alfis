@@ -1,8 +1,9 @@
 #![windows_subsystem = "windows"]
 extern crate web_view;
+extern crate tinyfiledialogs as tfd;
 
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering, AtomicUsize};
 use std::thread;
 
 use rand::RngCore;
@@ -27,7 +28,10 @@ fn main() {
     println!("ALFIS 0.1.0");
     let settings = Settings::load(SETTINGS_FILENAME).expect("Error loading settings");
     let keystore: Keystore = match Keystore::from_file(&settings.key_file, "") {
-        None => { generate_key(KEYSTORE_DIFFICULTY, Arc::new(AtomicBool::new(true))).expect("Could not load or generate keypair") }
+        None => {
+            println!("Generated temporary keystore. Please, generate full-privileged keys.");
+            Keystore::new()
+        }
         Some(keystore) => { keystore }
     };
     let blockchain: Blockchain = Blockchain::new(&settings);
@@ -81,36 +85,66 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                 Loaded => {
                     web_view.eval("showMiningIndicator(false);").expect("Error evaluating!");
                     let handle = web_view.handle();
+                    let context_copy = context.clone();
                     let mut c = context.lock().unwrap();
                     c.bus.register(move |_uuid, e| {
                         println!("Got event from bus {:?}", &e);
-                        let visible = match e {
-                            Event::MinerStarted => { true }
-                            Event::KeyGeneratorStarted => { true }
-                            Event::MinerStopped => { false }
-                            Event::KeyGeneratorStopped => { false }
-                            _ => { false }
+                        let eval = match e {
+                            Event::KeyCreated { path, public } => { format!("keystoreChanged('{}', '{}');", &path, &public) }
+                            Event::KeyLoaded { path, public } => { format!("keystoreChanged('{}', '{}');", &path, &public) }
+                            Event::KeySaved { path, public } => { format!("keystoreChanged('{}', '{}');", &path, &public) }
+                            Event::MinerStarted => { format!("showMiningIndicator({});", true) }
+                            Event::KeyGeneratorStarted => { format!("showMiningIndicator({});", true) }
+                            Event::MinerStopped => { format!("showMiningIndicator({});", false) }
+                            Event::KeyGeneratorStopped => { format!("showMiningIndicator({});", false) }
+                            _ => { String::new() }
                         };
-                        handle.dispatch(move |web_view| {
-                            web_view.eval(&format!("showMiningIndicator({});", visible)).expect("Error evaluating!");
-                            return WVResult::Ok(());
-                        }).expect("Error dispatching!");
+
+                        if !eval.is_empty() {
+                            println!("Evaluating {}", &eval);
+                            handle.dispatch(move |web_view| {
+                                web_view.eval(&eval.replace("\\", "\\\\")).expect("Error evaluating!");
+                                return WVResult::Ok(());
+                            }).expect("Error dispatching!");
+                        }
                         true
                     });
                 }
-                LoadKey { name, pass } => {
-                    match Keystore::from_file(&name, &pass) {
-                        None => {
-                            println!("Error loading keystore '{}'!", &name);
-                        },
-                        Some(keystore) => {
-                            let mut c = context.lock().unwrap();
-                            c.set_keystore(keystore);
+                LoadKey {} => {
+                    let result = tfd::open_file_dialog("Open keys file", "", Some((&["*.key"], "*.key")));
+                    match result {
+                        None => {}
+                        Some(file_name) => {
+                            match Keystore::from_file(&file_name, "") {
+                                None => {
+                                    println!("Error loading keystore '{}'!", &file_name);
+                                },
+                                Some(keystore) => {
+                                    println!("Loaded keystore with key: {:?}", &keystore.get_public());
+                                    let mut c = context.lock().unwrap();
+                                    c.bus.post(Event::KeyLoaded {path: keystore.get_path().to_owned(), public: keystore.get_public().to_string()});
+                                    c.set_keystore(keystore);
+                                }
+                            }
                         }
                     }
                 },
-                CreateKey { name, pass } => {
-                    create_key(context.clone(), &name, &pass);
+                CreateKey {} => {
+                    create_key(context.clone());
+                }
+                SaveKey {} => {
+                    let result = tfd::save_file_dialog_with_filter("Save keys file", "", &["*.key"], "Key files (*.key)");
+                    match result {
+                        None => {}
+                        Some(new_path) => {
+                            let mut c = context.lock().unwrap();
+                            let path = new_path.clone();
+                            let public = c.keystore.get_public().to_string();
+                            c.keystore.save(&new_path, "");
+                            println!("Key file saved to {}", &path);
+                            c.bus.post(Event::KeySaved {path, public });
+                        }
+                    }
                 }
                 CheckDomain { name} => {
                     let c = context.lock().unwrap();
@@ -170,27 +204,31 @@ fn create_transaction<S: Into<String>>(keystore: &Keystore, name: S, method: S, 
     transaction
 }
 
-fn create_key(context: Arc<Mutex<Context>>, filename: &str, password: &str) {
+fn create_key(context: Arc<Mutex<Context>>) {
     let mining = Arc::new(AtomicBool::new(true));
+    let miners_count = Arc::new(AtomicUsize::new(0));
     { context.lock().unwrap().bus.post(Event::KeyGeneratorStarted); }
     for _ in 0..num_cpus::get() {
         let context = context.clone();
-        let filename= filename.to_owned();
-        let password= password.to_owned();
         let mining = mining.clone();
+        let miners_count = miners_count.clone();
         thread::spawn(move || {
+            miners_count.fetch_add(1, Ordering::Relaxed);
             match generate_key(KEYSTORE_DIFFICULTY, mining.clone()) {
                 None => {
                     println!("Keystore mining finished");
-                    context.lock().unwrap().bus.post(Event::KeyGeneratorStopped);
                 }
                 Some(keystore) => {
+                    println!("Key mined successfully: {:?}", &keystore.get_public());
                     let mut c = context.lock().unwrap();
                     mining.store(false,Ordering::Relaxed);
-                    keystore.save(&filename, &password);
+                    c.bus.post(Event::KeyCreated {path: keystore.get_path().to_owned(), public: keystore.get_public().to_string()});
                     c.set_keystore(keystore);
-                    c.bus.post(Event::KeyGeneratorStopped);
                 }
+            }
+            let miners = miners_count.fetch_sub(1, Ordering::Relaxed) - 1;
+            if miners == 0 {
+                context.lock().unwrap().bus.post(Event::KeyGeneratorStopped);
             }
         });
     }
@@ -222,8 +260,9 @@ fn generate_key(difficulty: usize, mining: Arc<AtomicBool>) -> Option<Keystore> 
 #[serde(tag = "cmd", rename_all = "camelCase")]
 pub enum Cmd {
     Loaded,
-    LoadKey{name: String, pass: String},
-    CreateKey{name: String, pass: String},
+    LoadKey{},
+    CreateKey{},
+    SaveKey{},
     CheckDomain{name: String},
     CreateDomain{name: String, records: String, tags: String},
     ChangeDomain{name: String, records: String, tags: String},

@@ -37,9 +37,7 @@
                 </ul>
                 <p class="menu-label">Key management</p>
                 <ul class="menu-list">
-                    <li><a onclick="openTab(this, 'key_load')">Load key</a></li>
-                    <li><a onclick="openTab(this, 'key_create')">Create key</a></li>
-                    <li><a onclick="openTab(this, 'key_passwd')">Change password</a></li>
+                    <li><a onclick="openTab(this, 'key_load')">Manage keys</a></li>
                 </ul>
                 <p class="menu-label">Domain management</p>
                 <ul class="menu-list">
@@ -60,91 +58,31 @@
             <div class="content is-hidden" id="key_load">
                 <form action="#">
                     <div class="field">
-                        <label class="label">Key file name</label>
-                        <div class="control">
-                            <input class="input" type="text" placeholder="default.key" id="load_key_name">
-                        </div>
+                        <label class="label">Key path</label>
+                        <p id="key_file_name">Key not saved</p>
                     </div>
 
                     <div class="field">
-                        <label class="label">Key password</label>
-                        <div class="control">
-                            <input class="input" type="password" placeholder="123456" id="load_key_password">
-                        </div>
+                        <label class="label">Key public key</label>
+                        <p id="key_public_key">00000050C9516C42946D38EDD6A2DB1279F6E73E9C6D2EA6769A5C2BA3E381D6</p>
                     </div>
 
+                    <br>
                     <div class="field is-grouped">
                         <div class="control">
-                            <button class="button is-link" onclick="loadKey();">Load</button>
+                            <button class="button is-success" onclick="loadKey();">Load key</button>
+                        </div>
+
+                        <div class="control">
+                            <button class="button is-warning" onclick="createKey();">Mine new key</button>
+                        </div>
+
+                        <div class="control">
+                            <button class="button is-primary" onclick="saveKey();">Save key</button>
                         </div>
                     </div>
                 </form>
             </div>
-
-
-            <div class="content is-hidden" id="key_create">
-                <form action="#">
-                    <div class="field">
-                        <label class="label">Key file name</label>
-                        <div class="control">
-                            <input class="input" type="text" placeholder="default.key" id="create_key_name">
-                        </div>
-                    </div>
-
-                    <div class="field">
-                        <label class="label">Key password</label>
-                        <div class="control">
-                            <input class="input" type="password" placeholder="123456" id="create_key_password">
-                        </div>
-                    </div>
-
-                    <div class="field is-grouped">
-                        <div class="control">
-                            <button class="button is-link" onclick="createKey();">Create</button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-
-
-            <div class="content is-hidden" id="key_passwd">
-                <form action="#">
-                    <div class="field">
-                        <label class="label">Key file name</label>
-                        <div class="control">
-                            <input class="input" type="text" placeholder="default.key" id="change_key_name">
-                        </div>
-                    </div>
-
-                    <div class="field">
-                        <label class="label">Old key password</label>
-                        <div class="control">
-                            <input class="input" type="password" placeholder="123456" id="change_key_password">
-                        </div>
-                    </div>
-
-                    <div class="field">
-                        <label class="label">New key password</label>
-                        <div class="control">
-                            <input class="input" type="password" placeholder="123456" id="change_key_password_new">
-                        </div>
-                    </div>
-
-                    <div class="field">
-                        <label class="label">Repeat key password</label>
-                        <div class="control">
-                            <input class="input" type="password" placeholder="123456" id="change_key_password_repeat">
-                        </div>
-                    </div>
-
-                    <div class="field is-grouped">
-                        <div class="control">
-                            <button class="button is-link">Change password</button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-
 
 
             <div class="content is-hidden" id="dom_new">

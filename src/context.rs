@@ -3,6 +3,7 @@ use crate::event::Event;
 use serde::{Serialize, Deserialize};
 use std::fs::File;
 use std::io::Read;
+use std::sync::MutexGuard;
 
 pub struct Context {
     pub settings: Settings,

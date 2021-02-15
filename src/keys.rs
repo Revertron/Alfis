@@ -21,6 +21,8 @@ pub struct Keystore {
     private_key: Bytes,
     public_key: Bytes,
     #[serde(skip)]
+    path: String,
+    #[serde(skip)]
     seed: Vec<u8>
 }
 
@@ -30,18 +32,21 @@ impl Keystore {
         let mut rng = thread_rng();
         rng.fill(&mut buf);
         let (private, public) = keypair(&buf);
-        Keystore {private_key: Bytes::from_bytes(&private), public_key: Bytes::from_bytes(&public), seed: Vec::from(&buf[..])}
+        Keystore {private_key: Bytes::from_bytes(&private), public_key: Bytes::from_bytes(&public), path: String::new(), seed: Vec::from(&buf[..])}
     }
 
     pub fn from_bytes(seed: &[u8]) -> Self {
         let (private, public) = keypair(&seed);
-        Keystore {private_key: Bytes::from_bytes(&private), public_key: Bytes::from_bytes(&public), seed: Vec::from(seed)}
+        Keystore {private_key: Bytes::from_bytes(&private), public_key: Bytes::from_bytes(&public), path: String::new(), seed: Vec::from(seed)}
     }
 
     pub fn from_file(filename: &str, _password: &str) -> Option<Self> {
-        match fs::read(&Path::new(filename)) {
+        let path = Path::new(filename);
+        match fs::read(&path) {
             Ok(key) => {
-                Some(Self::from_bytes(key.as_slice()))
+                let mut keystore = Self::from_bytes(key.as_slice());
+                keystore.path = path.to_str().unwrap().to_owned();
+                Some(keystore)
             },
             Err(_) => {
                 None
@@ -50,11 +55,12 @@ impl Keystore {
     }
 
     //TODO Implement error conditions
-    pub fn save(&self, filename: &str, _password: &str) {
+    pub fn save(&mut self, filename: &str, _password: &str) {
         match File::create(Path::new(filename)) {
             Ok(mut f) => {
                 //TODO implement key encryption
                 f.write_all(&self.seed).expect("Error saving keystore");
+                self.path = filename.to_owned();
             }
             Err(_) => { println!("Error saving key file!"); }
         }
@@ -66,6 +72,10 @@ impl Keystore {
 
     pub fn get_private(&self) -> Bytes {
         self.private_key.clone()
+    }
+
+    pub fn get_path(&self) -> &str {
+        &self.path
     }
 
     pub fn sign(&self, message: &[u8]) -> [u8; 64] {
@@ -118,6 +128,10 @@ impl Bytes {
     /// Returns a byte slice of the hash contents.
     pub fn as_bytes(&self) -> &[u8] {
         self.data.as_slice()
+    }
+
+    pub fn to_string(&self) -> String {
+        crate::utils::to_hex(&self.data)
     }
 
     pub fn zero32() -> Self {

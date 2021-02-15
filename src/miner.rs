@@ -10,6 +10,7 @@ use num_cpus;
 
 use crate::{Block, Bytes, Context, hash_is_good, Transaction};
 use crate::event::Event;
+use std::ops::DerefMut;
 
 pub struct Miner {
     context: Arc<Mutex<Context>>,

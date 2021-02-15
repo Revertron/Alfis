@@ -24,15 +24,15 @@ function openTab(element, tabName) {
 }
 
 function loadKey() {
-    key_name = document.getElementById("load_key_name").value;
-    key_pass = document.getElementById("load_key_password").value;
-    external.invoke(JSON.stringify({cmd: 'loadKey', name: key_name, pass: key_pass}));
+    external.invoke(JSON.stringify({cmd: 'loadKey'}));
 }
 
 function createKey() {
-    key_name = document.getElementById("create_key_name").value;
-    key_pass = document.getElementById("create_key_password").value;
-    external.invoke(JSON.stringify({cmd: 'createKey', name: key_name, pass: key_pass}));
+    external.invoke(JSON.stringify({cmd: 'createKey'}));
+}
+
+function saveKey() {
+    external.invoke(JSON.stringify({cmd: 'saveKey'}));
 }
 
 function createDomain() {
@@ -115,4 +115,14 @@ function miningIndicatorClick(element) {
     showModalDialog("Do you really want to stop mining?", function() {
         external.invoke(JSON.stringify({cmd: 'stopMining'}));
     });
+}
+
+function keystoreChanged(path, pub_key) {
+    if (path == '') {
+        path = "In memory";
+    }
+    key_file_name = document.getElementById("key_file_name");
+    key_file_name.innerHTML = path;
+    key_file_key = document.getElementById("key_public_key");
+    key_file_key.innerHTML = pub_key;
 }
