@@ -5,15 +5,14 @@ extern crate serde_json;
 use crypto::ed25519::{keypair, signature, verify};
 use rand::{thread_rng, Rng};
 use std::fmt;
+use std::fmt::{Error, Formatter};
 use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use serde::export::fmt::Error;
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
 // For deserialization
 use serde::de::{Error as DeError, Visitor};
-use serde::export::Formatter;
 use crate::hash_is_good;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
