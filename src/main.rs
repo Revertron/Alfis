@@ -109,6 +109,9 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                         }
                         true
                     });
+                    let eval = format!("keystoreChanged('{}', '{}');", c.keystore.get_path(), &c.keystore.get_public().to_string());
+                    println!("Evaluating {}", &eval);
+                    web_view.eval(&eval.replace("\\", "\\\\")).expect("Error evaluating!");
                 }
                 LoadKey {} => {
                     let result = tfd::open_file_dialog("Open keys file", "", Some((&["*.key"], "*.key")));
