@@ -10835,3 +10835,7 @@ label.panel-block:hover {
 .container {
   margin: 10pt;
 }
+
+html {
+  overflow: hidden;
+}
