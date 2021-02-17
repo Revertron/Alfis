@@ -76,7 +76,7 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
         .content(html)
         .size(1024, 720)
         .resizable(true)
-        .debug(true)
+        .debug(false)
         .user_data(())
         .invoke_handler(|web_view, arg| {
             use Cmd::*;
