@@ -136,8 +136,14 @@ impl Miner {
                         }
                     },
                     Some(block) => {
+                        let index = block.index;
                         let mut context = context.lock().unwrap();
-                        context.blockchain.add_block(block).expect("Error adding fresh mined block!");
+                        if context.blockchain.add_block(block).is_err() {
+                            println!("Error adding mined block!");
+                            if index == 0 {
+                                println!("To mine genesis block you need to make 'origin' an empty string in config.");
+                            }
+                        }
                         context.bus.post(Event::MinerStopped);
                         mining.store(false, Ordering::Relaxed);
                     },
