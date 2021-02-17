@@ -73,7 +73,7 @@ impl Miner {
             if e == Event::ActionStopMining {
                 mining.store(false, Ordering::Relaxed);
             }
-            false
+            true
         });
     }
 

@@ -67,7 +67,7 @@ fn create_genesis_if_needed(context: &Arc<Mutex<Context>>, miner: &Arc<Mutex<Min
 fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let file_content = include_str!("webview/index.html");
     let mut styles= inline_style(include_str!("webview/bulma.css"));
-    styles.push_str(&inline_style(include_str!("webview/loader.css")));
+    styles.push_str(&inline_style(include_str!("webview/miner.css")));
     let scripts = inline_script(include_str!("webview/scripts.js"));
 
     let html = Content::Html(file_content.to_owned().replace("{styles}", &styles).replace("{scripts}", &scripts));

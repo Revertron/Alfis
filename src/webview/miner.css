@@ -1,13 +1,14 @@
 .mining_indicator {
    position:absolute;
-   right:10px;
+   left:0px;
+   bottom:0px;
    width:30px;
    height:30px;
    display:inline-block;
    padding:0px;
-   text-align:right;
-   float:right;
-   z-index: 10;
+   text-align:left;
+   float:left;
+   z-index:10;
 }
 .mining_indicator span {
    position:absolute;
@@ -15,7 +16,7 @@
    width:30px;
    height:30px;
    border-radius:100%;
-   background:#3273dc;
+   background:#ee3333;
    -webkit-animation:mining_indicator 1.6s linear infinite;
    animation:mining_indicator 1.6s linear infinite;
 }
