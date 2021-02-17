@@ -20,11 +20,13 @@ num-traits = "0.2"
 bincode = "1.2.0"
 groestl = "0.8.0"
 base64 = "0.11.0"
-chrono = "0.4.9"
+chrono = { version = "0.4.13", features = ["serde"] }
 rand = "0.7.2"
 sqlite = "0.25.3"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 mio = { version = "0.7", features = ["os-poll", "net"] }
+# for DNS from hermes
+derive_more = "0.99.9"
 
 [build-dependencies]
 winres = "0.1"

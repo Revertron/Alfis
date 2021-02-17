@@ -17,4 +17,5 @@ pub mod miner;
 pub mod context;
 pub mod event;
 pub mod p2p;
+pub mod dns;
 
