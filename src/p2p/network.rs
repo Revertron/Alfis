@@ -222,7 +222,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
     Ok(true)
 }
 
-fn read_message(stream: &mut TcpStream) -> Result<Vec<u8>, Vec<u8>> {
+fn read_message(stream: &mut TcpStream) -> Result<Vec<u8>, ()> {
     let instant = Instant::now();
     let data_size = match stream.read_u32::<BigEndian>() {
         Ok(size) => { size as usize }
@@ -233,7 +233,7 @@ fn read_message(stream: &mut TcpStream) -> Result<Vec<u8>, Vec<u8>> {
     };
     println!("Payload size is {}", data_size);
     if data_size > MAX_PACKET_SIZE {
-        return Err(Vec::new());
+        return Err(());
     }
 
     let mut buf = vec![0u8; data_size];
@@ -256,14 +256,14 @@ fn read_message(stream: &mut TcpStream) -> Result<Vec<u8>, Vec<u8>> {
             // Other errors we'll consider fatal.
             Err(_) => {
                 println!("Error reading message, only {} bytes read", bytes_read);
-                return Err(buf)
+                return Err(())
             },
         }
     }
     if buf.len() == data_size {
         Ok(buf)
     } else {
-        Err(buf)
+        Err(())
     }
 }
 
