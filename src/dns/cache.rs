@@ -39,25 +39,15 @@ impl PartialEq<RecordEntry> for RecordEntry {
 }
 
 impl Hash for RecordEntry {
-    fn hash<H>(&self, state: &mut H)
-    where
-        H: Hasher,
-    {
+    fn hash<H>(&self, state: &mut H) where H: Hasher {
         self.record.hash(state);
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum RecordSet {
-    NoRecords {
-        qtype: QueryType,
-        ttl: u32,
-        timestamp: DateTime<Local>,
-    },
-    Records {
-        qtype: QueryType,
-        records: HashSet<RecordEntry>,
-    },
+    NoRecords { qtype: QueryType, ttl: u32, timestamp: DateTime<Local> },
+    Records { qtype: QueryType, records: HashSet<RecordEntry> },
 }
 
 #[derive(Clone, Debug)]
@@ -70,22 +60,13 @@ pub struct DomainEntry {
 
 impl DomainEntry {
     pub fn new(domain: String) -> DomainEntry {
-        DomainEntry {
-            domain: domain,
-            record_types: HashMap::new(),
-            hits: 0,
-            updates: 0,
-        }
+        DomainEntry { domain, record_types: HashMap::new(), hits: 0, updates: 0 }
     }
 
     pub fn store_nxdomain(&mut self, qtype: QueryType, ttl: u32) {
         self.updates += 1;
 
-        let new_set = RecordSet::NoRecords {
-            qtype: qtype,
-            ttl: ttl,
-            timestamp: Local::now(),
-        };
+        let new_set = RecordSet::NoRecords { qtype, ttl, timestamp: Local::now() };
 
         self.record_types.insert(qtype, new_set);
     }
@@ -93,15 +74,9 @@ impl DomainEntry {
     pub fn store_record(&mut self, rec: &DnsRecord) {
         self.updates += 1;
 
-        let entry = RecordEntry {
-            record: rec.clone(),
-            timestamp: Local::now(),
-        };
+        let entry = RecordEntry { record: rec.clone(), timestamp: Local::now() };
 
-        if let Some(&mut RecordSet::Records {
-            ref mut records, ..
-        }) = self.record_types.get_mut(&rec.get_querytype())
-        {
+        if let Some(&mut RecordSet::Records { ref mut records, .. }) = self.record_types.get_mut(&rec.get_querytype()) {
             if records.contains(&entry) {
                 records.remove(&entry);
             }
@@ -113,10 +88,7 @@ impl DomainEntry {
         let mut records = HashSet::new();
         records.insert(entry);
 
-        let new_set = RecordSet::Records {
-            qtype: rec.get_querytype(),
-            records: records,
-        };
+        let new_set = RecordSet::Records { qtype: rec.get_querytype(), records };
 
         self.record_types.insert(rec.get_querytype(), new_set);
     }
@@ -191,9 +163,7 @@ pub struct Cache {
 
 impl Cache {
     pub fn new() -> Cache {
-        Cache {
-            domain_entries: BTreeMap::new(),
-        }
+        Cache { domain_entries: BTreeMap::new() }
     }
 
     fn get_cache_state(&mut self, qname: &str, qtype: QueryType) -> CacheState {
@@ -203,13 +173,7 @@ impl Cache {
         }
     }
 
-    fn fill_queryresult(
-        &mut self,
-        qname: &str,
-        qtype: QueryType,
-        result_vec: &mut Vec<DnsRecord>,
-        increment_stats: bool,
-    ) {
+    fn fill_queryresult(&mut self,qname: &str, qtype: QueryType, result_vec: &mut Vec<DnsRecord>, increment_stats: bool) {
         if let Some(domain_entry) = self.domain_entries.get_mut(qname).and_then(Arc::get_mut) {
             if increment_stats {
                 domain_entry.hits += 1
@@ -275,9 +239,7 @@ pub struct SynchronizedCache {
 
 impl SynchronizedCache {
     pub fn new() -> SynchronizedCache {
-        SynchronizedCache {
-            cache: RwLock::new(Cache::new()),
-        }
+        SynchronizedCache { cache: RwLock::new(Cache::new()) }
     }
 
     pub fn list(&self) -> Result<Vec<Arc<DomainEntry>>> {

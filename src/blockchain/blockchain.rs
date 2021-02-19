@@ -1,6 +1,7 @@
 use sqlite::{Connection, State, Statement};
 
-use crate::{Block, Bytes, Keystore, Transaction, Settings};
+use crate::{Block, Bytes, Keystore, Transaction};
+use crate::settings::Settings;
 
 const DB_NAME: &str = "blockchain.db";
 
@@ -173,6 +174,30 @@ impl Blockchain {
         }
 
         true
+    }
+
+    pub fn get_domain_info(&self, domain: &str) -> Option<String> {
+        if domain.is_empty() {
+            return None;
+        }
+        let identity_hash = Transaction::hash_identity(domain);
+
+        let mut statement = self.db.prepare("SELECT * FROM transactions WHERE identity = ? ORDER BY id DESC LIMIT 1;").unwrap();
+        statement.bind(1, identity_hash.as_bytes()).expect("Error in bind");
+        while let State::Row = statement.next().unwrap() {
+            let identity = Bytes::from_bytes(statement.read::<Vec<u8>>(1).unwrap().as_slice());
+            let confirmation = Bytes::from_bytes(statement.read::<Vec<u8>>(2).unwrap().as_slice());
+            let method = statement.read::<String>(3).unwrap();
+            let data = statement.read::<String>(4).unwrap();
+            let pub_key = Bytes::from_bytes(statement.read::<Vec<u8>>(5).unwrap().as_slice());
+            let signature = Bytes::from_bytes(statement.read::<Vec<u8>>(6).unwrap().as_slice());
+            let transaction = Transaction { identity, confirmation, method, data, pub_key, signature };
+            println!("Got transaction: {:?}", &transaction);
+            if transaction.check_for(domain) {
+                return Some(transaction.data);
+            }
+        }
+        None
     }
 
     pub fn last_block(&self) -> Option<Block> {

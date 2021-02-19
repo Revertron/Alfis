@@ -59,8 +59,7 @@ pub trait DnsServer {
 }
 
 /// Utility function for resolving domains referenced in for example CNAME or SRV
-/// records. This usually spares the client from having to perform additional
-/// lookups.
+/// records. This usually spares the client from having to perform additional lookups.
 fn resolve_cnames(
     lookup_list: &[DnsRecord],
     results: &mut Vec<DnsPacket>,
@@ -112,11 +111,7 @@ pub fn execute_query(context: Arc<ServerContext>, request: &DnsPacket) -> DnsPac
         packet.questions.push(question.clone());
 
         let mut resolver = context.create_resolver(context.clone());
-        let rescode = match resolver.resolve(
-            &question.name,
-            question.qtype,
-            request.header.recursion_desired,
-        ) {
+        let rescode = match resolver.resolve(&question.name, question.qtype, request.header.recursion_desired) {
             Ok(result) => {
                 let rescode = result.header.rescode;
 
@@ -128,10 +123,7 @@ pub fn execute_query(context: Arc<ServerContext>, request: &DnsPacket) -> DnsPac
                 rescode
             }
             Err(err) => {
-                println!(
-                    "Failed to resolve {:?} {}: {:?}",
-                    question.qtype, question.name, err
-                );
+                println!("Failed to resolve {:?} {}: {:?}", question.qtype, question.name, err);
                 ResultCode::SERVFAIL
             }
         };
@@ -169,10 +161,10 @@ pub struct DnsUdpServer {
 impl DnsUdpServer {
     pub fn new(context: Arc<ServerContext>, thread_count: usize) -> DnsUdpServer {
         DnsUdpServer {
-            context: context,
+            context,
             request_queue: Arc::new(Mutex::new(VecDeque::new())),
             request_cond: Arc::new(Condvar::new()),
-            thread_count: thread_count,
+            thread_count,
         }
     }
 }
@@ -180,11 +172,10 @@ impl DnsUdpServer {
 impl DnsServer for DnsUdpServer {
     /// Launch the server
     ///
-    /// This method takes ownership of the server, preventing the method from
-    /// being called multiple times.
+    /// This method takes ownership of the server, preventing the method from being called multiple times.
     fn run_server(self) -> Result<()> {
         // Bind the socket
-        let socket = UdpSocket::bind(("0.0.0.0", self.context.dns_port))?;
+        let socket = UdpSocket::bind(("[::]", self.context.dns_port))?;
 
         // Spawn threads for handling requests
         for thread_id in 0..self.thread_count {
@@ -227,8 +218,7 @@ impl DnsServer for DnsUdpServer {
                         }
                     }
 
-                    // Create a response buffer, and ask the context for an appropriate
-                    // resolver
+                    // Create a response buffer, and ask the context for an appropriate resolver
                     let mut res_buffer = VectorPacketBuffer::new();
 
                     let mut packet = execute_query(context.clone(), &request);
@@ -236,14 +226,8 @@ impl DnsServer for DnsUdpServer {
 
                     // Fire off the response
                     let len = res_buffer.pos();
-                    let data = return_or_report!(
-                        res_buffer.get_range(0, len),
-                        "Failed to get buffer data"
-                    );
-                    ignore_or_report!(
-                        socket_clone.send_to(data, src),
-                        "Failed to send response packet"
-                    );
+                    let data = return_or_report!(res_buffer.get_range(0, len), "Failed to get buffer data");
+                    ignore_or_report!(socket_clone.send_to(data, src), "Failed to send response packet");
                 }
             })?;
         }
@@ -253,11 +237,7 @@ impl DnsServer for DnsUdpServer {
             .name("DnsUdpServer-incoming".into())
             .spawn(move || {
                 loop {
-                    let _ = self
-                        .context
-                        .statistics
-                        .udp_query_count
-                        .fetch_add(1, Ordering::Release);
+                    let _ = self.context.statistics.udp_query_count.fetch_add(1, Ordering::Release);
 
                     // Read a query packet
                     let mut req_buffer = BytePacketBuffer::new();
@@ -278,8 +258,7 @@ impl DnsServer for DnsUdpServer {
                         }
                     };
 
-                    // Acquire lock, add request to queue, and notify waiting threads
-                    // using the condition.
+                    // Acquire lock, add request to queue, and notify waiting threads using the condition.
                     match self.request_queue.lock() {
                         Ok(mut queue) => {
                             queue.push_back((src, request));
@@ -305,17 +284,13 @@ pub struct DnsTcpServer {
 
 impl DnsTcpServer {
     pub fn new(context: Arc<ServerContext>, thread_count: usize) -> DnsTcpServer {
-        DnsTcpServer {
-            context: context,
-            senders: Vec::new(),
-            thread_count: thread_count,
-        }
+        DnsTcpServer { context, senders: Vec::new(), thread_count }
     }
 }
 
 impl DnsServer for DnsTcpServer {
     fn run_server(mut self) -> Result<()> {
-        let socket = TcpListener::bind(("0.0.0.0", self.context.dns_port))?;
+        let socket = TcpListener::bind(("[::]", self.context.dns_port))?;
 
         // Spawn threads for handling requests, and create the channels
         for thread_id in 0..self.thread_count {
@@ -332,48 +307,30 @@ impl DnsServer for DnsTcpServer {
                         Err(_) => continue,
                     };
 
-                    let _ = context
-                        .statistics
-                        .tcp_query_count
-                        .fetch_add(1, Ordering::Release);
+                    let _ = context.statistics.tcp_query_count.fetch_add(1, Ordering::Release);
 
                     // When DNS packets are sent over TCP, they're prefixed with a two byte
                     // length. We don't really need to know the length in advance, so we
                     // just move past it and continue reading as usual
-                    ignore_or_report!(
-                        read_packet_length(&mut stream),
-                        "Failed to read query packet length"
-                    );
+                    ignore_or_report!(read_packet_length(&mut stream), "Failed to read query packet length");
 
                     let request = {
                         let mut stream_buffer = StreamPacketBuffer::new(&mut stream);
-                        return_or_report!(
-                            DnsPacket::from_buffer(&mut stream_buffer),
-                            "Failed to read query packet"
-                        )
+                        return_or_report!(DnsPacket::from_buffer(&mut stream_buffer), "Failed to read query packet")
                     };
 
                     let mut res_buffer = VectorPacketBuffer::new();
 
                     let mut packet = execute_query(context.clone(), &request);
-                    ignore_or_report!(
-                        packet.write(&mut res_buffer, 0xFFFF),
-                        "Failed to write packet to buffer"
-                    );
+                    ignore_or_report!(packet.write(&mut res_buffer, 0xFFFF), "Failed to write packet to buffer");
 
                     // As is the case for incoming queries, we need to send a 2 byte length
                     // value before handing of the actual packet.
                     let len = res_buffer.pos();
-                    ignore_or_report!(
-                        write_packet_length(&mut stream, len),
-                        "Failed to write packet size"
-                    );
+                    ignore_or_report!(write_packet_length(&mut stream, len), "Failed to write packet size");
 
                     // Now we can go ahead and write the actual packet
-                    let data = return_or_report!(
-                        res_buffer.get_range(0, len),
-                        "Failed to get packet data"
-                    );
+                    let data = return_or_report!(res_buffer.get_range(0, len), "Failed to get packet data");
 
                     ignore_or_report!(stream.write(data), "Failed to write response packet");
 
@@ -399,10 +356,7 @@ impl DnsServer for DnsTcpServer {
                     match self.senders[thread_no].send(stream) {
                         Ok(_) => {}
                         Err(e) => {
-                            println!(
-                                "Failed to send TCP request for processing on thread {}: {}",
-                                thread_no, e
-                            );
+                            println!("Failed to send TCP request for processing on thread {}: {}", thread_no, e);
                         }
                     }
                 }

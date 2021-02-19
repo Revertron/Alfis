@@ -188,8 +188,8 @@ impl DnsRecord {
                 );
 
                 Ok(DnsRecord::A {
-                    domain: domain,
-                    addr: addr,
+                    domain,
+                    addr,
                     ttl: TransientTtl(ttl),
                 })
             }
@@ -210,8 +210,8 @@ impl DnsRecord {
                 );
 
                 Ok(DnsRecord::AAAA {
-                    domain: domain,
-                    addr: addr,
+                    domain,
+                    addr,
                     ttl: TransientTtl(ttl),
                 })
             }
@@ -220,7 +220,7 @@ impl DnsRecord {
                 buffer.read_qname(&mut ns)?;
 
                 Ok(DnsRecord::NS {
-                    domain: domain,
+                    domain,
                     host: ns,
                     ttl: TransientTtl(ttl),
                 })
@@ -230,7 +230,7 @@ impl DnsRecord {
                 buffer.read_qname(&mut cname)?;
 
                 Ok(DnsRecord::CNAME {
-                    domain: domain,
+                    domain,
                     host: cname,
                     ttl: TransientTtl(ttl),
                 })
@@ -244,10 +244,10 @@ impl DnsRecord {
                 buffer.read_qname(&mut srv)?;
 
                 Ok(DnsRecord::SRV {
-                    domain: domain,
-                    priority: priority,
-                    weight: weight,
-                    port: port,
+                    domain,
+                    priority,
+                    weight,
+                    port,
                     host: srv,
                     ttl: TransientTtl(ttl),
                 })
@@ -258,8 +258,8 @@ impl DnsRecord {
                 buffer.read_qname(&mut mx)?;
 
                 Ok(DnsRecord::MX {
-                    domain: domain,
-                    priority: priority,
+                    domain,
+                    priority,
                     host: mx,
                     ttl: TransientTtl(ttl),
                 })
@@ -278,14 +278,14 @@ impl DnsRecord {
                 let minimum = buffer.read_u32()?;
 
                 Ok(DnsRecord::SOA {
-                    domain: domain,
-                    m_name: m_name,
-                    r_name: r_name,
-                    serial: serial,
-                    refresh: refresh,
-                    retry: retry,
-                    expire: expire,
-                    minimum: minimum,
+                    domain,
+                    m_name,
+                    r_name,
+                    serial,
+                    refresh,
+                    retry,
+                    expire,
+                    minimum,
                     ttl: TransientTtl(ttl),
                 })
             }
@@ -300,7 +300,7 @@ impl DnsRecord {
                 buffer.step(data_len as usize)?;
 
                 Ok(DnsRecord::TXT {
-                    domain: domain,
+                    domain,
                     data: txt,
                     ttl: TransientTtl(ttl),
                 })
@@ -317,16 +317,16 @@ impl DnsRecord {
                 Ok(DnsRecord::OPT {
                     packet_len: class,
                     flags: ttl,
-                    data: data,
+                    data,
                 })
             }
             QueryType::UNKNOWN(_) => {
                 buffer.step(data_len as usize)?;
 
                 Ok(DnsRecord::UNKNOWN {
-                    domain: domain,
+                    domain,
                     qtype: qtype_num,
-                    data_len: data_len,
+                    data_len,
                     ttl: TransientTtl(ttl),
                 })
             }
@@ -755,10 +755,7 @@ pub struct DnsQuestion {
 
 impl DnsQuestion {
     pub fn new(name: String, qtype: QueryType) -> DnsQuestion {
-        DnsQuestion {
-            name: name,
-            qtype: qtype,
-        }
+        DnsQuestion { name, qtype }
     }
 
     pub fn binary_len(&self) -> usize {

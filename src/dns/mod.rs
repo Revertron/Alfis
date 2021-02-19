@@ -22,5 +22,6 @@ pub mod context;
 pub mod protocol;
 pub mod resolve;
 pub mod server;
+pub mod filter;
 
 mod netutil;

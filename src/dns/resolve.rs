@@ -51,6 +51,12 @@ pub trait DnsResolver {
             }
         }
 
+        for filter in self.get_context().filters.iter() {
+            if let Some(packet) = filter.lookup(qname, qtype) {
+                return Ok(packet);
+            }
+        }
+
         self.perform(qname, qtype)
     }
 
@@ -67,10 +73,7 @@ pub struct ForwardingDnsResolver {
 
 impl ForwardingDnsResolver {
     pub fn new(context: Arc<ServerContext>, server: (String, u16)) -> ForwardingDnsResolver {
-        ForwardingDnsResolver {
-            context: context,
-            server: server,
-        }
+        ForwardingDnsResolver { context, server }
     }
 }
 
@@ -81,10 +84,12 @@ impl DnsResolver for ForwardingDnsResolver {
 
     fn perform(&mut self, qname: &str, qtype: QueryType) -> Result<DnsPacket> {
         let &(ref host, port) = &self.server;
-        let result = self
-            .context
-            .client
-            .send_query(qname, qtype, (host.as_str(), port), true)?;
+        let result = match self.context.cache.lookup(qname, qtype) {
+            None => {
+                self.context.client.send_query(qname, qtype, (host.as_str(), port), true)?
+            }
+            Some(packet) => packet
+        };
 
         self.context.cache.store(&result.answers)?;
 
@@ -101,7 +106,7 @@ pub struct RecursiveDnsResolver {
 
 impl RecursiveDnsResolver {
     pub fn new(context: Arc<ServerContext>) -> RecursiveDnsResolver {
-        RecursiveDnsResolver { context: context }
+        RecursiveDnsResolver { context }
     }
 }
 

@@ -10839,3 +10839,11 @@ label.panel-block:hover {
 html {
   overflow: hidden;
 }
+
+.notification {
+  position: absolute;
+  z-index: 100;
+  width: 50%;
+  top: 10pt;
+  right: 10pt;
+}

@@ -10,6 +10,7 @@ use crate::dns::authority::Authority;
 use crate::dns::cache::SynchronizedCache;
 use crate::dns::client::{DnsClient, DnsNetworkClient};
 use crate::dns::resolve::{DnsResolver, ForwardingDnsResolver, RecursiveDnsResolver};
+use crate::dns::filter::DnsFilter;
 
 #[derive(Debug, Display, From, Error)]
 pub enum ContextError {
@@ -43,6 +44,7 @@ pub enum ResolveStrategy {
 pub struct ServerContext {
     pub authority: Authority,
     pub cache: SynchronizedCache,
+    pub filters: Vec<Box<dyn DnsFilter + Sync + Send>>,
     pub client: Box<dyn DnsClient + Sync + Send>,
     pub dns_port: u16,
     pub api_port: u16,
@@ -66,6 +68,7 @@ impl ServerContext {
         ServerContext {
             authority: Authority::new(),
             cache: SynchronizedCache::new(),
+            filters: Vec::new(),
             client: Box::new(DnsNetworkClient::new(34255)),
             dns_port: 53,
             api_port: 5380,
@@ -73,7 +76,7 @@ impl ServerContext {
             allow_recursive: true,
             enable_udp: true,
             enable_tcp: true,
-            enable_api: true,
+            enable_api: false,
             statistics: ServerStatistics {
                 tcp_query_count: AtomicUsize::new(0),
                 udp_query_count: AtomicUsize::new(0),
@@ -122,6 +125,7 @@ pub mod tests {
         Arc::new(ServerContext {
             authority: Authority::new(),
             cache: SynchronizedCache::new(),
+            filters: Vec::new(),
             client: Box::new(DnsStubClient::new(callback)),
             dns_port: 53,
             api_port: 5380,
@@ -129,7 +133,7 @@ pub mod tests {
             allow_recursive: true,
             enable_udp: true,
             enable_tcp: true,
-            enable_api: true,
+            enable_api: false,
             statistics: ServerStatistics {
                 tcp_query_count: AtomicUsize::new(0),
                 udp_query_count: AtomicUsize::new(0),
