@@ -1,3 +1,6 @@
+// With the default subsystem, 'console', windows creates an additional console window for the program.
+// This is silently ignored on non-windows systems.
+// See https://msdn.microsoft.com/en-us/library/4cc7ya5b.aspx for more details.
 #![windows_subsystem = "windows"]
 extern crate web_view;
 extern crate tinyfiledialogs as tfd;
@@ -7,6 +10,9 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::thread;
 use std::time::Duration;
+
+#[cfg(windows)]
+use winapi::um::wincon::{AttachConsole, FreeConsole, ATTACH_PARENT_PROCESS};
 
 use rand::RngCore;
 use serde::Deserialize;
@@ -34,6 +40,13 @@ const KEYSTORE_DIFFICULTY: usize = 24;
 const SETTINGS_FILENAME: &str = "alfis.cfg";
 
 fn main() {
+    // When linked with the windows subsystem windows won't automatically attach
+    // to the console of the parent process, so we do it explicitly. This fails silently if the parent has no console.
+    #[cfg(windows)]
+    unsafe {
+        AttachConsole(ATTACH_PARENT_PROCESS);
+    }
+
     println!("ALFIS 0.1.0");
     let args: Vec<String> = env::args().collect();
     let program = args[0].clone();
@@ -88,6 +101,12 @@ fn main() {
         }
     } else {
         run_interface(context.clone(), miner.clone());
+    }
+
+    // Without explicitly detaching the console cmd won't redraw it's prompt.
+    #[cfg(windows)]
+    unsafe {
+        FreeConsole();
     }
 }
 
