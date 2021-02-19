@@ -67,6 +67,12 @@ impl Transaction {
         digest.result(&mut buf);
         Bytes::from_bytes(&buf)
     }
+
+    pub fn check_for(&self, domain: &str) -> bool {
+        let hash = Self::hash_identity(&domain);
+        let confirmation = Self::hash_with_key(&domain, &self.pub_key);
+        self.identity.eq(&hash) && self.confirmation.eq(&confirmation)
+    }
 }
 
 impl fmt::Debug for Transaction {

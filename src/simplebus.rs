@@ -27,6 +27,7 @@ impl<T: Clone> Bus<T> {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread;

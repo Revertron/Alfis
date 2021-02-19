@@ -1,3 +1,66 @@
+var recordsBuffer = [];
+
+function addRecord(record) {
+    recordsBuffer.push(record);
+    refresh_records_list();
+}
+
+function delRecord(index) {
+    recordsBuffer.splice(index, 1);
+    refresh_records_list();
+}
+
+function refresh_records_list() {
+    var buf = "";
+    if (recordsBuffer.length > 0) {
+        buf = "<label class=\"label\">Records:</label>\n";
+    }
+    function getInput(text) {
+        return '<input class="input" type="text" value="' + text + '" readonly>';
+    }
+
+    function makeRecord(value, index, array) {
+        buf += "<div class=\"columns is-1\">\n";
+        buf += "<div class=\"column\">" + getInput(value.domain) + "</div>\n";
+        buf += "<div class=\"column is-2\">" + getInput(value.type) + "</div>\n";
+        buf += "<div class=\"column is-2\">" + getInput(value.ttl) + "</div>\n";
+        buf += "<div class=\"column\">" + getInput(value.addr) + "</div>\n";
+        buf += "<div class=\"column is-1 align-right\">\n<button class=\"button is-danger is-outlined\" id=\"record_delete\" onclick=\"delRecord(" + index + ");\">";
+        buf += "<span class=\"icon is-small\"><i class=\"fas fa-times\"></i></span></button></div>\n";
+        buf += "</div>";
+    }
+
+    recordsBuffer.forEach(makeRecord);
+    document.getElementById("domain_records").innerHTML = buf;
+}
+
+function showNewRecordDialog() {
+    button_positive = document.getElementById("new_record_positive_button");
+    button_positive.onclick = function() {
+        addRecord(get_record_from_dialog()); // It will refresh list
+        dialog = document.getElementById("new_record_dialog");
+        dialog.className = "modal";
+    };
+
+    button_negative = document.getElementById("new_record_negative_button");
+    button_negative.onclick = function() {
+        dialog = document.getElementById("new_record_dialog");
+        dialog.className = "modal";
+        refresh_records_list();
+    }
+
+    dialog = document.getElementById("new_record_dialog");
+    dialog.className = "modal is-active";
+}
+
+function get_record_from_dialog() {
+    record_name = document.getElementById("record_name").value;
+    record_type = document.getElementById("record_type").value;
+    record_ttl = parseInt(document.getElementById("record_ttl").value);
+    record_data = document.getElementById("record_data").value;
+    return { type: record_type, domain: record_name, ttl: record_ttl, addr: record_data }
+}
+
 function onLoad() {
     external.invoke(JSON.stringify({cmd: 'loaded'}));
 }
@@ -37,7 +100,8 @@ function saveKey() {
 
 function createDomain() {
     new_domain = document.getElementById("new_domain").value;
-    new_dom_records = document.getElementById("new_domain_records").value;
+    //new_dom_records = document.getElementById("new_domain_records").value;
+    new_dom_records = JSON.stringify(recordsBuffer);
     new_dom_tags = document.getElementById("new_domain_tags").value;
     external.invoke(JSON.stringify({cmd: 'createDomain', name: new_domain, records: new_dom_records, tags: new_dom_tags}));
 }
@@ -100,6 +164,20 @@ function showModalDialog(text, callback) {
 
     dialog = document.getElementById("modal_dialog");
     dialog.className = "modal is-active";
+}
+
+function showWarning(text) {
+    warning = document.getElementById("notification_warning");
+    message = document.getElementById("warning_text");
+    message.innerHTML = text;
+
+    warning.className = "notification is-warning";
+    button = document.getElementById("close");
+    button.onclick = function() {
+        message.value = "";
+        warning.className = "notification is-warning is-hidden";
+    }
+    setTimeout(button.onclick, 5000);
 }
 
 function showMiningIndicator(visible) {

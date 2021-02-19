@@ -2,22 +2,31 @@
 extern crate web_view;
 extern crate tinyfiledialogs as tfd;
 
+use std::env;
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, Ordering, AtomicUsize};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::thread;
+use std::time::Duration;
 
 use rand::RngCore;
-use serde::{Deserialize};
+use serde::Deserialize;
 use web_view::*;
+use getopts::Options;
 
-use alfis::{Blockchain, Bytes, Context, Keystore, Settings, Transaction, Block};
+use alfis::{Blockchain, Bytes, Context, Keystore, Transaction};
 use alfis::event::Event;
 use alfis::miner::Miner;
 use alfis::p2p::Network;
+use alfis::settings::Settings;
+use alfis::dns::context::{ServerContext, ResolveStrategy};
+use alfis::dns::server::{DnsServer, DnsUdpServer, DnsTcpServer};
+use alfis::dns::protocol::DnsRecord;
+use alfis::blockchain::filter::BlockchainFilter;
 
 extern crate serde;
 extern crate serde_json;
 
+#[allow(dead_code)]
 const ONE_YEAR: u16 = 365;
 const GENESIS_ZONE: &str = "ygg";
 const GENESIS_ZONE_DIFFICULTY: u16 = 20;
@@ -26,6 +35,27 @@ const SETTINGS_FILENAME: &str = "alfis.cfg";
 
 fn main() {
     println!("ALFIS 0.1.0");
+    let args: Vec<String> = env::args().collect();
+    let program = args[0].clone();
+
+    let mut opts = Options::new();
+    opts.optflag("h","help", "Print this help menu");
+    opts.optflag("n","nogui","Run without graphic user interface");
+    opts.optopt("c","config","Path to config file", "");
+
+    let opt_matches = match opts.parse(&args[1..]) {
+        Ok(m) => m,
+        Err(f) => panic!(f.to_string()),
+    };
+
+    if opt_matches.opt_present("h") {
+        let brief = format!("Usage: {} [options]", program);
+        print!("{}", opts.usage(&brief));
+        return;
+    }
+
+    let no_gui = opt_matches.opt_present("n");
+
     let settings = Settings::load(SETTINGS_FILENAME).expect("Error loading settings");
     let keystore: Keystore = match Keystore::from_file(&settings.key_file, "") {
         None => {
@@ -39,7 +69,9 @@ fn main() {
         None => { println!("No blocks found in DB"); }
         Some(block) => { println!("Loaded DB with origin {:?}", &block.hash); }
     }
+    let settings_copy = settings.clone();
     let context: Arc<Mutex<Context>> = Arc::new(Mutex::new(Context::new(settings, keystore, blockchain)));
+    start_dns_server(&context, &settings_copy);
 
     let mut miner_obj = Miner::new(context.clone());
     miner_obj.start_mining_thread();
@@ -49,7 +81,32 @@ fn main() {
     network.start().expect("Error starting network component");
 
     create_genesis_if_needed(&context, &miner);
-    run_interface(context.clone(), miner.clone());
+    if no_gui {
+        let sleep = Duration::from_millis(1000);
+        loop {
+            thread::sleep(sleep);
+        }
+    } else {
+        run_interface(context.clone(), miner.clone());
+    }
+}
+
+fn start_dns_server(context: &Arc<Mutex<Context>>, settings: &Settings) {
+    let server_context = create_server_context(context.clone(), &settings);
+
+    if server_context.enable_udp {
+        let udp_server = DnsUdpServer::new(server_context.clone(), 20);
+        if let Err(e) = udp_server.run_server() {
+            println!("Failed to bind UDP listener: {:?}", e);
+        }
+    }
+
+    if server_context.enable_tcp {
+        let tcp_server = DnsTcpServer::new(server_context.clone(), 20);
+        if let Err(e) = tcp_server.run_server() {
+            println!("Failed to bind TCP listener: {:?}", e);
+        }
+    }
 }
 
 fn create_genesis_if_needed(context: &Arc<Mutex<Context>>, miner: &Arc<Mutex<Miner>>) {
@@ -85,7 +142,6 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                 Loaded => {
                     web_view.eval("showMiningIndicator(false);").expect("Error evaluating!");
                     let handle = web_view.handle();
-                    let context_copy = context.clone();
                     let mut c = context.lock().unwrap();
                     c.bus.register(move |_uuid, e| {
                         println!("Got event from bus {:?}", &e);
@@ -103,8 +159,7 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                         if !eval.is_empty() {
                             println!("Evaluating {}", &eval);
                             handle.dispatch(move |web_view| {
-                                web_view.eval(&eval.replace("\\", "\\\\")).expect("Error evaluating!");
-                                return WVResult::Ok(());
+                                web_view.eval(&eval.replace("\\", "\\\\"))
                             }).expect("Error dispatching!");
                         }
                         true
@@ -154,19 +209,22 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                     let available = c.get_blockchain().is_domain_available(&name, &c.get_keystore());
                     web_view.eval(&format!("domainAvailable({})", available)).expect("Error evaluating!");
                 }
-                CreateDomain { name, records, tags } => {
-                    let keystore = {
-                        let guard = context.lock().unwrap();
-                        guard.get_keystore()
-                    };
-                    create_domain(miner.clone(), name, records, &keystore);
+                CreateDomain { name, records, .. } => {
+                    println!("Got records: {}", records);
+                    if serde_json::from_str::<Vec<DnsRecord>>(&records).is_ok() {
+                        let keystore = {
+                            let guard = context.lock().unwrap();
+                            guard.get_keystore()
+                        };
+                        create_domain(miner.clone(), name, records, &keystore);
+                    } else {
+                        println!("Error in DNS records for domain!");
+                        web_view.eval(&format!("showWarning('{}');", "Something wrong with your records! Please, correct the error and try again."));
+                    }
                 }
-                ChangeDomain { name, records, tags } => {
-                    let keystore = { context.lock().unwrap().get_keystore() };
-                    // TODO
-                }
-                RenewDomain { name, days } => {}
-                TransferDomain { name, owner } => {}
+                ChangeDomain { .. } => {}
+                RenewDomain { .. } => {}
+                TransferDomain { .. } => {}
                 StopMining => {
                     context.lock().unwrap().bus.post(Event::ActionStopMining);
                 }
@@ -192,7 +250,7 @@ fn create_domain<S: Into<String>>(miner: Arc<Mutex<Miner>>, name: S, data: S, ke
     println!("Generating domain {}", name);
     //let rec_vector: Vec<String> = records.into().trim().split("\n").map(|s| s.trim()).map(String::from).collect();
     //let tags_vector: Vec<String> = tags.into().trim().split(",").map(|s| s.trim()).map(String::from).collect();
-    let transaction = { create_transaction(keystore, name, "domain".into(), data.into()) };
+    let transaction = create_transaction(keystore, name, "domain".into(), data.into());
     let mut miner_guard = miner.lock().unwrap();
     miner_guard.add_transaction(transaction);
 }
@@ -259,6 +317,23 @@ fn generate_key(difficulty: usize, mining: Arc<AtomicBool>) -> Option<Keystore> 
     }
 }
 
+fn create_server_context(context: Arc<Mutex<Context>>, settings: &Settings) -> Arc<ServerContext> {
+    let mut server_context = ServerContext::new();
+    server_context.allow_recursive = true;
+    server_context.dns_port = settings.dns.port;
+    server_context.resolve_strategy = match settings.dns.forwarders.is_empty() {
+        true => { ResolveStrategy::Recursive }
+        false => { ResolveStrategy::Forward { host: settings.dns.forwarders[0].clone(), port: 53 }} // TODO refactor to use more resolvers
+    };
+    server_context.filters.push(Box::new(BlockchainFilter::new(context)));
+    match server_context.initialize() {
+        Ok(_) => {}
+        Err(e) => { panic!("Server failed to initialize: {:?}", e); }
+    }
+
+    Arc::new(server_context)
+}
+
 #[derive(Deserialize)]
 #[serde(tag = "cmd", rename_all = "camelCase")]
 pub enum Cmd {
@@ -280,4 +355,20 @@ fn inline_style(s: &str) -> String {
 
 fn inline_script(s: &str) -> String {
     format!(r#"<script type="text/javascript">{}</script>"#, s)
+}
+
+#[cfg(test)]
+mod tests {
+    use alfis::dns::protocol::{DnsRecord, TransientTtl};
+
+    #[test]
+    fn record_to_string() {
+        let record = DnsRecord::A {
+            domain: "google.com".to_string(),
+            addr: "127.0.0.1".parse().unwrap(),
+            ttl: TransientTtl(300)
+        };
+        println!("Record is {:?}", &record);
+        println!("Record in JSON is {}", serde_json::to_string(&record).unwrap());
+    }
 }

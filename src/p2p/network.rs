@@ -13,7 +13,6 @@ use mio::net::{TcpListener, TcpStream};
 
 use crate::{Context, Block, p2p::Message, p2p::State, p2p::Peer, p2p::Peers};
 use std::net::{SocketAddr, IpAddr, SocketAddrV4, Shutdown};
-use std::ops::DerefMut;
 
 const SERVER: Token = Token(0);
 const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(3000));
@@ -95,8 +94,8 @@ impl Network {
                                                     None => {}
                                                     Some(mut peer) => {
                                                         let stream = peer.get_stream();
-                                                        poll.registry().deregister(stream);
-                                                        stream.shutdown(Shutdown::Both);
+                                                        let _ = poll.registry().deregister(stream);
+                                                        let _ = stream.shutdown(Shutdown::Both);
                                                         println!("Peer connection {:?} has shut down", &peer.get_addr());
                                                     }
                                                 }

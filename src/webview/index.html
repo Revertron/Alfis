@@ -28,8 +28,66 @@
     </div>
 </div>
 
+<div id="new_record_dialog" class="modal">
+    <div class="modal-background"></div>
+    <div class="modal-content">
+        <div class="box">
+            <div class="columns">
+                <div class="column is-one-third">
+                    <div class="field">
+                        <label class="label">Name</label>
+                        <div class="control">
+                            <input class="input" type="text" placeholder="www" id="record_name">
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Type</label>
+                        <div class="select">
+                            <select id="record_type">
+                                <option>A</option>
+                                <option>AAAA</option>
+                                <option>CNAME</option>
+                                <option>MX</option>
+                                <option>TXT</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field">
+                        <label class="label">TTL</label>
+                        <div class="control">
+                            <input class="input" type="text" placeholder="3600" id="record_ttl" value="3600">
+                        </div>
+                    </div>
+                </div>
+                <div class="column is-one-third">
+                    <div class="field">
+                        <label class="label">Data</label>
+                        <div class="control">
+                            <input class="input" type="text" placeholder="1.2.3.4" id="record_data">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <br/>
+            <div class="buttons is-grouped is-centered">
+                <button class="button is-primary" id="new_record_positive_button">Ok</button>
+                <button class="button is-link is-light" id="new_record_negative_button">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="notification is-warning is-hidden" id="notification_warning">
+    <button class="delete" id="close"></button>
+    <p id="warning_text"></p>
+</div>
+
 <div class="container">
-    <div class="columns">
+    <div class="columns is-mobile">
         <div class="column is-one-fifth">
             <div class="menu">
                 <ul class="menu-list">
@@ -95,20 +153,20 @@
                     </div>
 
                     <div class="field">
-                        <label class="label">Domain records</label>
-                        <div class="control">
-                            <textarea class="textarea" placeholder="@ IN AAAA 200:1111:2222:3333:4444:5555:6666:7777" id="new_domain_records"></textarea>
-                        </div>
-                    </div>
-
-                    <div class="field">
                         <label class="label">Domain tags (will be used for search)</label>
                         <div class="control">
                             <input class="input" type="text" placeholder="blog, community, friendship" id="new_domain_tags">
                         </div>
                     </div>
 
+                    <div class="content" id="domain_records">
+                        <!-- Here will be our domain records, added by dialog -->
+                    </div>
+
                     <div class="field is-grouped">
+                        <div class="control">
+                            <button class="button is-success" id="add_record_button" onclick="showNewRecordDialog();">Add record</button>
+                        </div>
                         <div class="control">
                             <button class="button is-link" id="new_domain_button" onclick="createDomain();" disabled>Create domain</button>
                         </div>
