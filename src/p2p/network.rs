@@ -168,8 +168,11 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                 Err(_) => { return Ok(false); }
             }
         } else {
-            // Consider connection as unreliable
-            return Ok(false);
+            // Try to reregister connection
+            let peer = peers.get_mut_peer(&event.token()).expect("Error getting peer for connection");
+            let mut stream = peer.get_stream();
+            registry.reregister(stream, event.token(), Interest::READABLE);
+            return Ok(true);
         }
     }
 
