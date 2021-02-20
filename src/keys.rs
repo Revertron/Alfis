@@ -13,6 +13,7 @@ use std::path::Path;
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
 // For deserialization
 use serde::de::{Error as DeError, Visitor};
+use log::{trace, debug, info, warn, error};
 use crate::hash_is_good;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -61,7 +62,7 @@ impl Keystore {
                 f.write_all(&self.seed).expect("Error saving keystore");
                 self.path = filename.to_owned();
             }
-            Err(_) => { println!("Error saving key file!"); }
+            Err(_) => { error!("Error saving key file!"); }
         }
     }
 
@@ -203,11 +204,14 @@ impl<'dd> Deserialize<'dd> for Bytes {
     }
 }
 
-#[test]
-pub fn test_signature() {
-    let keystore: Keystore = Keystore::new();
-    let data = b"{ identity: 178135D209C697625E3EC71DA5C760382E54936F824EE5083908DA66B14ECE18,\
+#[cfg(test)]
+mod tests {
+    #[test]
+    pub fn test_signature() {
+        let keystore: Keystore = Keystore::new();
+        let data = b"{ identity: 178135D209C697625E3EC71DA5C760382E54936F824EE5083908DA66B14ECE18,\
     confirmation: A4A0AFECD1A511825226F0D3437C6C6BDAE83554040AA7AEB49DEFEAB0AE9EA4 }";
-    let signature = keystore.sign(data);
-    assert!(Keystore::check(data, keystore.get_public().as_bytes(), &signature), "Wrong signature!")
+        let signature = keystore.sign(data);
+        assert!(Keystore::check(data, keystore.get_public().as_bytes(), &signature), "Wrong signature!")
+    }
 }

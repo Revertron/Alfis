@@ -1,6 +1,7 @@
 use crate::{Blockchain, Bus, Keystore};
 use crate::event::Event;
 use crate::settings::Settings;
+use log::{trace, debug, info, warn, error};
 
 pub struct Context {
     pub settings: Settings,
@@ -20,7 +21,7 @@ impl Context {
         let filename = &name.into();
         match Keystore::from_file(filename, &password.into()) {
             None => {
-                println!("Error loading keystore '{}'!", filename);
+                warn!("Error loading keystore '{}'!", filename);
             },
             Some(keystore) => {
                 self.keystore = keystore;

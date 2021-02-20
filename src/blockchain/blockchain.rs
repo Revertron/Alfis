@@ -2,6 +2,7 @@ use sqlite::{Connection, State, Statement};
 
 use crate::{Block, Bytes, Keystore, Transaction};
 use crate::settings::Settings;
+use log::{trace, debug, info, warn, error};
 
 const DB_NAME: &str = "blockchain.db";
 
@@ -30,18 +31,18 @@ impl Blockchain {
             Ok(mut statement) => {
                 while statement.next().unwrap() == State::Row {
                     match Self::get_block_from_statement(&mut statement) {
-                        None => { println!("Something wrong with block in DB!"); }
+                        None => { error!("Something wrong with block in DB!"); }
                         Some(block) => {
-                            println!("Loaded last block: {:?}", &block);
+                            info!("Loaded last block: {:?}", &block);
                             self.version = block.version;
                             self.last_block = Some(block);
                         }
                     }
-                    println!("Blockchain version from DB = {}", self.version);
+                    debug!("Blockchain version from DB = {}", self.version);
                 }
             }
             Err(_) => {
-                println!("No blockchain database found. Creating new.");
+                info!("No blockchain database found. Creating new.");
                 self.db.execute("
                     CREATE TABLE blocks (
                                          'id' BIGINT,
@@ -64,10 +65,10 @@ impl Blockchain {
 
     pub fn add_block(&mut self, block: Block) -> Result<(), &str> {
         if !self.check_block(&block, &self.last_block) {
-            println!("Bad block found, ignoring:\n{:?}", &block);
+            warn!("Bad block found, ignoring:\n{:?}", &block);
             return Err("Bad block found, ignoring");
         }
-        println!("Adding block:\n{:?}", &block);
+        info!("Adding block:\n{:?}", &block);
         self.blocks.push(block.clone());
         self.last_block = Some(block.clone());
         let transaction = block.transaction.clone();
@@ -124,11 +125,11 @@ impl Blockchain {
                 while statement.next().unwrap() == State::Row {
                     return match Self::get_block_from_statement(&mut statement) {
                         None => {
-                            println!("Something wrong with block in DB!");
+                            error!("Something wrong with block in DB!");
                             None
                         }
                         Some(block) => {
-                            println!("Loaded block: {:?}", &block);
+                            debug!("Loaded block: {:?}", &block);
                             Some(block)
                         }
                     }
@@ -136,7 +137,7 @@ impl Blockchain {
                 None
             }
             Err(_) => {
-                println!("Can't find block {}", index);
+                warn!("Can't find requested block {}", index);
                 None
             }
         }
@@ -192,7 +193,7 @@ impl Blockchain {
             let pub_key = Bytes::from_bytes(statement.read::<Vec<u8>>(5).unwrap().as_slice());
             let signature = Bytes::from_bytes(statement.read::<Vec<u8>>(6).unwrap().as_slice());
             let transaction = Transaction { identity, confirmation, method, data, pub_key, signature };
-            println!("Got transaction: {:?}", &transaction);
+            debug!("Got transaction: {:?}", &transaction);
             if transaction.check_for(domain) {
                 return Some(transaction.data);
             }
@@ -227,13 +228,13 @@ impl Blockchain {
 
     fn check_block(&self, block: &Block, prev_block: &Option<Block>) -> bool {
         if !check_block_hash(block) {
-            println!("{:?} has wrong hash! Ignoring!", &block);
+            warn!("{:?} has wrong hash! Ignoring!", &block);
             return false;
         }
         // TODO make transaction not Optional
         let transaction = block.transaction.as_ref().unwrap();
         if !check_transaction_signature(&transaction) {
-            println!("{:?} has wrong signature! Ignoring block!", &transaction);
+            warn!("{:?} has wrong signature! Ignoring block!", &transaction);
             return false;
         }
         match prev_block {
@@ -250,7 +251,7 @@ impl Blockchain {
             }
             Some(prev) => {
                 if block.index != prev.index + 1 {
-                    println!("Discarding block with index {} as not needed now", block.index);
+                    info!("Discarding block with index {} as not needed now", block.index);
                     return false;
                 }
                 block.prev_block_hash.eq(&prev.hash)

@@ -7,6 +7,7 @@ use chrono::Utc;
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
 use num_cpus;
+use log::{trace, debug, info, warn, error};
 
 use crate::{Block, Bytes, Context, hash_is_good, Transaction};
 use crate::event::Event;
@@ -58,7 +59,7 @@ impl Miner {
 
                 let mut lock = transactions.lock().unwrap();
                 if lock.len() > 0 {
-                    println!("Got new transaction to mine");
+                    info!("Got new transaction to mine");
                     let transaction = lock.remove(0);
                     mining.store(true, Ordering::Relaxed);
                     Miner::mine_internal(context.clone(), transactions.clone(), transaction, mining.clone(), cond_var.clone());
@@ -98,7 +99,7 @@ impl Miner {
             let last_block = { context.lock().unwrap().blockchain.last_block() };
             match last_block {
                 None => {
-                    println!("Mining genesis block");
+                    warn!("Mining genesis block");
                     // Creating a block with that signed transaction
                     Block::new(0, Utc::now().timestamp(), version, Bytes::zero32(), Some(transaction.clone()))
                 },
@@ -111,7 +112,7 @@ impl Miner {
 
         let live_threads = Arc::new(AtomicU32::new(0u32));
         let cpus = num_cpus::get();
-        println!("Starting {} threads for mining", cpus);
+        debug!("Starting {} threads for mining", cpus);
         for _ in 0..cpus {
             let transactions = transactions.clone();
             let context = context.clone();
@@ -124,7 +125,7 @@ impl Miner {
                 live_threads.fetch_add(1, Ordering::Relaxed);
                 match find_hash(&mut Sha256::new(), block, mining.clone()) {
                     None => {
-                        println!("Mining did not find suitable hash or was stopped");
+                        debug!("Mining did not find suitable hash or was stopped");
                         let count = live_threads.fetch_sub(1, Ordering::Relaxed);
                         // If this is the last thread, but mining was not stopped by another thread
                         if count == 0 && mining.load(Ordering::Relaxed) {
@@ -138,9 +139,9 @@ impl Miner {
                         let index = block.index;
                         let mut context = context.lock().unwrap();
                         if context.blockchain.add_block(block).is_err() {
-                            println!("Error adding mined block!");
+                            warn!("Error adding mined block!");
                             if index == 0 {
-                                println!("To mine genesis block you need to make 'origin' an empty string in config.");
+                                error!("To mine genesis block you need to make 'origin' an empty string in config.");
                             }
                         }
                         context.bus.post(Event::MinerStopped);
@@ -155,7 +156,7 @@ impl Miner {
 fn find_hash(digest: &mut dyn Digest, mut block: Block, running: Arc<AtomicBool>) -> Option<Block> {
     let mut buf: [u8; 32] = [0; 32];
     block.random = rand::random();
-    println!("Mining block {}", serde_json::to_string(&block).unwrap());
+    debug!("Mining block {}", serde_json::to_string(&block).unwrap());
     for nonce in 0..std::u64::MAX {
         if !running.load(Ordering::Relaxed) {
             return None;

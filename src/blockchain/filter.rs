@@ -2,6 +2,7 @@ use crate::Context;
 use std::sync::{Mutex, Arc};
 use crate::dns::filter::DnsFilter;
 use crate::dns::protocol::{DnsPacket, QueryType, DnsRecord, DnsQuestion};
+use log::{trace, debug, info, warn, error};
 
 pub struct BlockchainFilter {
     context: Arc<Mutex<Context>>
@@ -17,8 +18,9 @@ impl DnsFilter for BlockchainFilter {
     fn lookup(&self, qname: &str, qtype: QueryType) -> Option<DnsPacket> {
         let data = self.context.lock().unwrap().blockchain.get_domain_info(qname);
         match data {
-            None => { println!("Not found info for domain {}", &qname); }
+            None => { debug!("Not found data for domain {}", &qname); }
             Some(data) => {
+                info!("Found data for domain {}", &qname);
                 let records: Vec<DnsRecord> = match serde_json::from_str(&data) {
                     Err(_) => { return None; }
                     Ok(records) => { records }

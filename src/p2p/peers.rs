@@ -6,6 +6,7 @@ use crate::p2p::{Peer, State, Message};
 use crate::p2p::network::LISTEN_PORT;
 use crate::p2p::network::next;
 use rand::random;
+use log::{trace, debug, info, warn, error};
 
 pub struct Peers {
     peers: HashMap<Token, Peer>,
@@ -36,7 +37,7 @@ impl Peers {
     }
 
     pub fn add_peers_from_exchange(&mut self, peers: Vec<String>) {
-        println!("Got peers: {:?}", &peers);
+        info!("Got peers: {:?}", &peers);
         // TODO make it return error if these peers are wrong and seem like an attack
         for peer in peers.iter() {
             let addr: SocketAddr = peer.parse().expect(&format!("Error parsing peer {}", peer));
@@ -109,7 +110,7 @@ impl Peers {
         for addr in self.new_peers.iter() {
             match TcpStream::connect(addr.clone()) {
                 Ok(mut stream) => {
-                    println!("Created connection to peer {}", &addr);
+                    info!("Created connection to peer {}", &addr);
                     let token = next(unique_token);
                     registry.register(&mut stream, token, Interest::WRITABLE).unwrap();
                     let mut peer = Peer::new(addr.clone(), stream, State::Connecting, false);
@@ -117,7 +118,7 @@ impl Peers {
                     self.peers.insert(token, peer);
                 }
                 Err(e) => {
-                    println!("Error connecting to peer {}: {}", &addr, e);
+                    error!("Error connecting to peer {}: {}", &addr, e);
                 }
             }
         }

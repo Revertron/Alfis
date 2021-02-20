@@ -10,6 +10,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use mio::{Events, Interest, Poll, Registry, Token};
 use mio::event::Event;
 use mio::net::{TcpListener, TcpStream};
+use log::{trace, debug, info, warn, error};
 
 use crate::{Context, Block, p2p::Message, p2p::State, p2p::Peer, p2p::Peers};
 use std::net::{SocketAddr, IpAddr, SocketAddrV4, Shutdown};
@@ -38,7 +39,7 @@ impl Network {
         // Starting server socket
         let addr = listen_addr.parse().expect("Error parsing listen address");
         let mut server = TcpListener::bind(addr).expect("Can't bind to address");
-        println!("Started node listener on {}", server.local_addr().unwrap());
+        debug!("Started node listener on {}", server.local_addr().unwrap());
 
         let mut events = Events::with_capacity(64);
         let mut poll = Poll::new().expect("Unable to create poll");
@@ -60,7 +61,7 @@ impl Network {
 
                 // Process each event.
                 for event in events.iter() {
-                    println!("Event for socket {} is {:?}", event.token().0, &event);
+                    trace!("Event for socket {} is {:?}", event.token().0, &event);
                     // We can use the token we previously provided to `register` to determine for which socket the event is.
                     match event.token() {
                         SERVER => {
@@ -77,7 +78,7 @@ impl Network {
                                         }
                                     }
 
-                                    println!("Accepted connection from: {}", address);
+                                    info!("Accepted connection from: {}", address);
                                     let token = next(&mut unique_token);
                                     poll.registry().register(&mut stream, token, Interest::READABLE).expect("Error registering poll");
                                     peers.add_peer(token, Peer::new(address, stream, State::Connected, true));
@@ -98,7 +99,7 @@ impl Network {
                                                         let stream = peer.get_stream();
                                                         let _ = poll.registry().deregister(stream);
                                                         let _ = stream.shutdown(Shutdown::Both);
-                                                        println!("Peer connection {:?} has shut down", &peer.get_addr());
+                                                        info!("Peer connection {:?} has shut down", &peer.get_addr());
                                                     }
                                                 }
                                             }
@@ -108,7 +109,7 @@ impl Network {
                                         }
                                     }
                                 }
-                                None => { println!("Odd event from poll"); }
+                                None => { warn!("Odd event from poll"); }
                             }
                         }
                     }
@@ -141,7 +142,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
             let data = data.unwrap();
             match Message::from_bytes(data) {
                 Ok(message) => {
-                    println!("Got message from socket {}: {:?}", &event.token().0, &message);
+                    debug!("Got message from socket {}: {:?}", &event.token().0, &message);
                     let new_state = handle_message(context.clone(), message, peers, &event.token());
                     let peer = peers.get_mut_peer(&event.token()).unwrap();
                     let stream = peer.get_stream();
@@ -179,28 +180,28 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
     }
 
     if event.is_writable() {
-        //println!("Socket {} is writable", event.token().0);
+        trace!("Socket {} is writable", event.token().0);
         match peers.get_mut_peer(&event.token()) {
             None => {}
             Some(peer) => {
                 match peer.get_state().clone() {
                     State::Connecting => {
-                        println!("Sending hello to socket {}", event.token().0);
+                        debug!("Sending hello to socket {}", event.token().0);
                         let data: String = {
                             let c = context.lock().unwrap();
                             let message = Message::hand(&c.settings.origin, c.settings.version, c.settings.public);
                             serde_json::to_string(&message).unwrap()
                         };
                         send_message(peer.get_stream(), &data.into_bytes());
-                        //println!("Sent hello through socket {}", event.token().0);
+                        debug!("Sent hello through socket {}", event.token().0);
                     }
                     State::Message { data } => {
-                        println!("Sending data to socket {}: {}", event.token().0, &String::from_utf8(data.clone()).unwrap());
+                        debug!("Sending data to socket {}: {}", event.token().0, &String::from_utf8(data.clone()).unwrap());
                         send_message(peer.get_stream(), &data);
                     }
                     State::Connected => {}
                     State::Idle { from } => {
-                        println!("Odd version of pings :)");
+                        debug!("Odd version of pings :)");
                         if from.elapsed().as_secs() >= 30 {
                             let data: String = {
                                 let c = context.lock().unwrap();
@@ -227,11 +228,11 @@ fn read_message(stream: &mut TcpStream) -> Result<Vec<u8>, ()> {
     let data_size = match stream.read_u32::<BigEndian>() {
         Ok(size) => { size as usize }
         Err(e) => {
-            println!("Error reading from socket! {}", e);
+            error!("Error reading from socket! {}", e);
             0
         }
     };
-    println!("Payload size is {}", data_size);
+    trace!("Payload size is {}", data_size);
     if data_size > MAX_PACKET_SIZE {
         return Err(());
     }
@@ -255,7 +256,7 @@ fn read_message(stream: &mut TcpStream) -> Result<Vec<u8>, ()> {
             Err(ref err) if interrupted(err) => continue,
             // Other errors we'll consider fatal.
             Err(_) => {
-                println!("Error reading message, only {} bytes read", bytes_read);
+                debug!("Error reading message, only {} bytes read", bytes_read);
                 return Err(())
             },
         }
@@ -286,7 +287,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 peer.set_public(public);
                 State::message(Message::shake(&origin, version, true, my_height))
             } else {
-                println!("Handshake from unsupported chain or version");
+                warn!("Handshake from unsupported chain or version");
                 State::Error
             }
         }
@@ -335,7 +336,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             }
         }
         Message::Block { index, block } => {
-            println!("Received block {}", index);
+            info!("Received block {}", index);
             let block: Block = match serde_json::from_str(&block) {
                 Ok(block) => block,
                 Err(_) => return State::Error
@@ -346,7 +347,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 let mut context = context.lock().unwrap();
                 match context.blockchain.add_block(block) {
                     Ok(_) => { context.bus.post(crate::event::Event::BlockchainChanged); }
-                    Err(_) => { println!("Error adding received block"); }
+                    Err(_) => { warn!("Error adding received block"); }
                 }
             });
             State::idle()
@@ -360,7 +361,7 @@ fn connect_peers(peers_addrs: Vec<String>, poll: &mut Poll, peers: &mut Peers, u
         let addr: SocketAddr = peer.parse().expect(&format!("Error parsing peer address {}", &peer));
         match TcpStream::connect(addr.clone()) {
             Ok(mut stream) => {
-                println!("Created connection to peer {}", &peer);
+                info!("Created connection to peer {}", &peer);
                 let token = next(unique_token);
                 poll.registry().register(&mut stream, token, Interest::WRITABLE).unwrap();
                 let mut peer = Peer::new(addr, stream, State::Connecting, false);
@@ -368,7 +369,7 @@ fn connect_peers(peers_addrs: Vec<String>, poll: &mut Poll, peers: &mut Peers, u
                 peers.add_peer(token, peer);
             }
             Err(e) => {
-                println!("Error connecting to peer {}: {}", &peer, e);
+                error!("Error connecting to peer {}: {}", &peer, e);
             }
         }
     }
