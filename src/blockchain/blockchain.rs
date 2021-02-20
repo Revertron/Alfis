@@ -177,7 +177,7 @@ impl Blockchain {
         true
     }
 
-    pub fn get_domain_info(&self, domain: &str) -> Option<String> {
+    pub fn get_domain_transaction(&self, domain: &str) -> Option<Transaction> {
         if domain.is_empty() {
             return None;
         }
@@ -193,12 +193,19 @@ impl Blockchain {
             let pub_key = Bytes::from_bytes(statement.read::<Vec<u8>>(5).unwrap().as_slice());
             let signature = Bytes::from_bytes(statement.read::<Vec<u8>>(6).unwrap().as_slice());
             let transaction = Transaction { identity, confirmation, method, data, pub_key, signature };
-            debug!("Got transaction: {:?}", &transaction);
+            debug!("Found transaction for domain {}: {:?}", domain, &transaction);
             if transaction.check_for(domain) {
-                return Some(transaction.data);
+                return Some(transaction);
             }
         }
         None
+    }
+
+    pub fn get_domain_info(&self, domain: &str) -> Option<String> {
+        match self.get_domain_transaction(domain) {
+            None => { None }
+            Some(transaction) => { Some(transaction.data) }
+        }
     }
 
     pub fn last_block(&self) -> Option<Block> {

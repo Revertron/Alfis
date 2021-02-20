@@ -36,6 +36,13 @@ impl State {
         }
     }
 
+    pub fn is_idle(&self) -> bool {
+        match self {
+            State::Idle { .. } => { true }
+            _ => { false }
+        }
+    }
+
     pub fn disabled(&self) -> bool {
         match self {
             State::Error => { true }
@@ -43,6 +50,13 @@ impl State {
             State::Offline { from} => {
                 from.elapsed().as_secs() < 60 // We check offline peers to become online every 5 minutes
             }
+            _ => { false }
+        }
+    }
+
+    pub fn need_reconnect(&self) -> bool {
+        match self {
+            State::Offline { from } => { from.elapsed().as_secs() > 60 }
             _ => { false }
         }
     }

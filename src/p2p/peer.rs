@@ -24,6 +24,10 @@ impl Peer {
         &mut self.stream
     }
 
+    pub fn set_stream(&mut self, stream: TcpStream) {
+        self.stream = stream;
+    }
+
     pub fn get_state(&self) -> &State {
         &self.state
     }
@@ -46,6 +50,10 @@ impl Peer {
 
     pub fn disabled(&self) -> bool {
         self.state.disabled()
+    }
+
+    pub fn is_inbound(&self) -> bool {
+        self.inbound
     }
 
     /// If loopback address then we care about ip and port.

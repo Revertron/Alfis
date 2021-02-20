@@ -99,10 +99,10 @@
                 </ul>
                 <p class="menu-label">Domain management</p>
                 <ul class="menu-list">
-                    <li><a onclick="openTab(this, 'dom_new')">Create domain</a></li>
-                    <li><a onclick="openTab(this, 'dom_edit')">Manage domain</a></li>
+                    <li><a onclick="openTab(this, 'dom_new')">Mine domain</a></li>
+                    <!--<li><a onclick="openTab(this, 'dom_edit')">Manage domain</a></li>
                     <li><a onclick="openTab(this, 'dom_renew')">Renew domain</a></li>
-                    <li><a onclick="openTab(this, 'dom_transfer')">Transfer domain</a></li>
+                    <li><a onclick="openTab(this, 'dom_transfer')">Transfer domain</a></li>-->
                 </ul>
             </div>
         </div><!--column-->
@@ -145,17 +145,23 @@
 
             <div class="content is-hidden" id="dom_new">
                 <form action="#">
-                    <div class="field">
-                        <label class="label">New domain name</label>
-                        <div class="control">
-                            <input class="input" type="text" placeholder="example.ygg" id="new_domain" oninput="onDomainChange(this)">
-                        </div>
-                    </div>
 
-                    <div class="field">
-                        <label class="label">Domain tags (will be used for search)</label>
-                        <div class="control">
-                            <input class="input" type="text" placeholder="blog, community, friendship" id="new_domain_tags">
+                    <div class="columns">
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">Domain name</label>
+                                <div class="control">
+                                    <input class="input" type="text" placeholder="example.ygg" id="new_domain" oninput="onDomainChange(this)">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">Domain tags (will be used for search)</label>
+                                <div class="control">
+                                    <input class="input" type="text" placeholder="blog, community, friendship" id="new_domain_tags">
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -168,7 +174,7 @@
                             <button class="button is-success" id="add_record_button" onclick="showNewRecordDialog();">Add record</button>
                         </div>
                         <div class="control">
-                            <button class="button is-link" id="new_domain_button" onclick="createDomain();" disabled>Create domain</button>
+                            <button class="button is-link" id="new_domain_button" onclick="createDomain();" disabled>Mine domain</button>
                         </div>
                     </div>
                 </form>

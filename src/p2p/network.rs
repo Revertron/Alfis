@@ -88,28 +88,8 @@ impl Network {
                             poll.registry().reregister(&mut server, SERVER, Interest::READABLE).expect("Error reregistering server");
                         }
                         token => {
-                            match peers.get_mut_peer(&token) {
-                                Some(_peer) => {
-                                    match handle_connection_event(context.clone(), &mut peers, &poll.registry(), &event) {
-                                        Ok(result) => {
-                                            if !result {
-                                                match peers.remove_peer(&token) {
-                                                    None => {}
-                                                    Some(mut peer) => {
-                                                        let stream = peer.get_stream();
-                                                        let _ = poll.registry().deregister(stream);
-                                                        let _ = stream.shutdown(Shutdown::Both);
-                                                        info!("Peer connection {:?} has shut down", &peer.get_addr());
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        Err(_err) => {
-                                            peers.remove_peer(&token);
-                                        }
-                                    }
-                                }
-                                None => { warn!("Odd event from poll"); }
+                            if !handle_connection_event(context.clone(), &mut peers, &poll.registry(), &event) {
+                                let _ = peers.close_peer(poll.registry(), &token);
                             }
                         }
                     }
@@ -126,9 +106,9 @@ impl Network {
     }
 }
 
-fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, registry: &Registry, event: &Event) -> io::Result<bool> {
+fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, registry: &Registry, event: &Event) -> bool {
     if event.is_error() || (event.is_read_closed() && event.is_write_closed()) {
-        return Ok(false);
+        return false;
     }
 
     if event.is_readable() {
@@ -168,14 +148,10 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                         }
                     }
                 }
-                Err(_) => { return Ok(false); }
+                Err(_) => { return false; }
             }
         } else {
-            // Try to reregister connection
-            let peer = peers.get_mut_peer(&event.token()).expect("Error getting peer for connection");
-            let mut stream = peer.get_stream();
-            registry.reregister(stream, event.token(), Interest::READABLE);
-            return Ok(true);
+            return false;
         }
     }
 
@@ -220,7 +196,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
         }
     }
 
-    Ok(true)
+    true
 }
 
 fn read_message(stream: &mut TcpStream) -> Result<Vec<u8>, ()> {
@@ -233,7 +209,7 @@ fn read_message(stream: &mut TcpStream) -> Result<Vec<u8>, ()> {
         }
     };
     trace!("Payload size is {}", data_size);
-    if data_size > MAX_PACKET_SIZE {
+    if data_size > MAX_PACKET_SIZE || data_size == 0 {
         return Err(());
     }
 

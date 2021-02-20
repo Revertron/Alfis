@@ -248,10 +248,23 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                             let guard = context.lock().unwrap();
                             guard.get_keystore()
                         };
-                        create_domain(miner.clone(), name, records, &keystore);
+                        let transaction = { context.lock().unwrap().blockchain.get_domain_transaction(&name) };
+                        match transaction {
+                            None => {
+                                create_domain(miner.clone(), name, records, &keystore);
+                            }
+                            Some(transaction) => {
+                                if transaction.pub_key == keystore.get_public() {
+                                    create_domain(miner.clone(), name, records, &keystore);
+                                } else {
+                                    warn!("Tried to mine not owned domain!");
+                                    let _ = web_view.eval(&format!("showWarning('{}');", "You cannot change domain that you don't own!"));
+                                }
+                            }
+                        }
                     } else {
                         warn!("Error in DNS records for domain!");
-                        web_view.eval(&format!("showWarning('{}');", "Something wrong with your records! Please, correct the error and try again."));
+                        let _ = web_view.eval(&format!("showWarning('{}');", "Something wrong with your records! Please, correct the error and try again."));
                     }
                 }
                 ChangeDomain { .. } => {}
