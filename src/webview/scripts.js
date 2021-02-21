@@ -20,11 +20,22 @@ function refresh_records_list() {
     }
 
     function makeRecord(value, index, array) {
+        data = value.addr;
+        if (value.type == "MX") {
+            data = value.priority + " " + value.host;
+        } else if (value.type == "CNAME") {
+            data = value.host;
+        } else if (value.type == "TXT") {
+            data = value.data;
+        } else if (value.type == "SRV") {
+            data = value.priority + " " + value.weight + " " + value.port + " " + value.host;
+        }
+
         buf += "<div class=\"columns is-1\">\n";
         buf += "<div class=\"column\">" + getInput(value.domain) + "</div>\n";
         buf += "<div class=\"column is-2\">" + getInput(value.type) + "</div>\n";
         buf += "<div class=\"column is-2\">" + getInput(value.ttl) + "</div>\n";
-        buf += "<div class=\"column\">" + getInput(value.addr) + "</div>\n";
+        buf += "<div class=\"column\">" + getInput(data) + "</div>\n";
         buf += "<div class=\"column is-1 align-right\">\n<button class=\"button is-danger is-outlined\" id=\"record_delete\" onclick=\"delRecord(" + index + ");\">";
         buf += "<span class=\"icon is-small\"><i class=\"fas fa-times\"></i></span></button></div>\n";
         buf += "</div>";
@@ -58,6 +69,20 @@ function get_record_from_dialog() {
     record_type = document.getElementById("record_type").value;
     record_ttl = parseInt(document.getElementById("record_ttl").value);
     record_data = document.getElementById("record_data").value;
+    if (record_type == "CNAME" || record_type == "NS") {
+        return { type: record_type, domain: record_name, ttl: record_ttl, host: record_data }
+    } else if (record_type == "MX") {
+        record_priority = parseInt(document.getElementById("record_priority").value);
+        return { type: record_type, domain: record_name, ttl: record_ttl, priority: record_priority, host: record_data }
+    }  else if (record_type == "TXT") {
+        record_priority = parseInt(document.getElementById("record_priority").value);
+        return { type: record_type, domain: record_name, ttl: record_ttl, data: record_data }
+    } else if (record_type == "SRV") {
+        record_priority = parseInt(document.getElementById("record_priority").value);
+        record_weight = parseInt(document.getElementById("record_weight").value);
+        record_port = parseInt(document.getElementById("record_port").value);
+        return { type: record_type, domain: record_name, ttl: record_ttl, priority: record_priority, weight: record_weight, port: record_port, host: record_data }
+    }
     return { type: record_type, domain: record_name, ttl: record_ttl, addr: record_data }
 }
 

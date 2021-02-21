@@ -33,7 +33,7 @@
     <div class="modal-content">
         <div class="box">
             <div class="columns">
-                <div class="column is-one-third">
+                <div class="column">
                     <div class="field">
                         <label class="label">Name</label>
                         <div class="control">
@@ -41,7 +41,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="column">
+                <div class="column is-narrow">
                     <div class="field">
                         <label class="label">Type</label>
                         <div class="select">
@@ -49,12 +49,18 @@
                                 <option>A</option>
                                 <option>AAAA</option>
                                 <option>CNAME</option>
+                                <option>NS</option>
                                 <option>MX</option>
+                                <option>SRV</option>
                                 <option>TXT</option>
+                                <!--<option>SOA</option>
+                                <option>OPT</option>-->
                             </select>
                         </div>
                     </div>
                 </div>
+            </div>
+            <div class="columns">
                 <div class="column">
                     <div class="field">
                         <label class="label">TTL</label>
@@ -63,13 +69,35 @@
                         </div>
                     </div>
                 </div>
-                <div class="column is-one-third">
+                <div class="column">
                     <div class="field">
-                        <label class="label">Data</label>
+                        <label class="label">Priority</label>
                         <div class="control">
-                            <input class="input" type="text" placeholder="1.2.3.4" id="record_data">
+                            <input class="input" type="number" placeholder="10" id="record_priority">
                         </div>
                     </div>
+                </div>
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Weight</label>
+                        <div class="control">
+                            <input class="input" type="number" placeholder="10" id="record_weight">
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Port</label>
+                        <div class="control">
+                            <input class="input" type="number" placeholder="5222" id="record_port">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="field">
+                <label class="label">Data/host</label>
+                <div class="control">
+                    <input class="input" type="text" placeholder="1.2.3.4" id="record_data">
                 </div>
             </div>
             <br/>
