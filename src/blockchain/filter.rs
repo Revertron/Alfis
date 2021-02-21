@@ -2,6 +2,7 @@ use crate::Context;
 use std::sync::{Mutex, Arc};
 use crate::dns::filter::DnsFilter;
 use crate::dns::protocol::{DnsPacket, QueryType, DnsRecord, DnsQuestion};
+#[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
 
 pub struct BlockchainFilter {
@@ -16,8 +17,8 @@ impl BlockchainFilter {
 
 impl DnsFilter for BlockchainFilter {
     fn lookup(&self, qname: &str, qtype: QueryType) -> Option<DnsPacket> {
-        let mut search;
-        let mut subdomain;
+        let search;
+        let subdomain;
         let parts: Vec<&str> = qname.rsplitn(3, ".").collect();
         match parts.len() {
             1 => { return None; }

@@ -6,6 +6,7 @@ use crate::p2p::{Peer, State, Message};
 use crate::p2p::network::LISTEN_PORT;
 use crate::p2p::network::next;
 use rand::random;
+#[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
 
 pub struct Peers {
@@ -33,12 +34,12 @@ impl Peers {
     }
 
     pub fn close_peer(&mut self, registry: &Registry, token: &Token) {
-        let mut peer = self.peers.get_mut(token);
+        let peer = self.peers.get_mut(token);
         match peer {
-            Some(mut peer) => {
-                let mut stream = peer.get_stream();
+            Some(peer) => {
+                let stream = peer.get_stream();
                 let _ = stream.shutdown(Shutdown::Both);
-                registry.deregister(stream);
+                let _ = registry.deregister(stream);
                 info!("Peer connection {:?} has shut down", &peer.get_addr());
 
                 if !peer.disabled() && !peer.is_inbound() {
@@ -169,7 +170,7 @@ fn skip_addr(addr: &SocketAddr) -> bool {
                 return true;
             }
         }
-        SocketAddr::V6(addr) => {
+        SocketAddr::V6(_addr) => {
             // TODO uncomment when stabilized
             // if addr.ip().is_unique_local() {
             //     return true;

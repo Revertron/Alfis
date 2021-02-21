@@ -2,6 +2,7 @@ use sqlite::{Connection, State, Statement};
 
 use crate::{Block, Bytes, Keystore, Transaction};
 use crate::settings::Settings;
+#[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
 
 const DB_NAME: &str = "blockchain.db";

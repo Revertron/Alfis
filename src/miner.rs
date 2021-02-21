@@ -7,6 +7,7 @@ use chrono::Utc;
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
 use num_cpus;
+#[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
 
 use crate::{Block, Bytes, Context, hash_is_good, Transaction};

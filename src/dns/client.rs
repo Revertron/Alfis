@@ -2,7 +2,7 @@
 
 use std::io::Write;
 use std::marker::{Send, Sync};
-use std::net::{TcpStream, UdpSocket};
+use std::net::{TcpStream, UdpSocket, ToSocketAddrs};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
@@ -32,7 +32,7 @@ pub trait DnsClient {
     fn get_failed_count(&self) -> usize;
 
     fn run(&self) -> Result<()>;
-    fn send_query(&self, qname: &str, qtype: QueryType, server: (&str, u16), recursive: bool) -> Result<DnsPacket>;
+    fn send_query(&self, qname: &str, qtype: QueryType, server: &str, recursive: bool) -> Result<DnsPacket>;
 }
 
 /// The UDP client
@@ -84,7 +84,7 @@ impl DnsNetworkClient {
     ///
     /// This is much simpler than using UDP, since the kernel will take care of
     /// packet ordering, connection state, timeouts etc.
-    pub fn send_tcp_query(&self, qname: &str, qtype: QueryType, server: (&str, u16), recursive: bool) -> Result<DnsPacket> {
+    pub fn send_tcp_query<A: ToSocketAddrs>(&self, qname: &str, qtype: QueryType, server: A, recursive: bool) -> Result<DnsPacket> {
         let _ = self.total_sent.fetch_add(1, Ordering::Release);
 
         // Prepare request
@@ -125,7 +125,7 @@ impl DnsNetworkClient {
     /// worker thread, and returned to this thread through a channel. Thus this
     /// method is thread safe, and can be used from any number of threads in
     /// parallel.
-    pub fn send_udp_query(&self, qname: &str, qtype: QueryType, server: (&str, u16), recursive: bool) -> Result<DnsPacket> {
+    pub fn send_udp_query<A: ToSocketAddrs>(&self, qname: &str, qtype: QueryType, server: A, recursive: bool) -> Result<DnsPacket> {
         let _ = self.total_sent.fetch_add(1, Ordering::Release);
 
         // Prepare request
@@ -268,7 +268,7 @@ impl DnsClient for DnsNetworkClient {
         Ok(())
     }
 
-    fn send_query(&self,qname: &str, qtype: QueryType, server: (&str, u16), recursive: bool) -> Result<DnsPacket> {
+    fn send_query(&self,qname: &str, qtype: QueryType, server: &str, recursive: bool) -> Result<DnsPacket> {
         let packet = self.send_udp_query(qname, qtype, server, recursive)?;
         if !packet.header.truncated_message {
             return Ok(packet);
@@ -284,7 +284,7 @@ pub mod tests {
     use super::*;
     use crate::dns::protocol::{DnsPacket, DnsRecord, QueryType};
 
-    pub type StubCallback = dyn Fn(&str, QueryType, (&str, u16), bool) -> Result<DnsPacket>;
+    pub type StubCallback = dyn Fn(&str, QueryType, &str, bool) -> Result<DnsPacket>;
 
     pub struct DnsStubClient {
         callback: Box<StubCallback>,
@@ -313,7 +313,7 @@ pub mod tests {
             Ok(())
         }
 
-        fn send_query(&self,qname: &str, qtype: QueryType, server: (&str, u16), recursive: bool) -> Result<DnsPacket> {
+        fn send_query(&self,qname: &str, qtype: QueryType, server: &str, recursive: bool) -> Result<DnsPacket> {
             (self.callback)(qname, qtype, server, recursive)
         }
     }

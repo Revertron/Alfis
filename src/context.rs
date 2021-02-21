@@ -1,6 +1,7 @@
 use crate::{Blockchain, Bus, Keystore};
 use crate::event::Event;
 use crate::settings::Settings;
+#[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
 
 pub struct Context {

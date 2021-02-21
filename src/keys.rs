@@ -13,6 +13,7 @@ use std::path::Path;
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
 // For deserialization
 use serde::de::{Error as DeError, Visitor};
+#[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
 use crate::hash_is_good;
 
@@ -206,6 +207,8 @@ impl<'dd> Deserialize<'dd> for Bytes {
 
 #[cfg(test)]
 mod tests {
+    use crate::Keystore;
+
     #[test]
     pub fn test_signature() {
         let keystore: Keystore = Keystore::new();

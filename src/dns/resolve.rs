@@ -68,12 +68,12 @@ pub trait DnsResolver {
 /// This resolver uses an external DNS server to service a query
 pub struct ForwardingDnsResolver {
     context: Arc<ServerContext>,
-    server: (String, u16),
+    upstreams: Vec<String>,
 }
 
 impl ForwardingDnsResolver {
-    pub fn new(context: Arc<ServerContext>, server: (String, u16)) -> ForwardingDnsResolver {
-        ForwardingDnsResolver { context, server }
+    pub fn new(context: Arc<ServerContext>, upstreams: Vec<String>) -> ForwardingDnsResolver {
+        ForwardingDnsResolver { context, upstreams }
     }
 }
 
@@ -83,10 +83,11 @@ impl DnsResolver for ForwardingDnsResolver {
     }
 
     fn perform(&mut self, qname: &str, qtype: QueryType) -> Result<DnsPacket> {
-        let &(ref host, port) = &self.server;
+        let index: usize = rand::random::<usize>() % self.upstreams.len();
+        let upstream = self.upstreams[index].as_ref();
         let result = match self.context.cache.lookup(qname, qtype) {
             None => {
-                self.context.client.send_query(qname, qtype, (host.as_str(), port), true)?
+                self.context.client.send_query(qname, qtype, upstream, true)?
             }
             Some(packet) => packet
         };
@@ -149,11 +150,11 @@ impl DnsResolver for RecursiveDnsResolver {
 
             let ns_copy = ns.clone();
 
-            let server = (ns_copy.as_str(), 53);
+            let server = format!("{}:{}", ns_copy.as_str(), 53);
             let response = self
                 .context
                 .client
-                .send_query(qname, qtype.clone(), server, false)?;
+                .send_query(qname, qtype.clone(), &server, false)?;
 
             // If we've got an actual answer, we're done!
             if !response.answers.is_empty() && response.header.rescode == ResultCode::NOERROR {
@@ -234,8 +235,7 @@ mod tests {
         match Arc::get_mut(&mut context) {
             Some(mut ctx) => {
                 ctx.resolve_strategy = ResolveStrategy::Forward {
-                    host: "127.0.0.1".to_string(),
-                    port: 53,
+                    upstreams: vec![String::from("127.0.0.1:53")]
                 };
             }
             None => panic!(),
@@ -342,10 +342,10 @@ mod tests {
 
     #[test]
     fn test_recursive_resolver_match_order() {
-        let context = create_test_context(Box::new(|_, _, (server, _), _| {
+        let context = create_test_context(Box::new(|_, _, server, _| {
             let mut packet = DnsPacket::new();
 
-            if server == "127.0.0.1" {
+            if server.starts_with("127.0.0.1") {
                 packet.header.id = 1;
 
                 packet.answers.push(DnsRecord::A {
@@ -355,7 +355,7 @@ mod tests {
                 });
 
                 return Ok(packet);
-            } else if server == "127.0.0.2" {
+            } else if server.starts_with("127.0.0.2") {
                 packet.header.id = 2;
 
                 packet.answers.push(DnsRecord::A {
@@ -365,7 +365,7 @@ mod tests {
                 });
 
                 return Ok(packet);
-            } else if server == "127.0.0.3" {
+            } else if server.starts_with("127.0.0.3") {
                 packet.header.id = 3;
 
                 packet.answers.push(DnsRecord::A {

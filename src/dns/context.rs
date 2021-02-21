@@ -38,7 +38,7 @@ impl ServerStatistics {
 
 pub enum ResolveStrategy {
     Recursive,
-    Forward { host: String, port: u16 },
+    Forward { upstreams: Vec<String> },
 }
 
 pub struct ServerContext {
@@ -101,8 +101,8 @@ impl ServerContext {
     pub fn create_resolver(&self, ptr: Arc<ServerContext>) -> Box<dyn DnsResolver> {
         match self.resolve_strategy {
             ResolveStrategy::Recursive => Box::new(RecursiveDnsResolver::new(ptr)),
-            ResolveStrategy::Forward { ref host, port } => {
-                Box::new(ForwardingDnsResolver::new(ptr, (host.clone(), port)))
+            ResolveStrategy::Forward { ref upstreams } => {
+                Box::new(ForwardingDnsResolver::new(ptr, upstreams.clone()))
             }
         }
     }

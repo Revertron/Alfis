@@ -19,6 +19,7 @@ use serde::Deserialize;
 use web_view::*;
 use getopts::Options;
 use simple_logger::{SimpleLogger};
+#[allow(unused_imports)]
 use log::{trace, debug, info, warn, error, LevelFilter};
 
 use alfis::{Blockchain, Bytes, Context, Keystore, Transaction};
@@ -368,7 +369,7 @@ fn create_server_context(context: Arc<Mutex<Context>>, settings: &Settings) -> A
     server_context.dns_port = settings.dns.port;
     server_context.resolve_strategy = match settings.dns.forwarders.is_empty() {
         true => { ResolveStrategy::Recursive }
-        false => { ResolveStrategy::Forward { host: settings.dns.forwarders[0].clone(), port: 53 }} // TODO refactor to use more resolvers
+        false => { ResolveStrategy::Forward { upstreams: settings.dns.forwarders.clone() }}
     };
     server_context.filters.push(Box::new(BlockchainFilter::new(context)));
     match server_context.initialize() {

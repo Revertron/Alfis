@@ -437,8 +437,7 @@ mod tests {
         match Arc::get_mut(&mut context) {
             Some(mut ctx) => {
                 ctx.resolve_strategy = ResolveStrategy::Forward {
-                    host: "127.0.0.1".to_string(),
-                    port: 53,
+                    upstreams: vec![String::from("127.0.0.1:53")]
                 };
             }
             None => panic!(),
@@ -545,8 +544,7 @@ mod tests {
         match Arc::get_mut(&mut context2) {
             Some(mut ctx) => {
                 ctx.resolve_strategy = ResolveStrategy::Forward {
-                    host: "127.0.0.1".to_string(),
-                    port: 53,
+                    upstreams: vec![String::from("127.0.0.1:53")]
                 };
             }
             None => panic!(),

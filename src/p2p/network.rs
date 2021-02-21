@@ -2,7 +2,7 @@ extern crate serde;
 extern crate serde_json;
 
 use std::{io, thread};
-use std::io::{Read, Write, Error};
+use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -10,10 +10,11 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use mio::{Events, Interest, Poll, Registry, Token};
 use mio::event::Event;
 use mio::net::{TcpListener, TcpStream};
+#[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
 
 use crate::{Context, Block, p2p::Message, p2p::State, p2p::Peer, p2p::Peers};
-use std::net::{SocketAddr, IpAddr, SocketAddrV4, Shutdown, ToSocketAddrs};
+use std::net::{SocketAddr, IpAddr, SocketAddrV4, ToSocketAddrs};
 
 const SERVER: Token = Token(0);
 const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(3000));
