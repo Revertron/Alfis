@@ -2,7 +2,7 @@ extern crate serde;
 extern crate serde_json;
 
 use std::{io, thread};
-use std::io::{Read, Write};
+use std::io::{Read, Write, Error};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -13,7 +13,7 @@ use mio::net::{TcpListener, TcpStream};
 use log::{trace, debug, info, warn, error};
 
 use crate::{Context, Block, p2p::Message, p2p::State, p2p::Peer, p2p::Peers};
-use std::net::{SocketAddr, IpAddr, SocketAddrV4, Shutdown};
+use std::net::{SocketAddr, IpAddr, SocketAddrV4, Shutdown, ToSocketAddrs};
 
 const SERVER: Token = Token(0);
 const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(3000));
@@ -334,18 +334,24 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
 /// Connecting to configured (bootstrap) peers
 fn connect_peers(peers_addrs: Vec<String>, poll: &mut Poll, peers: &mut Peers, unique_token: &mut Token) {
     for peer in peers_addrs.iter() {
-        let addr: SocketAddr = peer.parse().expect(&format!("Error parsing peer address {}", &peer));
-        match TcpStream::connect(addr.clone()) {
-            Ok(mut stream) => {
-                info!("Created connection to peer {}", &peer);
-                let token = next(unique_token);
-                poll.registry().register(&mut stream, token, Interest::WRITABLE).unwrap();
-                let mut peer = Peer::new(addr, stream, State::Connecting, false);
-                peer.set_public(true);
-                peers.add_peer(token, peer);
-            }
-            Err(e) => {
-                error!("Error connecting to peer {}: {}", &peer, e);
+        let addresses: Vec<SocketAddr> = match peer.to_socket_addrs() {
+            Ok(peers) => { peers.collect() }
+            Err(_) => { error!("Can't resolve address {}", &peer); continue; }
+        };
+
+        for addr in addresses {
+            match TcpStream::connect(addr.clone()) {
+                Ok(mut stream) => {
+                    info!("Created connection to peer {}", &addr);
+                    let token = next(unique_token);
+                    poll.registry().register(&mut stream, token, Interest::WRITABLE).unwrap();
+                    let mut peer = Peer::new(addr, stream, State::Connecting, false);
+                    peer.set_public(true);
+                    peers.add_peer(token, peer);
+                }
+                Err(e) => {
+                    error!("Error connecting to peer {}: {}", &addr, e);
+                }
             }
         }
     }
