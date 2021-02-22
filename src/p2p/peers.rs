@@ -73,6 +73,14 @@ impl Peers {
                 continue;
             }
 
+            if self.new_peers
+                .iter()
+                .find(|a| a.clone().eq(&addr))
+                .is_some() {
+                debug!("Skipping address from exchange: {}", &addr);
+                continue;
+            }
+
             if skip_addr(&addr) {
                 debug!("Skipping address from exchange: {}", &addr);
                 continue; // Return error in future

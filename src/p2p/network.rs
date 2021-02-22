@@ -330,7 +330,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 let mut context = context.lock().unwrap();
                 match context.blockchain.add_block(block) {
                     Ok(_) => { context.bus.post(crate::event::Event::BlockchainChanged); }
-                    Err(_) => { warn!("Error adding received block"); }
+                    Err(_) => { warn!("Discarded received block"); }
                 }
             });
             State::idle()
