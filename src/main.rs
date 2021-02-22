@@ -436,6 +436,7 @@ fn generate_key(difficulty: usize, mining: Arc<AtomicBool>) -> Option<Keystore> 
 fn create_server_context(context: Arc<Mutex<Context>>, settings: &Settings) -> Arc<ServerContext> {
     let mut server_context = ServerContext::new();
     server_context.allow_recursive = true;
+    server_context.dns_host = settings.dns.host.clone();
     server_context.dns_port = settings.dns.port;
     server_context.resolve_strategy = match settings.dns.forwarders.is_empty() {
         true => { ResolveStrategy::Recursive }
