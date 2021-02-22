@@ -125,10 +125,10 @@ function saveKey() {
 
 function createDomain() {
     new_domain = document.getElementById("new_domain").value;
-    //new_dom_records = document.getElementById("new_domain_records").value;
     new_dom_records = JSON.stringify(recordsBuffer);
     new_dom_tags = document.getElementById("new_domain_tags").value;
     external.invoke(JSON.stringify({cmd: 'createDomain', name: new_domain, records: new_dom_records, tags: new_dom_tags}));
+    recordsBuffer = [];
 }
 
 function changeDomain() {
