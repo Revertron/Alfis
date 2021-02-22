@@ -81,9 +81,13 @@ fn main() {
     if opt_matches.opt_present("d") {
         level = LevelFilter::Trace;
     }
+    let config_name = match opt_matches.opt_str("c") {
+        None => { SETTINGS_FILENAME.to_owned() }
+        Some(path) => { path }
+    };
     SimpleLogger::new().with_level(level).init().unwrap();
 
-    let settings = Settings::load(SETTINGS_FILENAME).expect("Error loading settings");
+    let settings = Settings::load(&config_name).expect("Error loading settings");
     let keystore: Keystore = match Keystore::from_file(&settings.key_file, "") {
         None => {
             warn!("Generated temporary keystore. Please, generate full-privileged keys.");
