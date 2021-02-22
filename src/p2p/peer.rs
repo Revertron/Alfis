@@ -7,13 +7,14 @@ pub struct Peer {
     addr: SocketAddr,
     stream: TcpStream,
     state: State,
+    height: u64,
     inbound: bool,
     public: bool,
 }
 
 impl Peer {
     pub fn new(addr: SocketAddr, stream: TcpStream, state: State, inbound: bool) -> Self {
-        Peer { addr, stream, state, inbound, public: false }
+        Peer { addr, stream, state, height: 0, inbound, public: false }
     }
 
     pub fn get_addr(&self) -> SocketAddr {
@@ -34,6 +35,14 @@ impl Peer {
 
     pub fn set_state(&mut self, state: State) {
         self.state = state;
+    }
+
+    pub fn set_height(&mut self, height: u64) {
+        self.height = height;
+    }
+
+    pub fn is_higher(&self, height: u64) -> bool {
+        self.height > height
     }
 
     pub fn is_public(&self) -> bool {

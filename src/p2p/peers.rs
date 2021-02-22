@@ -6,6 +6,7 @@ use crate::p2p::{Peer, State, Message};
 use crate::p2p::network::LISTEN_PORT;
 use crate::p2p::network::next;
 use rand::random;
+use rand::seq::IteratorRandom;
 #[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
 
@@ -98,6 +99,7 @@ impl Peers {
     }
 
     pub fn send_pings(&mut self, registry: &Registry, height: u64) {
+        let mut ping_sent = false;
         for (token, peer) in self.peers.iter_mut() {
             match peer.get_state() {
                 State::Idle { from } => {
@@ -113,9 +115,25 @@ impl Peers {
                         peer.set_state(State::message(message));
                         let stream = peer.get_stream();
                         registry.reregister(stream, token.clone(), Interest::WRITABLE).unwrap();
+                        ping_sent = true;
                     }
                 }
                 _ => {}
+            }
+        }
+
+        if !ping_sent {
+            let mut rng = rand::thread_rng();
+            match self.peers
+                .iter_mut()
+                .filter_map(|(token, peer)| if peer.get_state().is_idle() && peer.is_higher(height) { Some((token, peer)) } else { None })
+                .choose(&mut rng) {
+                None => {}
+                Some((token, peer)) => {
+                    debug!("Found some peer higher than we are, sending block request");
+                    registry.reregister(peer.get_stream(), token.clone(), Interest::WRITABLE).unwrap();
+                    peer.set_state(State::message(Message::GetBlock { index: height }));
+                }
             }
         }
 

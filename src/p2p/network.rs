@@ -273,7 +273,9 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 return State::Error;
             }
             if ok {
-                if height > my_height {
+                let peer = peers.get_mut_peer(token).unwrap();
+                peer.set_height(height);
+                if peer.is_higher(my_height) {
                     State::message(Message::GetBlock { index: my_height })
                 } else {
                     State::message(Message::GetPeers)
@@ -284,14 +286,18 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
         }
         Message::Error => { State::Error }
         Message::Ping { height } => {
-            if height > my_height {
+            let peer = peers.get_mut_peer(token).unwrap();
+            peer.set_height(height);
+            if peer.is_higher(my_height) {
                 State::message(Message::GetBlock { index: my_height })
             } else {
                 State::message(Message::pong(my_height))
             }
         }
         Message::Pong { height } => {
-            if height > my_height {
+            let peer = peers.get_mut_peer(token).unwrap();
+            peer.set_height(height);
+            if peer.is_higher(my_height) {
                 State::message(Message::GetBlock { index: my_height })
             } else {
                 State::idle()

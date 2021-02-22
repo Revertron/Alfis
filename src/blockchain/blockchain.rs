@@ -65,6 +65,15 @@ impl Blockchain {
     }
 
     pub fn add_block(&mut self, block: Block) -> Result<(), &str> {
+        match &self.last_block {
+            None => {}
+            Some(last_block) => {
+                if last_block.index >= block.index && last_block.hash == block.hash {
+                    info!("Ignoring block {}, we already have it", block.index);
+                    return Err("Already have that block");
+                }
+            }
+        }
         if !self.check_block(&block, &self.last_block) {
             warn!("Bad block found, ignoring:\n{:?}", &block);
             return Err("Bad block found, ignoring");
