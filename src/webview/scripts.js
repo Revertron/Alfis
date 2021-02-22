@@ -131,7 +131,17 @@ function createDomain() {
     recordsBuffer = [];
 }
 
-function changeDomain() {
+function createZone() {
+    new_zone = document.getElementById("new_zone").value;
+    difficulty = document.getElementById("new_zone_difficulty").value;
+    obj = {};
+    obj.name = new_zone;
+    obj.difficulty = difficulty;
+    data = JSON.stringify(obj);
+    external.invoke(JSON.stringify({cmd: 'createZone', name: new_zone, data: data}));
+}
+
+/*function changeDomain() {
     domain = document.getElementById("change_domain").value;
     dom_records = document.getElementById("change_domain_records").value;
     dom_tags = document.getElementById("change_domain_records").value;
@@ -148,7 +158,7 @@ function transferDomain() {
     domain = document.getElementById("transfer_domain").value;
     new_owner = document.getElementById("transfer_domain_transfer_owner").value;
     external.invoke(JSON.stringify({cmd: 'transferDomain', name: domain, owner: new_owner}));
-}
+}*/
 
 function sendAction(param) {
     external.invoke(JSON.stringify(param));
@@ -167,6 +177,40 @@ function domainAvailable(available) {
     } else {
         input.className = "input is-danger";
         button.disabled = true
+    }
+}
+
+function onZoneChange() {
+    button = document.getElementById("new_zone_button");
+    diff = document.getElementById("new_zone_difficulty");
+    d = parseInt(diff.value);
+    // Checking for NaN first
+    if (d != d || d < 20 || d > 50) {
+        button.disabled = true;
+        diff.className = "input is-danger";
+    } else {
+        diff.className = "input";
+        input = document.getElementById("new_zone");
+        external.invoke(JSON.stringify({cmd: 'checkZone', name: input.value}));
+    }
+}
+
+function zoneAvailable(available) {
+    input = document.getElementById("new_zone");
+    button = document.getElementById("new_zone_button");
+    if (available) {
+        input.className = "input";
+        button.disabled = false;
+        diff = document.getElementById("new_zone_difficulty");
+        d = parseInt(diff.value);
+        // Checking for NaN first
+        if (d != d || d < 20 || d > 50) {
+            button.disabled = true;
+            diff.className = "input is-danger";
+        }
+    } else {
+        input.className = "input is-danger";
+        button.disabled = true;
     }
 }
 

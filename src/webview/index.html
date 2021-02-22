@@ -128,6 +128,7 @@
                 <p class="menu-label">Domain management</p>
                 <ul class="menu-list">
                     <li><a onclick="openTab(this, 'dom_new')">Mine domain</a></li>
+                    <li><a onclick="openTab(this, 'zone_new')">Mine zone</a></li>
                     <!--<li><a onclick="openTab(this, 'dom_edit')">Manage domain</a></li>
                     <li><a onclick="openTab(this, 'dom_renew')">Renew domain</a></li>
                     <li><a onclick="openTab(this, 'dom_transfer')">Transfer domain</a></li>-->
@@ -203,6 +204,37 @@
                         </div>
                         <div class="control">
                             <button class="button is-link" id="new_domain_button" onclick="createDomain();" disabled>Mine domain</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+
+            <div class="content is-hidden" id="zone_new">
+                <form action="#">
+
+                    <div class="columns">
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">Zone name</label>
+                                <div class="control">
+                                    <input class="input" type="text" placeholder="ygg" id="new_zone" oninput="onZoneChange()">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">Difficulty (for all domains in zone)</label>
+                                <div class="control">
+                                    <input class="input" type="number" placeholder="20" id="new_zone_difficulty" oninput="onZoneChange()">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="field is-grouped">
+                        <div class="control">
+                            <button class="button is-link" id="new_zone_button" onclick="createZone();" disabled>Mine zone</button>
                         </div>
                     </div>
                 </form>

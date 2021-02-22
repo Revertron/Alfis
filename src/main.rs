@@ -22,7 +22,7 @@ use simple_logger::{SimpleLogger};
 #[allow(unused_imports)]
 use log::{trace, debug, info, warn, error, LevelFilter};
 
-use alfis::{Blockchain, Bytes, Context, Keystore, Transaction};
+use alfis::{Blockchain, Bytes, Context, Keystore, Transaction, check_domain};
 use alfis::event::Event;
 use alfis::miner::Miner;
 use alfis::p2p::Network;
@@ -50,7 +50,8 @@ fn main() {
         AttachConsole(ATTACH_PARENT_PROCESS);
     }
 
-    println!("Starting ALFIS 0.1.0");
+    let version = env!("CARGO_PKG_VERSION");
+    println!("Starting ALFIS {}", version);
     let args: Vec<String> = env::args().collect();
     let program = args[0].clone();
 
@@ -165,10 +166,12 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let scripts = inline_script(include_str!("webview/scripts.js"));
 
     let html = Content::Html(file_content.to_owned().replace("{styles}", &styles).replace("{scripts}", &scripts));
+    let title = format!("ALFIS {}", env!("CARGO_PKG_VERSION"));
     let mut interface = web_view::builder()
-        .title("ALFIS 0.1.0")
+        .title(&title)
         .content(html)
-        .size(1024, 720)
+        .size(1023, 720)
+        .min_size(895, 350)
         .resizable(true)
         .debug(false)
         .user_data(())
@@ -242,18 +245,22 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                     }
                 }
                 CheckDomain { name} => {
+                    let name = name.to_lowercase();
                     let c = context.lock().unwrap();
                     let available = c.get_blockchain().is_domain_available(&name, &c.get_keystore());
                     web_view.eval(&format!("domainAvailable({})", available)).expect("Error evaluating!");
                 }
                 CreateDomain { name, records, .. } => {
                     debug!("Got records: {}", records);
+                    let name = name.to_lowercase();
+                    if !check_domain(&name, true) {
+                        return Ok(());
+                    }
                     if serde_json::from_str::<Vec<DnsRecord>>(&records).is_ok() {
-                        let keystore = {
-                            let guard = context.lock().unwrap();
-                            guard.get_keystore()
+                        let (keystore, transaction) = {
+                            let context = context.lock().unwrap();
+                            (context.get_keystore(), context.blockchain.get_domain_transaction(&name))
                         };
-                        let transaction = { context.lock().unwrap().blockchain.get_domain_transaction(&name) };
                         match transaction {
                             None => {
                                 create_domain(miner.clone(), name, records, &keystore);
@@ -275,6 +282,37 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                 ChangeDomain { .. } => {}
                 RenewDomain { .. } => {}
                 TransferDomain { .. } => {}
+                CheckZone { name} => {
+                    let name = name.to_lowercase();
+                    if !check_domain(&name, false) {
+                        web_view.eval("zoneAvailable(false)").expect("Error evaluating!");
+                    } else {
+                        let c = context.lock().unwrap();
+                        let available = c.get_blockchain().is_domain_available(&name, &c.get_keystore());
+                        web_view.eval(&format!("zoneAvailable({})", available)).expect("Error evaluating!");
+                    }
+                }
+                CreateZone { name, data } => {
+                    let name = name.to_lowercase();
+                    let data = data.to_lowercase();
+                    let (keystore, transaction) = {
+                        let context = context.lock().unwrap();
+                        (context.get_keystore(), context.blockchain.get_domain_transaction(&name))
+                    };
+                    match transaction {
+                        None => {
+                            create_domain(miner.clone(), name, data, &keystore);
+                        }
+                        Some(transaction) => {
+                            if transaction.pub_key == keystore.get_public() {
+                                create_domain(miner.clone(), name, data, &keystore);
+                            } else {
+                                warn!("Tried to mine not owned domain!");
+                                let _ = web_view.eval(&format!("showWarning('{}');", "You cannot change domain that you don't own!"));
+                            }
+                        }
+                    }
+                }
                 StopMining => {
                     context.lock().unwrap().bus.post(Event::ActionStopMining);
                 }
@@ -419,6 +457,8 @@ pub enum Cmd {
     LoadKey{},
     CreateKey{},
     SaveKey{},
+    CheckZone{name: String},
+    CreateZone{name: String, data: String},
     CheckDomain{name: String},
     CreateDomain{name: String, records: String, tags: String},
     ChangeDomain{name: String, records: String, tags: String},

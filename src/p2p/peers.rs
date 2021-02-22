@@ -67,7 +67,7 @@ impl Peers {
 
             if self.peers
                 .iter()
-                .find(|(token, peer)| peer.get_addr() == addr)
+                .find(|(_token, peer)| peer.get_addr() == addr)
                 .is_some() {
                 debug!("Skipping address from exchange: {}", &addr);
                 continue;
