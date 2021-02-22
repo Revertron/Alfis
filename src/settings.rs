@@ -49,12 +49,18 @@ impl Settings {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Dns {
+    #[serde(default = "default_host")]
+    pub host: String,
     pub port: u16,
     pub forwarders: Vec<String>
 }
 
 impl Default for Dns {
     fn default() -> Self {
-        Dns { port: 53, forwarders: Vec::new() }
+        Dns { host: String::from("0.0.0.0"), port: 53, forwarders: Vec::new() }
     }
+}
+
+fn default_host() -> String {
+    String::from("0.0.0.0")
 }
