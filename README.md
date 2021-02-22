@@ -1,5 +1,5 @@
 # Alfis
-================
+
 [![Rust](https://github.com/Revertron/Alfis/actions/workflows/rust_build_and_test.yml/badge.svg)](https://github.com/Revertron/Alfis/actions/workflows/rust_build_and_test.yml)
 
 Alternative Free Identity System
@@ -19,15 +19,10 @@ You don't need any additional steps to build Alfis, just stick to the MSVC versi
 ### On Windows (MINGW64)
 If you'd rather use Gnu version of Rust you can build Alfis by these steps:
 ```
-pacman -S git
-pacman -Ss rust
-pacman -S mingw64/mingw-w64-x86_64-rust
-pacman -Ss cargo
-pacman -S mingw64/mingw-w64-x86_64-cargo-c
+pacman -S git mingw64/mingw-w64-x86_64-rust mingw64/mingw-w64-x86_64-cargo-c
 git clone https://github.com/Revertron/Alfis.git
 cd Alfis
 cargo build
-cargo run
 ```
 
 ### On Linux
