@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::{SocketAddr, Shutdown};
 use mio::{Token, Interest, Registry};
 use mio::net::TcpStream;
@@ -54,12 +54,27 @@ impl Peers {
     }
 
     pub fn add_peers_from_exchange(&mut self, peers: Vec<String>) {
-        info!("Got peers: {:?}", &peers);
+        let peers: HashSet<String> = peers
+            .iter()
+            .fold(HashSet::new(), |mut peers, peer| {
+                peers.insert(peer.to_owned());
+                peers
+            });
+        debug!("Got {} peers: {:?}", peers.len(), &peers);
         // TODO make it return error if these peers are wrong and seem like an attack
         for peer in peers.iter() {
             let addr: SocketAddr = peer.parse().expect(&format!("Error parsing peer {}", peer));
+
+            if self.peers
+                .iter()
+                .find(|(token, peer)| peer.get_addr() == addr)
+                .is_some() {
+                debug!("Skipping address from exchange: {}", &addr);
+                continue;
+            }
+
             if skip_addr(&addr) {
-                info!("Skipping address from exchange: {}", &addr);
+                debug!("Skipping address from exchange: {}", &addr);
                 continue; // Return error in future
             }
             let mut found = false;

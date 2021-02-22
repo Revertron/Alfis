@@ -97,7 +97,7 @@ function openTab(element, tabName) {
     // Get all elements with class="content" and hide them
     tabContent = document.getElementsByClassName("content");
     for (i = 0; i < tabContent.length; i++) {
-        tabContent[i].className = "context is-hidden";
+        tabContent[i].className = "content is-hidden";
     }
 
     // Get all elements with class="tablinks" and remove the class "active"

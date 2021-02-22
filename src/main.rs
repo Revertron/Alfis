@@ -9,7 +9,7 @@ use std::env;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[cfg(windows)]
 use winapi::um::wincon::{AttachConsole, FreeConsole, ATTACH_PARENT_PROCESS};
@@ -165,7 +165,7 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let scripts = inline_script(include_str!("webview/scripts.js"));
 
     let html = Content::Html(file_content.to_owned().replace("{styles}", &styles).replace("{scripts}", &scripts));
-    web_view::builder()
+    let mut interface = web_view::builder()
         .title("ALFIS 0.1.0")
         .content(html)
         .size(1024, 720)
@@ -282,8 +282,36 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
             //dbg!(&signature);
             Ok(())
         })
-        .run()
-        .unwrap();
+        .build()
+        .expect("Error building GUI");
+
+    // We use this ugly loop to lower CPU usage a lot.
+    // If we use .run() or only .step() in a loop without sleeps it will try
+    // to support 60FPS and uses more CPU than it should.
+    let pause = Duration::from_millis(25);
+    let mut start = Instant::now();
+    loop {
+        match interface.step() {
+            None => {
+                info!("Interface closed, exiting");
+                break;
+            }
+            Some(result) => {
+                match result {
+                    Ok(_) => {}
+                    Err(_) => {
+                        error!("Something wrong with webview, exiting");
+                        break;
+                    }
+                }
+            }
+        }
+        if start.elapsed().as_millis() > 1 {
+            thread::sleep(pause);
+            start = Instant::now();
+        }
+    }
+    interface.exit();
 }
 
 fn create_genesis<S: Into<String>>(miner: Arc<Mutex<Miner>>, name: S, keystore: &Keystore, difficulty: u16) {
