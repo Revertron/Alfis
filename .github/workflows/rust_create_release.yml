@@ -27,6 +27,9 @@ jobs:
             To be written by maintainer.
           draft: true
           prerelease: true
+      - name: Copy url
+        run: |
+          RELEASE_URL=${{ steps.create_release.outputs.upload_url }}
 
   windows:
     name: Create windows build
@@ -47,7 +50,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ jobs.make_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+          upload_url: ${RELEASE_URL}
           asset_path: target/release/alfis.exe
           asset_name: alfis_${GITHUB_REF##*/}.exe
           asset_content_type: application/octet-stream
