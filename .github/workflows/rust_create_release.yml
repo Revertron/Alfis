@@ -51,13 +51,13 @@ jobs:
           cargo build --release
       - name: Fill variables
         run: |
-          BIN=./target/release/alfis
-          NAME=alfis_${GITHUB_REF##*/}.bin
+          echo "BIN_PATH=./target/release/alfis" >> $GITHUB_ENV
+          echo "BIN_NAME::alfis_${GITHUB_REF##*/}.bin" >> $GITHUB_ENV
       - name: Windows variables
         if: contains(matrix.os, 'windows')
         run: |
-          BIN=./target/release/alfis.exe
-          NAME=Alfis_${GITHUB_REF##*/}.exe
+          echo "BIN_PATH=./target/release/alfis.exe" >> $GITHUB_ENV
+          echo "BIN_NAME::alfis_${GITHUB_REF##*/}.exe" >> $GITHUB_ENV
       - name: Upload binary
         id: upload-binary
         uses: actions/upload-release-asset@v1
@@ -65,6 +65,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.make_release.outputs.upload_url }}
-          asset_path: $BIN
-          asset_name: $NAME
+          asset_path: ${{ env.BIN_PATH }}
+          asset_name: ${{ env.BIN_NAME }}
           asset_content_type: application/octet-stream
