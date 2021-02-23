@@ -11,6 +11,8 @@ jobs:
   make_release:
     name: Create Release
     runs-on: ubuntu-latest
+    outputs: 
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -27,13 +29,13 @@ jobs:
             To be written by maintainer.
           draft: true
           prerelease: true
-      - name: Copy url
-        run: |
-          RELEASE_URL=${{ steps.create_release.outputs.upload_url }}
 
-  windows:
-    name: Create windows build
-    runs-on: windows-latest
+  upload:
+    name: Create and upload builds
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ windows-latest, ubuntu-latest, macOS-latest]
   
     defaults:
       run:
@@ -43,14 +45,23 @@ jobs:
         uses: actions/checkout@v2
       - name: Build release binary
         run: |
-          echo "Ok"
-      - name: Upload Windows binary
-        id: upload-windows-binary
+          cargo build --release
+      - name: Fill variables
+        run: |
+          BIN=./target/release/alfis
+          NAME=alfis_${GITHUB_REF##*/}.bin
+      - name: Windows variables
+        if: contains(matrix.os, 'windows')
+        run: |
+          BIN=./target/release/alfis.exe
+          NAME=Alfis_${GITHUB_REF##*/}.exe
+      - name: Upload binary
+        id: upload-binary
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${RELEASE_URL}
-          asset_path: ./alfis.cfg
-          asset_name: alfis_${GITHUB_REF##*/}.cfg
+          upload_url: ${{ needs.make_release.outputs.upload_url }}
+          asset_path: $BIN
+          asset_name: $NAME
           asset_content_type: application/octet-stream
