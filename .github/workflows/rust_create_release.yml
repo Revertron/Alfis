@@ -5,7 +5,7 @@ env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   CARGO_TERM_COLOR: always
 
-name: Create release
+name: Releases
 
 jobs:
   get_version:
