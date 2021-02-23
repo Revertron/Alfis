@@ -29,11 +29,10 @@ jobs:
             To be written by maintainer.
           draft: true
           prerelease: true
-      - name: Output URL
-        run: echo "URL=${{ steps.create_release.outputs.upload_url }}" >> $GITHUB_ENV
 
   upload:
     name: Create and upload builds
+    needs: make_release
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -66,7 +65,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ env.URL }}
+          upload_url: ${{ needs.make_release.outputs.upload_url }}
           asset_path: ${{ env.BIN_PATH }}
           asset_name: ${{ env.BIN_NAME }}
           asset_content_type: application/octet-stream
