@@ -19,7 +19,6 @@ jobs:
       - name: Getting version
         run: |
           echo "VERSION=$(cat Cargo.toml | grep version | sed s/version//g | sed s/=//g | sed s/\"//g | sed s/\ //g | sed -n 1p)" >> $GITHUB_ENV
-          echo "Version is ${{ env.VERSION }}"
 
   make_release:
     name: Create Release
@@ -68,12 +67,12 @@ jobs:
       - name: Fill variables
         run: |
           echo "BIN_PATH=./target/release/alfis" >> $GITHUB_ENV
-          echo "BIN_NAME=alfis_${env.VERSION}.zip" >> $GITHUB_ENV
+          echo "BIN_NAME=alfis_${{env.VERSION}}.zip" >> $GITHUB_ENV
       - name: Windows variables
         if: contains(matrix.os, 'windows')
         run: |
           echo "BIN_PATH=target/release/alfis.exe" >> $GITHUB_ENV
-          echo "BIN_NAME=alfis_${env.VERSION}.zip" >> $GITHUB_ENV
+          echo "BIN_NAME=alfis_${{env.VERSION}}.zip" >> $GITHUB_ENV
       - name: Packaging
         uses: papeloto/action-zip@v1
         with:
