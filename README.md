@@ -1,6 +1,7 @@
 # Alfis
 
-[![Rust](https://github.com/Revertron/Alfis/actions/workflows/rust_build_and_test.yml/badge.svg)](https://github.com/Revertron/Alfis/actions/workflows/rust_build_and_test.yml)
+![Builds](https://github.com/Revertron/Alfis/actions/workflows/rust_build_and_test.yml/badge.svg)
+![Releases](https://github.com/Revertron/Alfis/actions/workflows/rust_create_release.yml/badge.svg)
 
 Alternative Free Identity System
 
