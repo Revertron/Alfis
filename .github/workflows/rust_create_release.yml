@@ -53,13 +53,17 @@ jobs:
       - name: Fill variables
         run: |
           echo "BIN_PATH=./target/release/alfis" >> $GITHUB_ENV
-          echo "BIN_NAME=alfis_${GITHUB_REF##*/}.bin" >> $GITHUB_ENV
+          echo "BIN_NAME=alfis_${GITHUB_REF##*/}.zip" >> $GITHUB_ENV
       - name: Windows variables
         if: contains(matrix.os, 'windows')
         run: |
-          zip -9 -r target/release/alfis.exe alfis-latest.zip
-          echo "BIN_PATH=alfis-latest.zip" >> $GITHUB_ENV
+          echo "BIN_PATH=target/release/alfis.exe" >> $GITHUB_ENV
           echo "BIN_NAME=alfis_${GITHUB_REF##*/}.zip" >> $GITHUB_ENV
+      - name: Packaging
+        uses: papeloto/action-zip@v1
+        with:
+          files: ${{ env.BIN_PATH }}
+          dest: ${{ env.BIN_NAME }}
       - name: Upload binary
         id: upload-binary
         uses: actions/upload-release-asset@v1
@@ -67,6 +71,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.make_release.outputs.upload_url }}
-          asset_path: ${{ env.BIN_PATH }}
+          asset_path: ${{ env.BIN_NAME }}
           asset_name: ${{ env.BIN_NAME }}
           asset_content_type: application/zip
