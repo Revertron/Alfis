@@ -52,12 +52,12 @@ jobs:
       - name: Fill variables
         run: |
           echo "BIN_PATH=./target/release/alfis" >> $GITHUB_ENV
-          echo "BIN_NAME::alfis_${GITHUB_REF##*/}.bin" >> $GITHUB_ENV
+          echo "BIN_NAME=alfis_${GITHUB_REF##*/}.bin" >> $GITHUB_ENV
       - name: Windows variables
         if: contains(matrix.os, 'windows')
         run: |
           echo "BIN_PATH=./target/release/alfis.exe" >> $GITHUB_ENV
-          echo "BIN_NAME::alfis_${GITHUB_REF##*/}.exe" >> $GITHUB_ENV
+          echo "BIN_NAME=alfis_${GITHUB_REF##*/}.exe" >> $GITHUB_ENV
       - name: Upload binary
         id: upload-binary
         uses: actions/upload-release-asset@v1
