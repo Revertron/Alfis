@@ -11,6 +11,7 @@ use std::thread::Builder;
 
 use derive_more::{Display, Error, From};
 use rand::random;
+use log::{error, warn, debug};
 
 use crate::dns::buffer::{BytePacketBuffer, PacketBuffer, StreamPacketBuffer, VectorPacketBuffer};
 use crate::dns::context::ServerContext;
@@ -30,7 +31,7 @@ macro_rules! return_or_report {
         match $x {
             Ok(res) => res,
             Err(_) => {
-                println!($message);
+                debug!($message);
                 return;
             }
         }
@@ -42,7 +43,7 @@ macro_rules! ignore_or_report {
         match $x {
             Ok(_) => {}
             Err(_) => {
-                println!($message);
+                debug!($message);
                 return;
             }
         };
@@ -123,7 +124,7 @@ pub fn execute_query(context: Arc<ServerContext>, request: &DnsPacket) -> DnsPac
                 rescode
             }
             Err(err) => {
-                println!("Failed to resolve {:?} {}: {:?}", question.qtype, question.name, err);
+                error!("Failed to resolve {:?} {}: {:?}", question.qtype, question.name, err);
                 ResultCode::SERVFAIL
             }
         };
@@ -182,7 +183,7 @@ impl DnsServer for DnsUdpServer {
             let socket_clone = match socket.try_clone() {
                 Ok(x) => x,
                 Err(e) => {
-                    println!("Failed to clone socket when starting UDP server: {:?}", e);
+                    warn!("Failed to clone socket when starting UDP server: {:?}", e);
                     continue;
                 }
             };
@@ -204,7 +205,7 @@ impl DnsServer for DnsUdpServer {
                     {
                         Some(x) => x,
                         None => {
-                            println!("Not expected to happen!");
+                            debug!("Not expected to happen!");
                             continue;
                         }
                     };
@@ -244,7 +245,7 @@ impl DnsServer for DnsUdpServer {
                     let (_, src) = match socket.recv_from(&mut req_buffer.buf) {
                         Ok(x) => x,
                         Err(e) => {
-                            println!("Failed to read from UDP socket: {:?}", e);
+                            debug!("Failed to read from UDP socket: {:?}", e);
                             continue;
                         }
                     };
@@ -253,7 +254,7 @@ impl DnsServer for DnsUdpServer {
                     let request = match DnsPacket::from_buffer(&mut req_buffer) {
                         Ok(x) => x,
                         Err(e) => {
-                            println!("Failed to parse UDP query packet: {:?}", e);
+                            debug!("Failed to parse UDP query packet: {:?}", e);
                             continue;
                         }
                     };
@@ -265,7 +266,7 @@ impl DnsServer for DnsUdpServer {
                             self.request_cond.notify_one();
                         }
                         Err(e) => {
-                            println!("Failed to send UDP request for processing: {}", e);
+                            debug!("Failed to send UDP request for processing: {}", e);
                         }
                     }
                 }
@@ -346,7 +347,7 @@ impl DnsServer for DnsTcpServer {
                     let stream = match wrap_stream {
                         Ok(stream) => stream,
                         Err(err) => {
-                            println!("Failed to accept TCP connection: {:?}", err);
+                            warn!("Failed to accept TCP connection: {:?}", err);
                             continue;
                         }
                     };
@@ -356,7 +357,7 @@ impl DnsServer for DnsTcpServer {
                     match self.senders[thread_no].send(stream) {
                         Ok(_) => {}
                         Err(e) => {
-                            println!("Failed to send TCP request for processing on thread {}: {}", thread_no, e);
+                            warn!("Failed to send TCP request for processing on thread {}: {}", thread_no, e);
                         }
                     }
                 }
