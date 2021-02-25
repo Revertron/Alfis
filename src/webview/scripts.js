@@ -31,7 +31,7 @@ function refresh_records_list() {
             data = value.priority + " " + value.weight + " " + value.port + " " + value.host;
         }
 
-        buf += "<div class=\"columns is-1\">\n";
+        buf += "<div class=\"columns\">\n";
         buf += "<div class=\"column\">" + getInput(value.domain) + "</div>\n";
         buf += "<div class=\"column is-2\">" + getInput(value.type) + "</div>\n";
         buf += "<div class=\"column is-2\">" + getInput(value.ttl) + "</div>\n";
