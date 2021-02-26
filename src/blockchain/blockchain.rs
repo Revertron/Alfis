@@ -4,6 +4,8 @@ use crate::{Block, Bytes, Keystore, Transaction};
 use crate::settings::Settings;
 #[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
+use std::collections::HashSet;
+use std::cell::RefCell;
 
 const DB_NAME: &str = "blockchain.db";
 
@@ -13,6 +15,7 @@ pub struct Blockchain {
     pub blocks: Vec<Block>,
     last_block: Option<Block>,
     db: Connection,
+    zones: RefCell<HashSet<String>>
 }
 
 impl Blockchain {
@@ -21,7 +24,7 @@ impl Blockchain {
         let version = settings.version;
 
         let db = sqlite::open(DB_NAME).expect("Unable to open blockchain DB");
-        let mut blockchain = Blockchain{ origin, version, blocks: Vec::new(), last_block: None, db};
+        let mut blockchain = Blockchain{ origin, version, blocks: Vec::new(), last_block: None, db, zones: RefCell::new(HashSet::new()) };
         blockchain.init_db();
         blockchain
     }
@@ -173,18 +176,27 @@ impl Blockchain {
             if parts.last().unwrap().contains(".") {
                 return false;
             }
-            // Checking for available zone, for this domain
-            let identity_hash = Transaction::hash_identity(parts.first().unwrap());
-            let mut statement = self.db.prepare("SELECT identity FROM transactions WHERE identity = ? ORDER BY id DESC LIMIT 1;").unwrap();
-            statement.bind(1, identity_hash.as_bytes()).expect("Error in bind");
-            while let State::Row = statement.next().unwrap() {
-                // If there is such a zone
-                return true;
-            }
-            return false;
+            return self.is_zone_in_blockchain(parts.first().unwrap());
         }
 
         true
+    }
+
+    pub fn is_zone_in_blockchain(&self, zone: &str) -> bool {
+        if self.zones.borrow().contains(zone) {
+            return true;
+        }
+
+        // Checking for existing zone in DB
+        let identity_hash = Transaction::hash_identity(zone);
+        let mut statement = self.db.prepare("SELECT identity FROM transactions WHERE identity = ? ORDER BY id DESC LIMIT 1;").unwrap();
+        statement.bind(1, identity_hash.as_bytes()).expect("Error in bind");
+        while let State::Row = statement.next().unwrap() {
+            // If there is such a zone
+            self.zones.borrow_mut().insert(zone.to_owned());
+            return true;
+        }
+        false
     }
 
     pub fn get_domain_transaction(&self, domain: &str) -> Option<Transaction> {

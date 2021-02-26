@@ -1,7 +1,7 @@
 use crate::Context;
 use std::sync::{Mutex, Arc};
 use crate::dns::filter::DnsFilter;
-use crate::dns::protocol::{DnsPacket, QueryType, DnsRecord, DnsQuestion};
+use crate::dns::protocol::{DnsPacket, QueryType, DnsRecord, DnsQuestion, ResultCode};
 #[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
 
@@ -35,7 +35,17 @@ impl DnsFilter for BlockchainFilter {
 
         let data = self.context.lock().unwrap().blockchain.get_domain_info(&search);
         match data {
-            None => { debug!("Not found data for domain {}", &search); }
+            None => {
+                debug!("Not found data for domain {}", &search);
+                if self.context.lock().unwrap().blockchain.is_zone_in_blockchain(parts[0]) {
+                    // Create DnsPacket
+                    let mut packet = DnsPacket::new();
+                    packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
+                    packet.header.rescode = ResultCode::SERVFAIL;
+                    trace!("Returning packet: {:?}", &packet);
+                    return Some(packet);
+                }
+            }
             Some(data) => {
                 info!("Found data for domain {}", &search);
                 let mut records: Vec<DnsRecord> = match serde_json::from_str(&data) {
@@ -118,14 +128,22 @@ impl DnsFilter for BlockchainFilter {
                     }
                 }
 
-                if !answers.is_empty() {
+                return if !answers.is_empty() {
                     // Create DnsPacket
                     let mut packet = DnsPacket::new();
                     packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
                     for answer in answers {
                         packet.answers.push(answer);
                     }
-                    return Some(packet);
+                    trace!("Returning packet: {:?}", &packet);
+                    Some(packet)
+                } else {
+                    // Create DnsPacket
+                    let mut packet = DnsPacket::new();
+                    packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
+                    packet.header.rescode = ResultCode::SERVFAIL;
+                    trace!("Returning packet: {:?}", &packet);
+                    Some(packet)
                 }
             }
         }
