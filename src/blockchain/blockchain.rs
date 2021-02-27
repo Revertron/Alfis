@@ -14,6 +14,7 @@ pub struct Blockchain {
     pub version: u32,
     pub blocks: Vec<Block>,
     last_block: Option<Block>,
+    max_height: u64,
     db: Connection,
     zones: RefCell<HashSet<String>>
 }
@@ -24,7 +25,7 @@ impl Blockchain {
         let version = settings.version;
 
         let db = sqlite::open(DB_NAME).expect("Unable to open blockchain DB");
-        let mut blockchain = Blockchain{ origin, version, blocks: Vec::new(), last_block: None, db, zones: RefCell::new(HashSet::new()) };
+        let mut blockchain = Blockchain{ origin, version, blocks: Vec::new(), last_block: None, max_height: 0, db, zones: RefCell::new(HashSet::new()) };
         blockchain.init_db();
         blockchain
     }
@@ -240,6 +241,16 @@ impl Blockchain {
             Some(ref block) => {
                 block.index + 1
             }
+        }
+    }
+
+    pub fn max_height(&self) -> u64 {
+        self.max_height
+    }
+
+    pub fn update_max_height(&mut self, height: u64) {
+        if height > self.max_height {
+            self.max_height = height;
         }
     }
 

@@ -91,6 +91,9 @@ impl Network {
                         token => {
                             if !handle_connection_event(context.clone(), &mut peers, &poll.registry(), &event) {
                                 let _ = peers.close_peer(poll.registry(), &token);
+                                let mut context = context.lock().unwrap();
+                                let blocks_count = context.blockchain.height();
+                                context.bus.post(crate::event::Event::StatsCount { nodes: peers.get_peers_active_count(), blocks: blocks_count });
                             }
                         }
                     }
@@ -123,9 +126,10 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
             let data = data.unwrap();
             match Message::from_bytes(data) {
                 Ok(message) => {
-                    debug!("Got message from socket {}: {:?}", &event.token().0, &message);
+                    let m = format!("{:?}", &message);
                     let new_state = handle_message(context.clone(), message, peers, &event.token());
                     let peer = peers.get_mut_peer(&event.token()).unwrap();
+                    debug!("Got message from {}: {:?}", &peer.get_addr(), &m);
                     let stream = peer.get_stream();
                     match new_state {
                         State::Message { data } => {
@@ -163,17 +167,17 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
             Some(peer) => {
                 match peer.get_state().clone() {
                     State::Connecting => {
-                        debug!("Sending hello to socket {}", event.token().0);
+                        debug!("Sending hello to {}", &peer.get_addr());
                         let data: String = {
                             let c = context.lock().unwrap();
                             let message = Message::hand(&c.settings.origin, c.settings.version, c.settings.public);
                             serde_json::to_string(&message).unwrap()
                         };
                         send_message(peer.get_stream(), &data.into_bytes());
-                        debug!("Sent hello through socket {}", event.token().0);
+                        debug!("Sent hello to {}", &peer.get_addr());
                     }
                     State::Message { data } => {
-                        debug!("Sending data to socket {}: {}", event.token().0, &String::from_utf8(data.clone()).unwrap());
+                        debug!("Sending data to {}: {}", &peer.get_addr(), &String::from_utf8(data.clone()).unwrap());
                         send_message(peer.get_stream(), &data);
                     }
                     State::Connected => {}
@@ -273,9 +277,16 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 return State::Error;
             }
             if ok {
+                let active_count = peers.get_peers_active_count();
                 let peer = peers.get_mut_peer(token).unwrap();
                 peer.set_height(height);
+                peer.set_active(true);
+                let mut context = context.lock().unwrap();
+                let blocks_count = context.blockchain.height();
+                context.bus.post(crate::event::Event::StatsCount { nodes: active_count, blocks: blocks_count });
                 if peer.is_higher(my_height) {
+                    context.blockchain.update_max_height(height);
+                    context.bus.post(crate::event::Event::SyncStarted { have: my_height, height});
                     State::message(Message::GetBlock { index: my_height })
                 } else {
                     State::message(Message::GetPeers)
@@ -288,6 +299,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
         Message::Ping { height } => {
             let peer = peers.get_mut_peer(token).unwrap();
             peer.set_height(height);
+            peer.set_active(true);
             if peer.is_higher(my_height) {
                 State::message(Message::GetBlock { index: my_height })
             } else {
@@ -297,9 +309,14 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
         Message::Pong { height } => {
             let peer = peers.get_mut_peer(token).unwrap();
             peer.set_height(height);
+            peer.set_active(true);
             if peer.is_higher(my_height) {
                 State::message(Message::GetBlock { index: my_height })
             } else {
+                let mut context = context.lock().unwrap();
+                let blocks_count = context.blockchain.height();
+                context.bus.post(crate::event::Event::ActionIdle);
+                context.bus.post(crate::event::Event::StatsCount { nodes: peers.get_peers_active_count(), blocks: blocks_count });
                 State::idle()
             }
         }
@@ -324,12 +341,22 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 Ok(block) => block,
                 Err(_) => return State::Error
             };
-            // TODO check if the block is good
+            // TODO check here if the block is good before trying to add
             let context = context.clone();
             thread::spawn(move || {
                 let mut context = context.lock().unwrap();
+                let max_height = context.blockchain.max_height();
                 match context.blockchain.add_block(block) {
-                    Ok(_) => { context.bus.post(crate::event::Event::BlockchainChanged); }
+                    Ok(_) => {
+                        let my_height = context.blockchain.height();
+                        context.bus.post(crate::event::Event::BlockchainChanged);
+                        // If it was the last block to sync
+                        if my_height == max_height {
+                            context.bus.post(crate::event::Event::ActionIdle);
+                        } else {
+                            context.bus.post(crate::event::Event::SyncStarted { have: my_height, height: max_height});
+                        }
+                    }
                     Err(_) => { warn!("Discarded received block"); }
                 }
             });

@@ -9,10 +9,6 @@
     {scripts}
 </head>
 <body onload="onLoad();">
-<div class="mining_indicator" id="mining_indicator" onclick="miningIndicatorClick(this)">
-    <span></span>
-    <span></span>
-</div>
 
 <div id="modal_dialog" class="modal">
     <div class="modal-background"></div>
@@ -328,6 +324,25 @@
     </div> <!-- columns -->
 </div>
 
-<div class="footer is-hidden">Some footer text is here</div>
+<div class="footer is-family-code">
+    <div class="level">
+        <div class="level-left">
+            <div class="level-item" id="indicator_parent">
+                <div class="busy_indicator busy_blue" id="busy_indicator" onclick="miningIndicatorClick(this)">
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+            <div class="level-item">
+                <div id="status_bar_left">Connecting and syncing...</div>
+            </div>
+        </div>
+
+        <div class="level-right">
+            <div class="level-item" id="status_bar_right">No data</div>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>

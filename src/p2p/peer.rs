@@ -10,11 +10,12 @@ pub struct Peer {
     height: u64,
     inbound: bool,
     public: bool,
+    active: bool,
 }
 
 impl Peer {
     pub fn new(addr: SocketAddr, stream: TcpStream, state: State, inbound: bool) -> Self {
-        Peer { addr, stream, state, height: 0, inbound, public: false }
+        Peer { addr, stream, state, height: 0, inbound, public: false, active: false }
     }
 
     pub fn get_addr(&self) -> SocketAddr {
@@ -53,8 +54,12 @@ impl Peer {
         self.public = public;
     }
 
+    pub fn set_active(&mut self, active: bool) {
+        self.active = active;
+    }
+
     pub fn active(&self) -> bool {
-        self.state.active()
+        self.active
     }
 
     pub fn disabled(&self) -> bool {

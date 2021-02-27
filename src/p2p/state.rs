@@ -26,16 +26,6 @@ impl State {
         State::Message {data: Vec::from(response.as_bytes()) }
     }
 
-    pub fn active(&self) -> bool {
-        match self {
-            State::Connecting => { true }
-            State::Connected => { true }
-            State::Idle { .. } => { true }
-            State::Message { .. } => { true }
-            _ => { false }
-        }
-    }
-
     pub fn is_idle(&self) -> bool {
         match self {
             State::Idle { .. } => { true }

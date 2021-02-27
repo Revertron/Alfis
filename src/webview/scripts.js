@@ -249,12 +249,19 @@ function showWarning(text) {
     setTimeout(button.onclick, 5000);
 }
 
-function showMiningIndicator(visible) {
-    indicator = document.getElementById("mining_indicator");
+function showMiningIndicator(visible, blue) {
+    var indicator = document.getElementById("busy_indicator");
+    var parent = document.getElementById("indicator_parent");
+    var add = "";
+    if (blue) {
+        add = " busy_blue";
+    }
     if (visible) {
-        indicator.style.visibility = 'visible';
+        indicator.className = 'busy_indicator' + add;
+        parent.style.display = 'flex';
     } else {
-        indicator.style.visibility = 'hidden';
+        indicator.className = 'busy_indicator is-hidden';
+        parent.style.display = 'none';
     }
 }
 
@@ -262,6 +269,16 @@ function miningIndicatorClick(element) {
     showModalDialog("Do you really want to stop mining?", function() {
         external.invoke(JSON.stringify({cmd: 'stopMining'}));
     });
+}
+
+function setLeftStatusBarText(text) {
+    var bar = document.getElementById("status_bar_left");
+    bar.innerHTML = text;
+}
+
+function setRightStatusBarText(text) {
+    var bar = document.getElementById("status_bar_right");
+    bar.innerHTML = text;
 }
 
 function keystoreChanged(path, pub_key) {

@@ -45,6 +45,7 @@ impl Peers {
 
                 if !peer.disabled() && !peer.is_inbound() {
                     peer.set_state(State::offline());
+                    peer.set_active(false);
                 } else {
                     self.peers.remove(token);
                 }
@@ -110,6 +111,16 @@ impl Peers {
             }
         }
         result
+    }
+
+    pub fn get_peers_active_count(&self) -> usize {
+        let mut count = 0;
+        for (_, peer) in self.peers.iter() {
+            if peer.active() {
+                count += 1;
+            }
+        }
+        count
     }
 
     pub fn skip_peer_connection(&self, addr: &SocketAddr) -> bool {

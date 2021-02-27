@@ -56,11 +56,11 @@ fn main() {
     let program = args[0].clone();
 
     let mut opts = Options::new();
-    opts.optflag("h","help", "Print this help menu");
-    opts.optflag("n","nogui","Run without graphic user interface");
-    opts.optflag("v","verbose","Show more debug messages");
-    opts.optflag("d","debug","Show trace messages, more than debug");
-    opts.optopt("c","config","Path to config file", "");
+    opts.optflag("h", "help", "Print this help menu");
+    opts.optflag("n", "nogui", "Run without graphic user interface");
+    opts.optflag("v", "verbose", "Show more debug messages");
+    opts.optflag("d", "debug", "Show trace messages, more than debug");
+    opts.optopt("c", "config", "Path to config file", "");
 
     let opt_matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
@@ -161,8 +161,8 @@ fn create_genesis_if_needed(context: &Arc<Mutex<Context>>, miner: &Arc<Mutex<Min
 
 fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let file_content = include_str!("webview/index.html");
-    let mut styles= inline_style(include_str!("webview/bulma.css"));
-    styles.push_str(&inline_style(include_str!("webview/miner.css")));
+    let mut styles = inline_style(include_str!("webview/bulma.css"));
+    styles.push_str(&inline_style(include_str!("webview/busy_indicator.css")));
     let scripts = inline_script(include_str!("webview/scripts.js"));
 
     let html = Content::Html(file_content.to_owned().replace("{styles}", &styles).replace("{scripts}", &scripts));
@@ -189,10 +189,19 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                             Event::KeyCreated { path, public } => { format!("keystoreChanged('{}', '{}');", &path, &public) }
                             Event::KeyLoaded { path, public } => { format!("keystoreChanged('{}', '{}');", &path, &public) }
                             Event::KeySaved { path, public } => { format!("keystoreChanged('{}', '{}');", &path, &public) }
-                            Event::MinerStarted => { format!("showMiningIndicator({});", true) }
-                            Event::KeyGeneratorStarted => { format!("showMiningIndicator({});", true) }
-                            Event::MinerStopped => { format!("showMiningIndicator({});", false) }
-                            Event::KeyGeneratorStopped => { format!("showMiningIndicator({});", false) }
+                            Event::MinerStarted => { format!("showMiningIndicator({}, false);", true) }
+                            Event::KeyGeneratorStarted => { format!("showMiningIndicator({}, false);", true) }
+                            Event::MinerStopped => { format!("showMiningIndicator({}, false);", false) }
+                            Event::KeyGeneratorStopped => { format!("showMiningIndicator({}, false);", false) }
+                            Event::SyncStarted { have, height } => {
+                                format!("setLeftStatusBarText('Synchronizing {}/{}'); showMiningIndicator(true, true);", have, height)
+                            }
+                            Event::ActionIdle => {
+                                format!("setLeftStatusBarText('Idle'); showMiningIndicator(false, true);")
+                            }
+                            Event::StatsCount { nodes, blocks } => {
+                                format!("setRightStatusBarText('Nodes: {}, Blocks: {}')", nodes, blocks)
+                            }
                             _ => { String::new() }
                         };
 
@@ -216,17 +225,17 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                             match Keystore::from_file(&file_name, "") {
                                 None => {
                                     error!("Error loading keystore '{}'!", &file_name);
-                                },
+                                }
                                 Some(keystore) => {
                                     info!("Loaded keystore with key: {:?}", &keystore.get_public());
                                     let mut c = context.lock().unwrap();
-                                    c.bus.post(Event::KeyLoaded {path: keystore.get_path().to_owned(), public: keystore.get_public().to_string()});
+                                    c.bus.post(Event::KeyLoaded { path: keystore.get_path().to_owned(), public: keystore.get_public().to_string() });
                                     c.set_keystore(keystore);
                                 }
                             }
                         }
                     }
-                },
+                }
                 CreateKey {} => {
                     create_key(context.clone());
                 }
@@ -240,11 +249,11 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                             let public = c.keystore.get_public().to_string();
                             c.keystore.save(&new_path, "");
                             info!("Key file saved to {}", &path);
-                            c.bus.post(Event::KeySaved {path, public });
+                            c.bus.post(Event::KeySaved { path, public });
                         }
                     }
                 }
-                CheckDomain { name} => {
+                CheckDomain { name } => {
                     let name = name.to_lowercase();
                     let c = context.lock().unwrap();
                     let available = c.get_blockchain().is_domain_available(&name, &c.get_keystore());
@@ -282,7 +291,7 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                 ChangeDomain { .. } => {}
                 RenewDomain { .. } => {}
                 TransferDomain { .. } => {}
-                CheckZone { name} => {
+                CheckZone { name } => {
                     let name = name.to_lowercase();
                     if !check_domain(&name, false) {
                         web_view.eval("zoneAvailable(false)").expect("Error evaluating!");
@@ -398,8 +407,8 @@ fn create_key(context: Arc<Mutex<Context>>) {
                 Some(keystore) => {
                     info!("Key mined successfully: {:?}", &keystore.get_public());
                     let mut c = context.lock().unwrap();
-                    mining.store(false,Ordering::Relaxed);
-                    c.bus.post(Event::KeyCreated {path: keystore.get_path().to_owned(), public: keystore.get_public().to_string()});
+                    mining.store(false, Ordering::Relaxed);
+                    c.bus.post(Event::KeyCreated { path: keystore.get_path().to_owned(), public: keystore.get_public().to_string() });
                     c.set_keystore(keystore);
                 }
             }
@@ -440,7 +449,7 @@ fn create_server_context(context: Arc<Mutex<Context>>, settings: &Settings) -> A
     server_context.dns_port = settings.dns.port;
     server_context.resolve_strategy = match settings.dns.forwarders.is_empty() {
         true => { ResolveStrategy::Recursive }
-        false => { ResolveStrategy::Forward { upstreams: settings.dns.forwarders.clone() }}
+        false => { ResolveStrategy::Forward { upstreams: settings.dns.forwarders.clone() } }
     };
     server_context.filters.push(Box::new(BlockchainFilter::new(context)));
     match server_context.initialize() {
@@ -455,16 +464,16 @@ fn create_server_context(context: Arc<Mutex<Context>>, settings: &Settings) -> A
 #[serde(tag = "cmd", rename_all = "camelCase")]
 pub enum Cmd {
     Loaded,
-    LoadKey{},
-    CreateKey{},
-    SaveKey{},
-    CheckZone{name: String},
-    CreateZone{name: String, data: String},
-    CheckDomain{name: String},
-    CreateDomain{name: String, records: String, tags: String},
-    ChangeDomain{name: String, records: String, tags: String},
-    RenewDomain{name: String, days: u16},
-    TransferDomain{name: String, owner: String},
+    LoadKey {},
+    CreateKey {},
+    SaveKey {},
+    CheckZone { name: String },
+    CreateZone { name: String, data: String },
+    CheckDomain { name: String },
+    CreateDomain { name: String, records: String, tags: String },
+    ChangeDomain { name: String, records: String, tags: String },
+    RenewDomain { name: String, days: u16 },
+    TransferDomain { name: String, owner: String },
     StopMining,
 }
 

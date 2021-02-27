@@ -1,0 +1,34 @@
+.busy_indicator {
+   width:24px;
+   height:24px;
+   display:inline-block;
+   padding:0px;
+   text-align:left;
+   float:left;
+   margin-left: -5px;
+}
+.busy_indicator span {
+   position:absolute;
+   display:inline-block;
+   width:24px;
+   height:24px;
+   border-radius:100%;
+   background:#ee3333;
+   -webkit-animation:busy_indicator 1.6s linear infinite;
+   animation:busy_indicator 1.6s linear infinite;
+}
+.busy_indicator span:last-child {
+   animation-delay:-0.8s;
+   -webkit-animation-delay:-0.8s;
+}
+@keyframes busy_indicator {
+   0% {transform: scale(0, 0);opacity:0.9;}
+   100% {transform: scale(1, 1);opacity:0;}
+}
+@-webkit-keyframes busy_indicator {
+   0% {-webkit-transform: scale(0, 0);opacity:0.9;}
+   100% {-webkit-transform: scale(1, 1);opacity:0;}
+}
+.busy_blue span {
+   background:#3273dc;
+}
