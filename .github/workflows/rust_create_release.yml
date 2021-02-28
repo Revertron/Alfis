@@ -1,5 +1,8 @@
 on:
-  workflow_dispatch:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
