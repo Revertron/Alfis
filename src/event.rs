@@ -10,7 +10,7 @@ pub enum Event {
     NewBlockReceived,
     BlockchainChanged,
     ActionStopMining,
-    StatsCount { nodes: usize, blocks: u64 },
-    SyncStarted { have: u64, height: u64 },
-    ActionIdle,
+    NetworkStatus { nodes: usize, blocks: u64 },
+    Syncing { have: u64, height: u64 },
+    SyncFinished,
 }

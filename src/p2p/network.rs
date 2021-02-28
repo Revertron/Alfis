@@ -93,7 +93,7 @@ impl Network {
                                 let _ = peers.close_peer(poll.registry(), &token);
                                 let mut context = context.lock().unwrap();
                                 let blocks_count = context.blockchain.height();
-                                context.bus.post(crate::event::Event::StatsCount { nodes: peers.get_peers_active_count(), blocks: blocks_count });
+                                context.bus.post(crate::event::Event::NetworkStatus { nodes: peers.get_peers_active_count(), blocks: blocks_count });
                             }
                         }
                     }
@@ -283,10 +283,10 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 peer.set_active(true);
                 let mut context = context.lock().unwrap();
                 let blocks_count = context.blockchain.height();
-                context.bus.post(crate::event::Event::StatsCount { nodes: active_count, blocks: blocks_count });
+                context.bus.post(crate::event::Event::NetworkStatus { nodes: active_count + 1, blocks: blocks_count });
                 if peer.is_higher(my_height) {
                     context.blockchain.update_max_height(height);
-                    context.bus.post(crate::event::Event::SyncStarted { have: my_height, height});
+                    context.bus.post(crate::event::Event::Syncing { have: my_height, height});
                     State::message(Message::GetBlock { index: my_height })
                 } else {
                     State::message(Message::GetPeers)
@@ -315,8 +315,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             } else {
                 let mut context = context.lock().unwrap();
                 let blocks_count = context.blockchain.height();
-                context.bus.post(crate::event::Event::ActionIdle);
-                context.bus.post(crate::event::Event::StatsCount { nodes: peers.get_peers_active_count(), blocks: blocks_count });
+                context.bus.post(crate::event::Event::NetworkStatus { nodes: peers.get_peers_active_count(), blocks: blocks_count });
                 State::idle()
             }
         }
@@ -352,9 +351,9 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                         context.bus.post(crate::event::Event::BlockchainChanged);
                         // If it was the last block to sync
                         if my_height == max_height {
-                            context.bus.post(crate::event::Event::ActionIdle);
+                            context.bus.post(crate::event::Event::SyncFinished);
                         } else {
-                            context.bus.post(crate::event::Event::SyncStarted { have: my_height, height: max_height});
+                            context.bus.post(crate::event::Event::Syncing { have: my_height, height: max_height});
                         }
                     }
                     Err(_) => { warn!("Discarded received block"); }

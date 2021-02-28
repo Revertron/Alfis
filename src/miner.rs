@@ -38,8 +38,8 @@ impl Miner {
     }
 
     pub fn stop(&mut self) {
-        self.mining.store(false, Ordering::Relaxed);
-        self.running.store(false, Ordering::Relaxed);
+        self.mining.store(false, Ordering::SeqCst);
+        self.running.store(false, Ordering::SeqCst);
         self.cond_var.notify_all();
     }
 
@@ -62,7 +62,7 @@ impl Miner {
                 if lock.len() > 0 {
                     info!("Got new transaction to mine");
                     let transaction = lock.remove(0);
-                    mining.store(true, Ordering::Relaxed);
+                    mining.store(true, Ordering::SeqCst);
                     Miner::mine_internal(context.clone(), transactions.clone(), transaction, mining.clone(), cond_var.clone());
                 } else {
                     let _ = cond_var.wait(lock).expect("Error in wait lock!");
@@ -72,7 +72,7 @@ impl Miner {
         let mining = self.mining.clone();
         self.context.lock().unwrap().bus.register(move |_uuid, e| {
             if e == Event::ActionStopMining {
-                mining.store(false, Ordering::Relaxed);
+                mining.store(false, Ordering::SeqCst);
             }
             true
         });
@@ -123,17 +123,15 @@ impl Miner {
             let live_threads = live_threads.clone();
             let cond_var = cond_var.clone();
             thread::spawn(move || {
-                live_threads.fetch_add(1, Ordering::Relaxed);
+                live_threads.fetch_add(1, Ordering::SeqCst);
                 match find_hash(&mut Sha256::new(), block, mining.clone()) {
                     None => {
-                        debug!("Mining did not find suitable hash or was stopped");
-                        let count = live_threads.fetch_sub(1, Ordering::Relaxed);
+                        debug!("Mining was cancelled");
+                        let count = live_threads.fetch_sub(1, Ordering::SeqCst);
                         // If this is the last thread, but mining was not stopped by another thread
-                        if count == 0 && mining.load(Ordering::Relaxed) {
-                            // If all threads came empty with mining we return transaction to the queue
-                            transactions.lock().unwrap().push(transaction);
-                            mining.store(false, Ordering::Relaxed);
-                            cond_var.notify_one();
+                        if count == 1 {
+                            let mut context = context.lock().unwrap();
+                            context.bus.post(Event::MinerStopped);
                         }
                     },
                     Some(block) => {
@@ -146,7 +144,7 @@ impl Miner {
                             }
                         }
                         context.bus.post(Event::MinerStopped);
-                        mining.store(false, Ordering::Relaxed);
+                        mining.store(false, Ordering::SeqCst);
                     },
                 }
             });
@@ -156,21 +154,23 @@ impl Miner {
 
 fn find_hash(digest: &mut dyn Digest, mut block: Block, running: Arc<AtomicBool>) -> Option<Block> {
     let mut buf: [u8; 32] = [0; 32];
-    block.random = rand::random();
-    debug!("Mining block {}", serde_json::to_string(&block).unwrap());
-    for nonce in 0..std::u64::MAX {
-        if !running.load(Ordering::Relaxed) {
-            return None;
-        }
-        block.timestamp = Utc::now().timestamp();
-        block.nonce = nonce;
+    loop {
+        block.random = rand::random();
+        debug!("Mining block {}", serde_json::to_string(&block).unwrap());
+        for nonce in 0..std::u64::MAX {
+            if !running.load(Ordering::Relaxed) {
+                return None;
+            }
+            block.timestamp = Utc::now().timestamp();
+            block.nonce = nonce;
 
-        digest.reset();
-        digest.input(serde_json::to_string(&block).unwrap().as_bytes());
-        digest.result(&mut buf);
-        if hash_is_good(&buf, block.difficulty) {
-            block.hash = Bytes::from_bytes(&buf);
-            return Some(block);
+            digest.reset();
+            digest.input(serde_json::to_string(&block).unwrap().as_bytes());
+            digest.result(&mut buf);
+            if hash_is_good(&buf, block.difficulty) {
+                block.hash = Bytes::from_bytes(&buf);
+                return Some(block);
+            }
         }
     }
     None

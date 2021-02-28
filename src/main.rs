@@ -180,8 +180,9 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
             debug!("Command {}", arg);
             match serde_json::from_str(arg).unwrap() {
                 Loaded => {
-                    web_view.eval("showMiningIndicator(false);").expect("Error evaluating!");
+                    web_view.eval("showMiningIndicator(false, false);").expect("Error evaluating!");
                     let handle = web_view.handle();
+                    let mut status = Status::new();
                     let mut c = context.lock().unwrap();
                     c.bus.register(move |_uuid, e| {
                         debug!("Got event from bus {:?}", &e);
@@ -189,18 +190,46 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                             Event::KeyCreated { path, public } => { format!("keystoreChanged('{}', '{}');", &path, &public) }
                             Event::KeyLoaded { path, public } => { format!("keystoreChanged('{}', '{}');", &path, &public) }
                             Event::KeySaved { path, public } => { format!("keystoreChanged('{}', '{}');", &path, &public) }
-                            Event::MinerStarted => { format!("showMiningIndicator({}, false);", true) }
-                            Event::KeyGeneratorStarted => { format!("showMiningIndicator({}, false);", true) }
-                            Event::MinerStopped => { format!("showMiningIndicator({}, false);", false) }
-                            Event::KeyGeneratorStopped => { format!("showMiningIndicator({}, false);", false) }
-                            Event::SyncStarted { have, height } => {
-                                format!("setLeftStatusBarText('Synchronizing {}/{}'); showMiningIndicator(true, true);", have, height)
+                            Event::MinerStarted => {
+                                status.mining = true;
+                                String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
                             }
-                            Event::ActionIdle => {
-                                format!("setLeftStatusBarText('Idle'); showMiningIndicator(false, true);")
+                            Event::KeyGeneratorStarted => {
+                                status.mining = true;
+                                String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
                             }
-                            Event::StatsCount { nodes, blocks } => {
-                                format!("setRightStatusBarText('Nodes: {}, Blocks: {}')", nodes, blocks)
+                            Event::MinerStopped | Event::KeyGeneratorStopped => {
+                                status.mining = false;
+                                if status.syncing {
+                                    String::from("setLeftStatusBarText('Syncing...'); showMiningIndicator(true, true);")
+                                } else {
+                                    String::from("setLeftStatusBarText('Idle'); showMiningIndicator(false, false);")
+                                }
+                            }
+                            Event::Syncing { have, height } => {
+                                status.syncing = true;
+                                status.synced_blocks = have;
+                                status.sync_height = height;
+                                if status.mining {
+                                    String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
+                                } else {
+                                    format!("setLeftStatusBarText('Synchronizing {}/{}'); showMiningIndicator(true, true);", have, height)
+                                }
+                            }
+                            Event::SyncFinished => {
+                                status.syncing = false;
+                                if status.mining {
+                                    String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
+                                } else {
+                                    format!("setLeftStatusBarText('Idle'); showMiningIndicator(false, false);")
+                                }
+                            }
+                            Event::NetworkStatus { nodes, blocks } => {
+                                if status.mining || status.syncing || nodes < 3 {
+                                    format!("setRightStatusBarText('Nodes: {}, Blocks: {}')", nodes, blocks)
+                                } else {
+                                    format!("setLeftStatusBarText('Idle'); setRightStatusBarText('Nodes: {}, Blocks: {}')", nodes, blocks)
+                                }
                             }
                             _ => { String::new() }
                         };
@@ -475,6 +504,21 @@ pub enum Cmd {
     RenewDomain { name: String, days: u16 },
     TransferDomain { name: String, owner: String },
     StopMining,
+}
+
+struct Status {
+    pub mining: bool,
+    pub syncing: bool,
+    pub synced_blocks: u64,
+    pub sync_height: u64,
+    pub nodes_connected: usize,
+    pub chain_height: u64
+}
+
+impl Status {
+    fn new() -> Self {
+        Status { mining: false, syncing: false, synced_blocks: 0, sync_height: 0, nodes_connected: 0, chain_height: 0 }
+    }
 }
 
 fn inline_style(s: &str) -> String {
