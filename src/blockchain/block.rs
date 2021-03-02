@@ -15,7 +15,7 @@ pub struct Block {
     pub index: u64,
     pub timestamp: i64,
     pub version: u32,
-    pub difficulty: usize,
+    pub difficulty: u32,
     pub random: u32,
     pub nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -24,25 +24,30 @@ pub struct Block {
     pub prev_block_hash: Bytes,
     #[serde(default, skip_serializing_if = "Bytes::is_zero")]
     pub hash: Bytes,
+    #[serde(default, skip_serializing_if = "Bytes::is_zero")]
+    pub pub_key: Bytes,
+    #[serde(default, skip_serializing_if = "Bytes::is_zero")]
+    pub signature: Bytes,
 }
 
 impl Block {
-    pub fn new(index: u64, timestamp: i64, version: u32, prev_block_hash: Bytes, transaction: Option<Transaction>) -> Self {
+    pub fn new(transaction: Option<Transaction>, pub_key: Bytes, prev_block_hash: Bytes) -> Self {
         Block {
-            index,
-            timestamp,
-            version,
-            // TODO make difficulty parameter
-            difficulty: 20,
+            index: 0,
+            timestamp: 0,
+            version: 0,
+            difficulty: 0,
             random: 0,
             nonce: 0,
             transaction,
             prev_block_hash,
             hash: Bytes::default(),
+            pub_key,
+            signature: Bytes::default()
         }
     }
 
-    pub fn from_all_params(index: u64, timestamp: i64, version: u32, difficulty: usize, random: u32, nonce: u64, prev_block_hash: Bytes, hash: Bytes, transaction: Option<Transaction>) -> Self {
+    pub fn from_all_params(index: u64, timestamp: i64, version: u32, difficulty: u32, random: u32, nonce: u64, prev_block_hash: Bytes, hash: Bytes, pub_key: Bytes, signature: Bytes, transaction: Option<Transaction>) -> Self {
         Block {
             index,
             timestamp,
@@ -53,18 +58,24 @@ impl Block {
             transaction,
             prev_block_hash,
             hash,
+            pub_key,
+            signature
         }
-    }
-
-    pub fn hash(data: &[u8]) -> Bytes {
-        let mut buf: [u8; 32] = [0; 32];
-        let mut digest = Sha256::new();
-        digest.input(data);
-        digest.result(&mut buf);
-        Bytes::new(buf.to_vec())
     }
 
     pub fn is_genesis(&self) -> bool {
         self.index == 0 && self.transaction.is_none() && self.prev_block_hash == Bytes::default()
     }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        Vec::from(serde_json::to_string(&self).unwrap().as_bytes())
+    }
+}
+
+pub fn hash(data: &[u8]) -> Bytes {
+    let mut buf: [u8; 32] = [0; 32];
+    let mut digest = Sha256::new();
+    digest.input(data);
+    digest.result(&mut buf);
+    Bytes::new(buf.to_vec())
 }

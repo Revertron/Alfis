@@ -74,19 +74,6 @@ pub fn hash_is_good(hash: &[u8], difficulty: usize) -> bool {
     return hash_int < target;
 }
 
-/// Generates random string of given length
-pub fn random_string(length: usize) -> String {
-    let chars: Vec<char> = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?".chars().collect();
-    let mut rng = rand::thread_rng();
-    let mut result = String::with_capacity(length);
-    for _ in 0..length {
-        let position: usize = rng.gen::<usize>() % chars.len();
-        let c: char = *chars.get(position).unwrap();
-        result.push(c);
-    }
-    result
-}
-
 #[cfg(test)]
 mod test {
     use crate::check_domain;

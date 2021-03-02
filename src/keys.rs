@@ -16,6 +16,8 @@ use serde::de::{Error as DeError, Visitor};
 #[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
 use crate::hash_is_good;
+use std::cmp::Ordering;
+use num_bigint::BigUint;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Keystore {
@@ -157,6 +159,24 @@ impl PartialEq for Bytes {
 
     fn ne(&self, other: &Self) -> bool {
         !crate::utils::same_hash(&self.data, &other.data)
+    }
+}
+
+impl Eq for Bytes {}
+
+impl PartialOrd for Bytes {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let self_hash_int = BigUint::from_bytes_be(&self.data);
+        let other_hash_int = BigUint::from_bytes_be(&other.data);
+        Some(self_hash_int.cmp(&other_hash_int))
+    }
+}
+
+impl Ord for Bytes {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let self_hash_int = BigUint::from_bytes_be(&self.data);
+        let other_hash_int = BigUint::from_bytes_be(&other.data);
+        self_hash_int.cmp(&other_hash_int)
     }
 }
 

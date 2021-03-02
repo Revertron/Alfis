@@ -22,7 +22,7 @@ use simple_logger::{SimpleLogger};
 #[allow(unused_imports)]
 use log::{trace, debug, info, warn, error, LevelFilter};
 
-use alfis::{Blockchain, Bytes, Context, Keystore, Transaction, check_domain};
+use alfis::{Blockchain, Bytes, Context, Keystore, Transaction, check_domain, Block};
 use alfis::event::Event;
 use alfis::miner::Miner;
 use alfis::p2p::Network;
@@ -35,10 +35,6 @@ use alfis::blockchain::filter::BlockchainFilter;
 extern crate serde;
 extern crate serde_json;
 
-#[allow(dead_code)]
-const ONE_YEAR: u16 = 365;
-const GENESIS_ZONE: &str = "ygg";
-const GENESIS_ZONE_DIFFICULTY: u16 = 20;
 const KEYSTORE_DIFFICULTY: usize = 24;
 const SETTINGS_FILENAME: &str = "alfis.cfg";
 
@@ -150,12 +146,11 @@ fn start_dns_server(context: &Arc<Mutex<Context>>, settings: &Settings) {
 fn create_genesis_if_needed(context: &Arc<Mutex<Context>>, miner: &Arc<Mutex<Miner>>) {
     // If there is no origin in settings and no blockchain in DB, generate genesis block
     let context = context.lock().unwrap();
-    // TODO compare first block's hash to origin
     let last_block = context.get_blockchain().last_block();
     let origin = context.settings.origin.clone();
     if origin.eq("") && last_block.is_none() {
         // If blockchain is empty, we are going to mine a Genesis block
-        create_genesis(miner.clone(), GENESIS_ZONE, &context.get_keystore(), GENESIS_ZONE_DIFFICULTY);
+        create_genesis(miner.clone(), &context.get_keystore());
     }
 }
 
@@ -390,33 +385,20 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     interface.exit();
 }
 
-fn create_genesis<S: Into<String>>(miner: Arc<Mutex<Miner>>, name: S, keystore: &Keystore, difficulty: u16) {
-    let mut transaction = Transaction::from_str(name.into(), "zone".to_owned(), difficulty.to_string(), keystore.get_public().clone());
-    // Signing it with private key from Signature
-    let sign_hash = keystore.sign(&transaction.get_bytes());
-    transaction.set_signature(Bytes::from_bytes(&sign_hash));
+fn create_genesis(miner: Arc<Mutex<Miner>>, keystore: &Keystore) {
+    let block = Block::new(None, keystore.get_public(), Bytes::default());
     let mut miner_guard = miner.lock().unwrap();
-    miner_guard.add_transaction(transaction);
+    miner_guard.add_block(block);
 }
 
 fn create_domain<S: Into<String>>(miner: Arc<Mutex<Miner>>, name: S, data: S, keystore: &Keystore) {
     let name = name.into();
     info!("Generating domain or zone {}", name);
-    //let rec_vector: Vec<String> = records.into().trim().split("\n").map(|s| s.trim()).map(String::from).collect();
     //let tags_vector: Vec<String> = tags.into().trim().split(",").map(|s| s.trim()).map(String::from).collect();
-    let transaction = create_transaction(keystore, name, "domain".into(), data.into());
+    let transaction = Transaction::from_str(name.into(), "domain".into(), data.into(), keystore.get_public().clone());
+    let block = Block::new(Some(transaction), keystore.get_public(), Bytes::default());
     let mut miner_guard = miner.lock().unwrap();
-    miner_guard.add_transaction(transaction);
-}
-
-fn create_transaction<S: Into<String>>(keystore: &Keystore, name: S, method: S, data: S) -> Transaction {
-    // Creating transaction
-    // TODO Do not use owner for now, make a field in UI and use it if filled
-    let mut transaction = Transaction::from_str(name.into(), method.into(), data.into(), keystore.get_public().clone());
-    // Signing it with private key from Signature
-    let sign_hash = keystore.sign(&transaction.get_bytes());
-    transaction.set_signature(Bytes::from_bytes(&sign_hash));
-    transaction
+    miner_guard.add_block(block);
 }
 
 fn create_key(context: Arc<Mutex<Context>>) {

@@ -6,16 +6,18 @@ use std::time::Duration;
 use chrono::Utc;
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
-use num_cpus;
 #[allow(unused_imports)]
-use log::{trace, debug, info, warn, error};
+use log::{debug, error, info, trace, warn};
+use num_cpus;
 
-use crate::{Block, Bytes, Context, hash_is_good, Transaction};
+use crate::{Block, Bytes, Context, hash_is_good};
+use crate::blockchain::blockchain::BlockQuality;
+use crate::blockchain::{BLOCK_DIFFICULTY, CHAIN_VERSION};
 use crate::event::Event;
 
 pub struct Miner {
     context: Arc<Mutex<Context>>,
-    transactions: Arc<Mutex<Vec<Transaction>>>,
+    blocks: Arc<Mutex<Vec<Block>>>,
     running: Arc<AtomicBool>,
     mining: Arc<AtomicBool>,
     cond_var: Arc<Condvar>
@@ -25,15 +27,15 @@ impl Miner {
     pub fn new(context: Arc<Mutex<Context>>) -> Self {
         Miner {
             context: context.clone(),
-            transactions: Arc::new(Mutex::new(Vec::new())),
+            blocks: Arc::new(Mutex::new(Vec::new())),
             running: Arc::new(AtomicBool::new(false)),
             mining: Arc::new(AtomicBool::new(false)),
             cond_var: Arc::new(Condvar::new())
         }
     }
 
-    pub fn add_transaction(&mut self, transaction: Transaction) {
-        self.transactions.lock().unwrap().push(transaction);
+    pub fn add_block(&mut self, block: Block) {
+        self.blocks.lock().unwrap().push(block);
         self.cond_var.notify_one();
     }
 
@@ -45,7 +47,7 @@ impl Miner {
 
     pub fn start_mining_thread(&mut self) {
         let context = self.context.clone();
-        let transactions = self.transactions.clone();
+        let blocks = self.blocks.clone();
         let running = self.running.clone();
         let mining = self.mining.clone();
         let cond_var = self.cond_var.clone();
@@ -58,12 +60,12 @@ impl Miner {
                     continue;
                 }
 
-                let mut lock = transactions.lock().unwrap();
+                let mut lock = blocks.lock().unwrap();
                 if lock.len() > 0 {
-                    info!("Got new transaction to mine");
-                    let transaction = lock.remove(0);
+                    info!("Got new block to mine");
+                    let block = lock.remove(0);
                     mining.store(true, Ordering::SeqCst);
-                    Miner::mine_internal(context.clone(), transactions.clone(), transaction, mining.clone(), cond_var.clone());
+                    Miner::mine_internal(context.clone(), block, mining.clone());
                 } else {
                     let _ = cond_var.wait(lock).expect("Error in wait lock!");
                 }
@@ -82,46 +84,27 @@ impl Miner {
         self.running.load(Ordering::Relaxed)
     }
 
-    fn mine_internal(context: Arc<Mutex<Context>>, transactions: Arc<Mutex<Vec<Transaction>>>, mut transaction: Transaction, mining: Arc<AtomicBool>, cond_var: Arc<Condvar>) {
-        let version= {
-            let mut c = context.lock().unwrap();
-            c.bus.post(Event::MinerStarted);
-            c.settings.version
-        };
-        let block = {
-            if transaction.signature.is_zero() {
-                // Signing it with private key from Keystore
-                let c = context.lock().unwrap();
-                let sign_hash = c.keystore.sign(&transaction.get_bytes());
-                transaction.set_signature(Bytes::from_bytes(&sign_hash));
-            }
-
-            // Get last block for mining
-            let last_block = { context.lock().unwrap().blockchain.last_block() };
-            match last_block {
-                None => {
-                    warn!("Mining genesis block");
-                    // Creating a block with that signed transaction
-                    Block::new(0, Utc::now().timestamp(), version, Bytes::zero32(), Some(transaction.clone()))
-                },
-                Some(block) => {
-                    // Creating a block with that signed transaction
-                    Block::new(block.index + 1, Utc::now().timestamp(), version, block.hash.clone(), Some(transaction.clone()))
-                },
-            }
+    fn mine_internal(context: Arc<Mutex<Context>>, mut block: Block, mining: Arc<AtomicBool>) {
+        // Clear signature and hash just in case
+        block.signature = Bytes::default();
+        block.hash = Bytes::default();
+        block.version = CHAIN_VERSION;
+        block.difficulty = BLOCK_DIFFICULTY;
+        block.index = context.lock().unwrap().blockchain.height();
+        block.prev_block_hash = match context.lock().unwrap().blockchain.last_block() {
+            None => { Bytes::default() }
+            Some(block) => { block.hash }
         };
 
+        context.lock().unwrap().bus.post(Event::MinerStarted);
         let live_threads = Arc::new(AtomicU32::new(0u32));
         let cpus = num_cpus::get();
         debug!("Starting {} threads for mining", cpus);
         for _ in 0..cpus {
-            let transactions = transactions.clone();
             let context = context.clone();
-            let transaction = transaction.clone();
             let block = block.clone();
             let mining = mining.clone();
             let live_threads = live_threads.clone();
-            let cond_var = cond_var.clone();
             thread::spawn(move || {
                 live_threads.fetch_add(1, Ordering::SeqCst);
                 match find_hash(&mut Sha256::new(), block, mining.clone()) {
@@ -134,14 +117,17 @@ impl Miner {
                             context.bus.post(Event::MinerStopped);
                         }
                     },
-                    Some(block) => {
+                    Some(mut block) => {
                         let index = block.index;
                         let mut context = context.lock().unwrap();
-                        if context.blockchain.add_block(block).is_err() {
+                        block.signature = Bytes::from_bytes(&context.keystore.sign(&block.as_bytes()));
+                        if context.blockchain.check_new_block(&block) != BlockQuality::Good {
                             warn!("Error adding mined block!");
                             if index == 0 {
                                 error!("To mine genesis block you need to make 'origin' an empty string in config.");
                             }
+                        } else {
+                            context.blockchain.add_block(block);
                         }
                         context.bus.post(Event::MinerStopped);
                         mining.store(false, Ordering::SeqCst);
@@ -154,6 +140,7 @@ impl Miner {
 
 fn find_hash(digest: &mut dyn Digest, mut block: Block, running: Arc<AtomicBool>) -> Option<Block> {
     let mut buf: [u8; 32] = [0; 32];
+    let difficulty = block.difficulty as usize;
     loop {
         block.random = rand::random();
         debug!("Mining block {}", serde_json::to_string(&block).unwrap());
@@ -165,13 +152,12 @@ fn find_hash(digest: &mut dyn Digest, mut block: Block, running: Arc<AtomicBool>
             block.nonce = nonce;
 
             digest.reset();
-            digest.input(serde_json::to_string(&block).unwrap().as_bytes());
+            digest.input(&block.as_bytes());
             digest.result(&mut buf);
-            if hash_is_good(&buf, block.difficulty) {
+            if hash_is_good(&buf, difficulty) {
                 block.hash = Bytes::from_bytes(&buf);
                 return Some(block);
             }
         }
     }
-    None
 }

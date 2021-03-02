@@ -15,6 +15,7 @@ use log::{trace, debug, info, warn, error};
 
 use crate::{Context, Block, p2p::Message, p2p::State, p2p::Peer, p2p::Peers};
 use std::net::{SocketAddr, IpAddr, SocketAddrV4, ToSocketAddrs};
+use crate::blockchain::blockchain::BlockQuality;
 
 const SERVER: Token = Token(0);
 const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(3000));
@@ -340,13 +341,13 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 Ok(block) => block,
                 Err(_) => return State::Error
             };
-            // TODO check here if the block is good before trying to add
             let context = context.clone();
             thread::spawn(move || {
                 let mut context = context.lock().unwrap();
                 let max_height = context.blockchain.max_height();
-                match context.blockchain.add_block(block) {
-                    Ok(_) => {
+                match context.blockchain.check_new_block(&block) {
+                    BlockQuality::Good => {
+                        context.blockchain.add_block(block);
                         let my_height = context.blockchain.height();
                         context.bus.post(crate::event::Event::BlockchainChanged);
                         // If it was the last block to sync
@@ -356,7 +357,11 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                             context.bus.post(crate::event::Event::Syncing { have: my_height, height: max_height});
                         }
                     }
-                    Err(_) => { warn!("Discarded received block"); }
+                    BlockQuality::Twin => { debug!("Ignoring duplicate block {}", block.index); }
+                    BlockQuality::Future => { debug!("Ignoring future block {}", block.index); }
+                    BlockQuality::Bad => { debug!("Ignoring bad block {} with hash {:?}", block.index, block.hash); }
+                    // TODO deal with forks
+                    BlockQuality::Fork => { debug!("Ignoring forked block {} with hash {:?}", block.index, block.hash); }
                 }
             });
             State::idle()
