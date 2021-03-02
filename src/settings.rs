@@ -8,7 +8,6 @@ use crate::Bytes;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Settings {
     pub origin: String,
-    pub version: u32,
     pub key_file: String,
     pub listen: String,
     pub public: bool,

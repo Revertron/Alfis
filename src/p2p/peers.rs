@@ -9,6 +9,7 @@ use rand::random;
 use rand::seq::IteratorRandom;
 #[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
+use crate::Bytes;
 
 pub struct Peers {
     peers: HashMap<Token, Peer>,
@@ -132,7 +133,7 @@ impl Peers {
         false
     }
 
-    pub fn send_pings(&mut self, registry: &Registry, height: u64) {
+    pub fn send_pings(&mut self, registry: &Registry, height: u64, hash: Bytes) {
         let mut ping_sent = false;
         for (token, peer) in self.peers.iter_mut() {
             match peer.get_state() {
@@ -143,7 +144,7 @@ impl Peers {
                         let message = if random < 16 {
                             Message::GetPeers
                         } else {
-                            Message::ping(height)
+                            Message::ping(height, hash.clone())
                         };
 
                         peer.set_state(State::message(message));

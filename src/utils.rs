@@ -1,5 +1,4 @@
 use std::num;
-use rand::Rng;
 use num_bigint::BigUint;
 use num_traits::One;
 

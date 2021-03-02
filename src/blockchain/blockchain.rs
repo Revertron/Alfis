@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use chrono::Utc;
 use crate::blockchain::transaction::hash_identity;
 use crate::blockchain::blockchain::BlockQuality::*;
-use crate::blockchain::BLOCK_DIFFICULTY;
+use crate::blockchain::{BLOCK_DIFFICULTY, CHAIN_VERSION};
 
 const DB_NAME: &str = "blockchain.db";
 
@@ -26,10 +26,9 @@ pub struct Blockchain {
 impl Blockchain {
     pub fn new(settings: &Settings) -> Self {
         let origin = settings.get_origin();
-        let version = settings.version;
 
         let db = sqlite::open(DB_NAME).expect("Unable to open blockchain DB");
-        let mut blockchain = Blockchain{ origin, version, blocks: Vec::new(), last_block: None, max_height: 0, db, zones: RefCell::new(HashSet::new()) };
+        let mut blockchain = Blockchain{ origin, version: CHAIN_VERSION, blocks: Vec::new(), last_block: None, max_height: 0, db, zones: RefCell::new(HashSet::new()) };
         blockchain.init_db();
         blockchain
     }
@@ -228,6 +227,13 @@ impl Blockchain {
             Some(ref block) => {
                 block.index + 1
             }
+        }
+    }
+
+    pub fn last_hash(&self) -> Bytes {
+        match &self.last_block {
+            None => { Bytes::default() }
+            Some(block) => { block.hash.clone() }
         }
     }
 

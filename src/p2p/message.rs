@@ -2,14 +2,15 @@ extern crate serde;
 extern crate serde_json;
 
 use serde::{Deserialize, Serialize};
+use crate::Bytes;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Message {
     Error,
     Hand { origin: String, version: u32, public: bool },
     Shake { origin: String, version: u32, ok: bool, height: u64 },
-    Ping { height: u64 },
-    Pong { height: u64 },
+    Ping { height: u64, hash: Bytes },
+    Pong { height: u64, hash: Bytes },
     GetPeers,
     Peers { peers: Vec<String> },
     GetBlock { index: u64 },
@@ -33,12 +34,12 @@ impl Message {
         Message::Shake { origin: origin.to_owned(), version, ok, height }
     }
 
-    pub fn ping(height: u64) -> Self {
-        Message::Ping { height }
+    pub fn ping(height: u64, hash: Bytes) -> Self {
+        Message::Ping { height, hash }
     }
 
-    pub fn pong(height: u64) -> Self {
-        Message::Pong { height }
+    pub fn pong(height: u64, hash: Bytes) -> Self {
+        Message::Pong { height, hash }
     }
 
     pub fn block(height: u64, str: String) -> Self {

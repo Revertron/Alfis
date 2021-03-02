@@ -16,6 +16,7 @@ use log::{trace, debug, info, warn, error};
 use crate::{Context, Block, p2p::Message, p2p::State, p2p::Peer, p2p::Peers};
 use std::net::{SocketAddr, IpAddr, SocketAddrV4, ToSocketAddrs};
 use crate::blockchain::blockchain::BlockQuality;
+use crate::blockchain::CHAIN_VERSION;
 
 const SERVER: Token = Token(0);
 const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(3000));
@@ -102,8 +103,11 @@ impl Network {
                 events.clear();
 
                 // Send pings to idle peers
-                let height = { context.lock().unwrap().blockchain.height() };
-                peers.send_pings(poll.registry(), height);
+                let (height, hash) = {
+                    let context = context.lock().unwrap();
+                    (context.blockchain.height(), context.blockchain.last_hash())
+                };
+                peers.send_pings(poll.registry(), height, hash);
                 peers.connect_new_peers(poll.registry(), &mut unique_token);
             }
         });
@@ -171,7 +175,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                         debug!("Sending hello to {}", &peer.get_addr());
                         let data: String = {
                             let c = context.lock().unwrap();
-                            let message = Message::hand(&c.settings.origin, c.settings.version, c.settings.public);
+                            let message = Message::hand(&c.settings.origin, CHAIN_VERSION, c.settings.public);
                             serde_json::to_string(&message).unwrap()
                         };
                         send_message(peer.get_stream(), &data.into_bytes());
@@ -187,7 +191,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                         if from.elapsed().as_secs() >= 30 {
                             let data: String = {
                                 let c = context.lock().unwrap();
-                                let message = Message::ping(c.blockchain.height());
+                                let message = Message::ping(c.blockchain.height(), c.blockchain.last_hash());
                                 serde_json::to_string(&message).unwrap()
                             };
                             send_message(peer.get_stream(), &data.into_bytes());
@@ -258,9 +262,10 @@ fn send_message(connection: &mut TcpStream, data: &Vec<u8>) {
 }
 
 fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Peers, token: &Token) -> State {
-    let (my_height, my_origin, my_version) = {
+    let (my_height, my_hash, my_origin, my_version) = {
         let context = context.lock().unwrap();
-        (context.blockchain.height(), &context.settings.origin.clone(), context.settings.version)
+        // TODO cache it somewhere
+        (context.blockchain.height(), context.blockchain.last_hash(), &context.settings.origin.clone(), CHAIN_VERSION)
     };
     match message {
         Message::Hand { origin, version, public } => {
@@ -297,21 +302,21 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             }
         }
         Message::Error => { State::Error }
-        Message::Ping { height } => {
+        Message::Ping { height, hash } => {
             let peer = peers.get_mut_peer(token).unwrap();
             peer.set_height(height);
             peer.set_active(true);
-            if peer.is_higher(my_height) {
+            if peer.is_higher(my_height) || my_hash.ne(&hash) {
                 State::message(Message::GetBlock { index: my_height })
             } else {
-                State::message(Message::pong(my_height))
+                State::message(Message::pong(my_height, my_hash))
             }
         }
-        Message::Pong { height } => {
+        Message::Pong { height, hash } => {
             let peer = peers.get_mut_peer(token).unwrap();
             peer.set_height(height);
             peer.set_active(true);
-            if peer.is_higher(my_height) {
+            if peer.is_higher(my_height) || my_hash.ne(&hash) {
                 State::message(Message::GetBlock { index: my_height })
             } else {
                 let mut context = context.lock().unwrap();
