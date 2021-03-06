@@ -2,7 +2,7 @@
 
 use std::io::Write;
 use std::marker::{Send, Sync};
-use std::net::{TcpStream, UdpSocket, ToSocketAddrs};
+use std::net::{TcpStream, UdpSocket, ToSocketAddrs, SocketAddr};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
@@ -49,8 +49,11 @@ pub struct DnsNetworkClient {
     /// Counter for assigning packet ids
     seq: AtomicUsize,
 
-    /// The listener socket
-    socket: UdpSocket,
+    /// The requesting socket for IPv4
+    socket_ipv4: UdpSocket,
+
+    /// The requesting socket for IPv6
+    socket_ipv6: UdpSocket,
 
     /// Queries in progress
     pending_queries: Arc<Mutex<Vec<PendingQuery>>>,
@@ -75,7 +78,8 @@ impl DnsNetworkClient {
             total_sent: AtomicUsize::new(0),
             total_failed: AtomicUsize::new(0),
             seq: AtomicUsize::new(0),
-            socket: UdpSocket::bind(("0.0.0.0", port)).unwrap(),
+            socket_ipv4: UdpSocket::bind(format!("0.0.0.0:{}", port)).expect("Error binding IPv4"),
+            socket_ipv6: UdpSocket::bind(format!("[::]:{}", port)).expect("Error binding IPv6"),
             pending_queries: Arc::new(Mutex::new(Vec::new())),
         }
     }
@@ -152,7 +156,15 @@ impl DnsNetworkClient {
         // Send query
         let mut req_buffer = BytePacketBuffer::new();
         packet.write(&mut req_buffer, 512)?;
-        self.socket.send_to(&req_buffer.buf[0..req_buffer.pos], server)?;
+        let addr: SocketAddr = server.to_socket_addrs()?.next().expect("Wrong resolver address");
+        match addr {
+            SocketAddr::V4(addr) => {
+                self.socket_ipv4.send_to(&req_buffer.buf[0..req_buffer.pos], addr)?;
+            }
+            SocketAddr::V6(addr) => {
+                self.socket_ipv6.send_to(&req_buffer.buf[0..req_buffer.pos], addr)?;
+            }
+        }
 
         // Wait for response
         match rx.recv() {
@@ -183,7 +195,61 @@ impl DnsClient for DnsNetworkClient {
     fn run(&self) -> Result<()> {
         // Start the thread for handling incoming responses
         {
-            let socket_copy = self.socket.try_clone()?;
+            let socket_copy = self.socket_ipv4.try_clone()?;
+            let pending_queries_lock = self.pending_queries.clone();
+
+            Builder::new()
+                .name("DnsNetworkClient-worker-thread".into())
+                .spawn(move || {
+                    loop {
+                        // Read data into a buffer
+                        let mut res_buffer = BytePacketBuffer::new();
+                        match socket_copy.recv_from(&mut res_buffer.buf) {
+                            Ok(_) => {}
+                            Err(_) => {
+                                continue;
+                            }
+                        }
+
+                        // Construct a DnsPacket from buffer, skipping the packet if parsing
+                        // failed
+                        let packet = match DnsPacket::from_buffer(&mut res_buffer) {
+                            Ok(packet) => packet,
+                            Err(err) => {
+                                println!("DnsNetworkClient failed to parse packet with error: {:?}", err);
+                                continue;
+                            }
+                        };
+
+                        // Acquire a lock on the pending_queries list, and search for a
+                        // matching PendingQuery to which to deliver the response.
+                        if let Ok(mut pending_queries) = pending_queries_lock.lock() {
+                            let mut matched_query = None;
+                            for (i, pending_query) in pending_queries.iter().enumerate() {
+                                if pending_query.seq == packet.header.id {
+                                    // Matching query found, send the response
+                                    let _ = pending_query.tx.send(Some(packet.clone()));
+
+                                    // Mark this index for removal from list
+                                    matched_query = Some(i);
+
+                                    break;
+                                }
+                            }
+
+                            if let Some(idx) = matched_query {
+                                pending_queries.remove(idx);
+                            } else {
+                                println!("Discarding response for: {:?}", packet.questions[0]);
+                            }
+                        }
+                    }
+                })?;
+        }
+
+        // Start the save thread for IPv6
+        {
+            let socket_copy = self.socket_ipv6.try_clone()?;
             let pending_queries_lock = self.pending_queries.clone();
 
             Builder::new()

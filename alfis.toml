@@ -10,7 +10,9 @@ peers = ["test2-ip4.alfis.name:4244", "test2-ip6.alfis.name:4244"]
 
 # DNS server options
 [dns]
-listen = "0.0.0.0:5300"
+listen = "127.0.0.1:53"
 threads = 20
 #AdGuard DNS servers to filter ads and trackers
-forwarders = ["94.140.14.14:53", "94.140.15.15:53"]
+#forwarders = ["94.140.14.14:53", "94.140.15.15:53"]
+#forwarders = ["[301:2522::53]:53", "[301:2923::53]:53"]
+forwarders = ["[301:2522::53]:53", "[301:2923::53]:53", "94.140.14.14:53", "94.140.15.15:53"]

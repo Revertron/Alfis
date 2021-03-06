@@ -8,6 +8,7 @@ use derive_more::{Display, Error, From};
 
 use crate::dns::context::ServerContext;
 use crate::dns::protocol::{DnsPacket, QueryType, ResultCode};
+use rand::seq::IteratorRandom;
 
 #[derive(Debug, Display, From, Error)]
 pub enum ResolveError {
@@ -83,8 +84,8 @@ impl DnsResolver for ForwardingDnsResolver {
     }
 
     fn perform(&mut self, qname: &str, qtype: QueryType) -> Result<DnsPacket> {
-        let index: usize = rand::random::<usize>() % self.upstreams.len();
-        let upstream = self.upstreams[index].as_ref();
+        let mut random = rand::thread_rng();
+        let upstream = self.upstreams.iter().choose(&mut random).unwrap();
         let result = match self.context.cache.lookup(qname, qtype) {
             None => {
                 self.context.client.send_query(qname, qtype, upstream, true)?
