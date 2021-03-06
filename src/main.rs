@@ -36,7 +36,7 @@ use alfis::dns::protocol::DnsRecord;
 use alfis::blockchain::filter::BlockchainFilter;
 
 const KEYSTORE_DIFFICULTY: usize = 24;
-const SETTINGS_FILENAME: &str = "alfis.cfg";
+const SETTINGS_FILENAME: &str = "alfis.toml";
 const LOG_TARGET_MAIN: &str = "alfis::Main";
 const LOG_TARGET_UI: &str = "alfis::UI";
 

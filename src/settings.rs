@@ -26,12 +26,10 @@ impl Settings {
             Ok(mut file) => {
                 let mut text = String::new();
                 file.read_to_string(&mut text).unwrap();
-                let loaded = serde_json::from_str(&text);
-                return if loaded.is_ok() {
-                    Some(loaded.unwrap())
-                } else {
-                    None
+                if let Ok(settings) = toml::from_str(&text) {
+                    return Some(settings);
                 }
+                None
             },
             Err(..) => None
         }

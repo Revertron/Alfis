@@ -1,0 +1,16 @@
+# Settings
+origin = "00000DFBFFCFADC09751E7085872F9AE6464075E626401904D8C779E215A21B1"
+version = 1
+key_file = "default.key"
+listen = "[::]:4244"
+public = false
+
+# Bootstrap nodes
+peers = ["test2-ip4.alfis.name:4244", "test2-ip6.alfis.name:4244"]
+
+# DNS server options
+[dns]
+host = "0.0.0.0"
+port = 5300
+#AdGuard DNS servers to filter ads and trackers
+forwarders = ["94.140.14.14:53", "94.140.15.15:53"]
