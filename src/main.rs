@@ -17,6 +17,7 @@ use std::time::{Duration, Instant};
 use winapi::um::wincon::{AttachConsole, FreeConsole, ATTACH_PARENT_PROCESS};
 
 use rand::RngCore;
+#[cfg(not(target_os = "macos"))]
 use thread_priority::*;
 use serde::Deserialize;
 use web_view::*;
@@ -421,6 +422,7 @@ fn create_key(context: Arc<Mutex<Context>>) {
         let mining = mining.clone();
         let miners_count = miners_count.clone();
         thread::spawn(move || {
+            #[cfg(not(target_os = "macos"))]
             let _ = set_current_thread_priority(ThreadPriority::Min);
             miners_count.fetch_add(1, Ordering::Relaxed);
             match generate_key(KEYSTORE_DIFFICULTY, mining.clone()) {

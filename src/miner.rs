@@ -9,6 +9,7 @@ use crypto::sha2::Sha256;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use num_cpus;
+#[cfg(not(target_os = "macos"))]
 use thread_priority::*;
 
 use crate::{Block, Bytes, Context, hash_is_good};
@@ -143,6 +144,7 @@ impl Miner {
             let mining = mining.clone();
             let live_threads = live_threads.clone();
             thread::spawn(move || {
+                #[cfg(not(target_os = "macos"))]
                 let _ = set_current_thread_priority(ThreadPriority::Min);
                 live_threads.fetch_add(1, Ordering::SeqCst);
                 match find_hash(&mut Sha256::new(), block, mining.clone()) {
