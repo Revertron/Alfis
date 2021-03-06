@@ -4,6 +4,8 @@
 #![windows_subsystem = "windows"]
 extern crate web_view;
 extern crate tinyfiledialogs as tfd;
+extern crate serde;
+extern crate serde_json;
 
 use std::env;
 use std::sync::{Arc, Mutex};
@@ -32,11 +34,10 @@ use alfis::dns::server::{DnsServer, DnsUdpServer, DnsTcpServer};
 use alfis::dns::protocol::DnsRecord;
 use alfis::blockchain::filter::BlockchainFilter;
 
-extern crate serde;
-extern crate serde_json;
-
 const KEYSTORE_DIFFICULTY: usize = 24;
 const SETTINGS_FILENAME: &str = "alfis.cfg";
+const LOG_TARGET_MAIN: &str = "alfis::Main";
+const LOG_TARGET_UI: &str = "alfis::UI";
 
 fn main() {
     // When linked with the windows subsystem windows won't automatically attach
@@ -46,8 +47,6 @@ fn main() {
         AttachConsole(ATTACH_PARENT_PROCESS);
     }
 
-    let version = env!("CARGO_PKG_VERSION");
-    println!("Starting ALFIS {}", version);
     let args: Vec<String> = env::args().collect();
     let program = args[0].clone();
 
@@ -56,6 +55,7 @@ fn main() {
     opts.optflag("n", "nogui", "Run without graphic user interface");
     opts.optflag("v", "verbose", "Show more debug messages");
     opts.optflag("d", "debug", "Show trace messages, more than debug");
+    opts.optflag("l", "list", "List blocks from DB and exit");
     opts.optopt("c", "config", "Path to config file", "");
 
     let opt_matches = match opts.parse(&args[1..]) {
@@ -83,19 +83,29 @@ fn main() {
         Some(path) => { path }
     };
     SimpleLogger::new().with_level(level).init().unwrap();
+    info!(target: LOG_TARGET_MAIN, "Starting ALFIS {}", env!("CARGO_PKG_VERSION"));
 
     let settings = Settings::load(&config_name).expect("Error loading settings");
     let keystore: Keystore = match Keystore::from_file(&settings.key_file, "") {
         None => {
-            warn!("Generated temporary keystore. Please, generate full-privileged keys.");
+            warn!(target: LOG_TARGET_MAIN, "Generated temporary keystore. Please, generate full-privileged keys.");
             Keystore::new()
         }
         Some(keystore) => { keystore }
     };
     let blockchain: Blockchain = Blockchain::new(&settings);
-    match blockchain.get_block(0) {
-        None => { info!("No blocks found in DB"); }
-        Some(block) => { info!("Loaded DB with origin {:?}", &block.hash); }
+    if opt_matches.opt_present("l") {
+        for i in 1..(blockchain.height() + 1) {
+            if let Some(block) = blockchain.get_block(i) {
+                info!(target: LOG_TARGET_MAIN, "{:?}", &block);
+            }
+        }
+        return;
+    }
+
+    match blockchain.get_block(1) {
+        None => { info!(target: LOG_TARGET_MAIN, "No blocks found in DB"); }
+        Some(block) => { trace!(target: LOG_TARGET_MAIN, "Loaded DB with origin {:?}", &block.hash); }
     }
     let settings_copy = settings.clone();
     let context: Arc<Mutex<Context>> = Arc::new(Mutex::new(Context::new(settings, keystore, blockchain)));
@@ -131,14 +141,14 @@ fn start_dns_server(context: &Arc<Mutex<Context>>, settings: &Settings) {
     if server_context.enable_udp {
         let udp_server = DnsUdpServer::new(server_context.clone(), 20);
         if let Err(e) = udp_server.run_server() {
-            error!("Failed to bind UDP listener: {:?}", e);
+            error!(target: LOG_TARGET_MAIN, "Failed to bind UDP listener: {:?}", e);
         }
     }
 
     if server_context.enable_tcp {
         let tcp_server = DnsTcpServer::new(server_context.clone(), 20);
         if let Err(e) = tcp_server.run_server() {
-            error!("Failed to bind TCP listener: {:?}", e);
+            error!(target: LOG_TARGET_MAIN, "Failed to bind TCP listener: {:?}", e);
         }
     }
 }
@@ -172,7 +182,7 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
         .user_data(())
         .invoke_handler(|web_view, arg| {
             use Cmd::*;
-            debug!("Command {}", arg);
+            debug!(target: LOG_TARGET_UI, "Command {}", arg);
             match serde_json::from_str(arg).unwrap() {
                 Loaded => {
                     web_view.eval("showMiningIndicator(false, false);").expect("Error evaluating!");
@@ -180,7 +190,7 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                     let mut status = Status::new();
                     let mut c = context.lock().unwrap();
                     c.bus.register(move |_uuid, e| {
-                        debug!("Got event from bus {:?}", &e);
+                        debug!(target: LOG_TARGET_UI, "Got event from bus {:?}", &e);
                         let eval = match e {
                             Event::KeyCreated { path, public } => { format!("keystoreChanged('{}', '{}');", &path, &public) }
                             Event::KeyLoaded { path, public } => { format!("keystoreChanged('{}', '{}');", &path, &public) }
@@ -230,7 +240,7 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                         };
 
                         if !eval.is_empty() {
-                            debug!("Evaluating {}", &eval);
+                            debug!(target: LOG_TARGET_UI, "Evaluating {}", &eval);
                             handle.dispatch(move |web_view| {
                                 web_view.eval(&eval.replace("\\", "\\\\"))
                             }).expect("Error dispatching!");
@@ -238,7 +248,7 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                         true
                     });
                     let eval = format!("keystoreChanged('{}', '{}');", c.keystore.get_path(), &c.keystore.get_public().to_string());
-                    debug!("Evaluating {}", &eval);
+                    debug!(target: LOG_TARGET_UI, "Evaluating {}", &eval);
                     web_view.eval(&eval.replace("\\", "\\\\")).expect("Error evaluating!");
                 }
                 LoadKey {} => {
@@ -248,10 +258,10 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                         Some(file_name) => {
                             match Keystore::from_file(&file_name, "") {
                                 None => {
-                                    error!("Error loading keystore '{}'!", &file_name);
+                                    error!(target: LOG_TARGET_UI, "Error loading keystore '{}'!", &file_name);
                                 }
                                 Some(keystore) => {
-                                    info!("Loaded keystore with key: {:?}", &keystore.get_public());
+                                    info!(target: LOG_TARGET_UI, "Loaded keystore with key: {:?}", &keystore.get_public());
                                     let mut c = context.lock().unwrap();
                                     c.bus.post(Event::KeyLoaded { path: keystore.get_path().to_owned(), public: keystore.get_public().to_string() });
                                     c.set_keystore(keystore);
@@ -272,7 +282,7 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                             let path = new_path.clone();
                             let public = c.keystore.get_public().to_string();
                             c.keystore.save(&new_path, "");
-                            info!("Key file saved to {}", &path);
+                            info!(target: LOG_TARGET_UI, "Key file saved to {}", &path);
                             c.bus.post(Event::KeySaved { path, public });
                         }
                     }
@@ -284,7 +294,7 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                     web_view.eval(&format!("domainAvailable({})", available)).expect("Error evaluating!");
                 }
                 CreateDomain { name, records, .. } => {
-                    debug!("Got records: {}", records);
+                    debug!(target: LOG_TARGET_UI, "Got records: {}", records);
                     let name = name.to_lowercase();
                     if !check_domain(&name, true) {
                         return Ok(());
@@ -302,13 +312,13 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                                 if transaction.pub_key == keystore.get_public() {
                                     create_domain(miner.clone(), name, records, &keystore);
                                 } else {
-                                    warn!("Tried to mine not owned domain!");
+                                    warn!(target: LOG_TARGET_UI, "Tried to mine not owned domain!");
                                     let _ = web_view.eval(&format!("showWarning('{}');", "You cannot change domain that you don't own!"));
                                 }
                             }
                         }
                     } else {
-                        warn!("Error in DNS records for domain!");
+                        warn!(target: LOG_TARGET_UI, "Error in DNS records for domain!");
                         let _ = web_view.eval(&format!("showWarning('{}');", "Something wrong with your records! Please, correct the error and try again."));
                     }
                 }
@@ -340,7 +350,7 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                             if transaction.pub_key == keystore.get_public() {
                                 create_domain(miner.clone(), name, data, &keystore);
                             } else {
-                                warn!("Tried to mine not owned domain!");
+                                warn!(target: LOG_TARGET_UI, "Tried to mine not owned domain!");
                                 let _ = web_view.eval(&format!("showWarning('{}');", "You cannot change domain that you don't own!"));
                             }
                         }
@@ -364,14 +374,14 @@ fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     loop {
         match interface.step() {
             None => {
-                info!("Interface closed, exiting");
+                info!(target: LOG_TARGET_UI, "Interface closed, exiting");
                 break;
             }
             Some(result) => {
                 match result {
                     Ok(_) => {}
                     Err(_) => {
-                        error!("Something wrong with webview, exiting");
+                        error!(target: LOG_TARGET_UI, "Something wrong with webview, exiting");
                         break;
                     }
                 }
@@ -393,9 +403,9 @@ fn create_genesis(miner: Arc<Mutex<Miner>>, keystore: &Keystore) {
 
 fn create_domain<S: Into<String>>(miner: Arc<Mutex<Miner>>, name: S, data: S, keystore: &Keystore) {
     let name = name.into();
-    info!("Generating domain or zone {}", name);
+    info!(target: LOG_TARGET_UI, "Generating domain or zone {}", name);
     //let tags_vector: Vec<String> = tags.into().trim().split(",").map(|s| s.trim()).map(String::from).collect();
-    let transaction = Transaction::from_str(name.into(), "domain".into(), data.into(), keystore.get_public().clone());
+    let transaction = Transaction::from_str(name.into(), "dns".into(), data.into(), keystore.get_public().clone());
     let block = Block::new(Some(transaction), keystore.get_public(), Bytes::default());
     let mut miner_guard = miner.lock().unwrap();
     miner_guard.add_block(block);
@@ -413,10 +423,10 @@ fn create_key(context: Arc<Mutex<Context>>) {
             miners_count.fetch_add(1, Ordering::Relaxed);
             match generate_key(KEYSTORE_DIFFICULTY, mining.clone()) {
                 None => {
-                    debug!("Keystore mining finished");
+                    debug!(target: LOG_TARGET_UI, "Keystore mining finished");
                 }
                 Some(keystore) => {
-                    info!("Key mined successfully: {:?}", &keystore.get_public());
+                    info!(target: LOG_TARGET_UI, "Key mined successfully: {:?}", &keystore.get_public());
                     let mut c = context.lock().unwrap();
                     mining.store(false, Ordering::Relaxed);
                     c.bus.post(Event::KeyCreated { path: keystore.get_path().to_owned(), public: keystore.get_public().to_string() });
@@ -444,7 +454,7 @@ fn generate_key(difficulty: usize, mining: Arc<AtomicBool>) -> Option<Keystore> 
         rng.fill_bytes(&mut buf);
         let keystore = Keystore::from_bytes(&buf);
         if keystore.hash_is_good(difficulty) {
-            info!("Generated keypair: {:?}", &keystore);
+            info!(target: LOG_TARGET_UI, "Generated keypair: {:?}", &keystore);
             return Some(keystore);
         }
         if !mining.load(Ordering::Relaxed) {

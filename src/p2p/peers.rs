@@ -157,17 +157,35 @@ impl Peers {
             }
         }
 
+        // If someone has more blocks we sync
         if !ping_sent {
             let mut rng = rand::thread_rng();
             match self.peers
                 .iter_mut()
-                .filter_map(|(token, peer)| if peer.get_state().is_idle() && peer.is_higher(height) { Some((token, peer)) } else { None })
+                .filter_map(|(token, peer)| if peer.has_more_blocks(height) { Some((token, peer)) } else { None })
                 .choose(&mut rng) {
                 None => {}
                 Some((token, peer)) => {
                     debug!("Found some peer higher than we are, sending block request");
                     registry.reregister(peer.get_stream(), token.clone(), Interest::WRITABLE).unwrap();
-                    peer.set_state(State::message(Message::GetBlock { index: height }));
+                    peer.set_state(State::message(Message::GetBlock { index: height + 1 }));
+                    ping_sent = true;
+                }
+            }
+        }
+
+        // If someone has less blocks (we mined a new block) we send a ping with our height
+        if !ping_sent {
+            let mut rng = rand::thread_rng();
+            match self.peers
+                .iter_mut()
+                .filter_map(|(token, peer)| if peer.is_lower(height) && peer.get_state().is_idle() { Some((token, peer)) } else { None })
+                .choose(&mut rng) {
+                None => {}
+                Some((token, peer)) => {
+                    debug!("Found some peer lower than we are, sending ping");
+                    registry.reregister(peer.get_stream(), token.clone(), Interest::WRITABLE).unwrap();
+                    peer.set_state(State::message(Message::Ping { height, hash }));
                 }
             }
         }

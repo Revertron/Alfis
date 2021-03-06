@@ -1,6 +1,8 @@
-use crate::p2p::State;
 use std::net::SocketAddr;
+use std::collections::HashMap;
 use mio::net::TcpStream;
+use crate::p2p::State;
+use crate::Block;
 
 #[derive(Debug)]
 pub struct Peer {
@@ -11,11 +13,13 @@ pub struct Peer {
     inbound: bool,
     public: bool,
     active: bool,
+    received_block: u64,
+    fork: HashMap<u64, Block>
 }
 
 impl Peer {
     pub fn new(addr: SocketAddr, stream: TcpStream, state: State, inbound: bool) -> Self {
-        Peer { addr, stream, state, height: 0, inbound, public: false, active: false }
+        Peer { addr, stream, state, height: 0, inbound, public: false, active: false, received_block: 0, fork: HashMap::new() }
     }
 
     pub fn get_addr(&self) -> SocketAddr {
@@ -46,6 +50,18 @@ impl Peer {
         self.height > height
     }
 
+    pub fn is_lower(&self, height: u64) -> bool {
+        self.height < height
+    }
+
+    pub fn set_received_block(&mut self, index: u64) {
+        self.received_block = index;
+    }
+
+    pub fn has_more_blocks(&self, height: u64) -> bool {
+        self.height > self.received_block && self.height > height && self.get_state().is_idle()
+    }
+
     pub fn is_public(&self) -> bool {
         self.public
     }
@@ -68,6 +84,14 @@ impl Peer {
 
     pub fn is_inbound(&self) -> bool {
         self.inbound
+    }
+
+    pub fn add_fork_block(&mut self, block: Block) {
+        self.fork.insert(block.index, block);
+    }
+
+    pub fn get_fork(&self) -> &HashMap<u64, Block> {
+        &self.fork
     }
 
     /// If loopback address then we care about ip and port.

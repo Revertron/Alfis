@@ -64,7 +64,7 @@ impl Block {
     }
 
     pub fn is_genesis(&self) -> bool {
-        self.index == 0 && self.transaction.is_none() && self.prev_block_hash == Bytes::default()
+        self.index == 1 && self.transaction.is_none() && self.prev_block_hash == Bytes::default()
     }
 
     pub fn as_bytes(&self) -> Vec<u8> {

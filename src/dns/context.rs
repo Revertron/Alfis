@@ -1,6 +1,5 @@
 //! The `ServerContext in this thread holds the common state across the server
 
-use std::fs;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -70,7 +69,7 @@ impl ServerContext {
             authority: Authority::new(),
             cache: SynchronizedCache::new(),
             filters: Vec::new(),
-            client: Box::new(DnsNetworkClient::new(34255)),
+            client: Box::new(DnsNetworkClient::new(10000 + (rand::random::<u16>() % 20000))),
             dns_host: String::from("0.0.0.0"),
             dns_port: 53,
             api_port: 5380,
@@ -88,9 +87,6 @@ impl ServerContext {
     }
 
     pub fn initialize(&mut self) -> Result<()> {
-        // Create zones directory if it doesn't exist
-        fs::create_dir_all(self.zones_dir)?;
-
         // Start UDP client thread
         self.client.run()?;
 

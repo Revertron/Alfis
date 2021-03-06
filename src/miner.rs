@@ -12,7 +12,7 @@ use num_cpus;
 
 use crate::{Block, Bytes, Context, hash_is_good};
 use crate::blockchain::blockchain::BlockQuality;
-use crate::blockchain::{BLOCK_DIFFICULTY, CHAIN_VERSION};
+use crate::blockchain::{BLOCK_DIFFICULTY, CHAIN_VERSION, LOCKER_DIFFICULTY};
 use crate::event::Event;
 
 pub struct Miner {
@@ -52,11 +52,11 @@ impl Miner {
         let mining = self.mining.clone();
         let cond_var = self.cond_var.clone();
         thread::spawn(move || {
-            running.store(true, Ordering::Relaxed);
-            while running.load(Ordering::Relaxed) {
+            running.store(true, Ordering::SeqCst);
+            while running.load(Ordering::SeqCst) {
                 // If some transaction is being mined now, we yield
-                if mining.load(Ordering::Relaxed) {
-                    thread::sleep(Duration::from_millis(100));
+                if mining.load(Ordering::SeqCst) {
+                    thread::sleep(Duration::from_millis(1000));
                     continue;
                 }
 
@@ -72,9 +72,25 @@ impl Miner {
             }
         });
         let mining = self.mining.clone();
+        let blocks = self.blocks.clone();
+        let cond_var = self.cond_var.clone();
         self.context.lock().unwrap().bus.register(move |_uuid, e| {
-            if e == Event::ActionStopMining {
-                mining.store(false, Ordering::SeqCst);
+            match e {
+                Event::NewBlockReceived => {}
+                Event::BlockchainChanged => {}
+                Event::ActionStopMining => {
+                    mining.store(false, Ordering::SeqCst);
+                }
+                Event::ActionMineLocker { index, hash } => {
+                    if !mining.load(Ordering::SeqCst) {
+                        let mut block = Block::new(None, Bytes::default(), hash);
+                        block.index = index;
+                        blocks.lock().unwrap().push(block);
+                        cond_var.notify_all();
+                        info!("Added a locker block to mine");
+                    }
+                }
+                _ => {}
             }
             true
         });
@@ -89,12 +105,32 @@ impl Miner {
         block.signature = Bytes::default();
         block.hash = Bytes::default();
         block.version = CHAIN_VERSION;
-        block.difficulty = BLOCK_DIFFICULTY;
-        block.index = context.lock().unwrap().blockchain.height();
-        block.prev_block_hash = match context.lock().unwrap().blockchain.last_block() {
-            None => { Bytes::default() }
-            Some(block) => { block.hash }
-        };
+        // If this block needs to be a locker
+        if block.index > 0 && !block.prev_block_hash.is_empty() {
+            info!("Mining locker block");
+            block.difficulty = LOCKER_DIFFICULTY;
+            block.pub_key = context.lock().unwrap().keystore.get_public();
+            match context.lock().unwrap().blockchain.last_block() {
+                None => {}
+                Some(last_block) => {
+                    info!("Last block found");
+                    // If we were doing something else and got new block before we could mine this block
+                    if last_block.index > block.index || last_block.hash != block.prev_block_hash {
+                        warn!("We missed block to lock");
+                        context.lock().unwrap().bus.post(Event::MinerStopped);
+                        mining.store(false, Ordering::SeqCst);
+                        return;
+                    }
+                }
+            }
+        } else {
+            block.difficulty = BLOCK_DIFFICULTY;
+            block.index = context.lock().unwrap().blockchain.height() + 1;
+            block.prev_block_hash = match context.lock().unwrap().blockchain.last_block() {
+                None => { Bytes::default() }
+                Some(block) => { block.hash }
+            };
+        }
 
         context.lock().unwrap().bus.post(Event::MinerStarted);
         let live_threads = Arc::new(AtomicU32::new(0u32));

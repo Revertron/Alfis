@@ -18,6 +18,7 @@ use log::{trace, debug, info, warn, error};
 use crate::hash_is_good;
 use std::cmp::Ordering;
 use num_bigint::BigUint;
+use std::convert::TryInto;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Keystore {
@@ -137,6 +138,12 @@ impl Bytes {
         crate::utils::to_hex(&self.data)
     }
 
+    pub fn get_tail_u64(&self) -> u64 {
+        let index = self.data.len() - 8;
+        let bytes: [u8; 8] = self.data[index..].try_into().unwrap();
+        u64::from_be_bytes(bytes)
+    }
+
     pub fn zero32() -> Self {
         Bytes { data: [0u8; 32].to_vec() }
     }
@@ -227,7 +234,7 @@ impl<'dd> Deserialize<'dd> for Bytes {
 
 #[cfg(test)]
 mod tests {
-    use crate::Keystore;
+    use crate::{Keystore, Bytes};
 
     #[test]
     pub fn test_signature() {
@@ -236,5 +243,11 @@ mod tests {
     confirmation: A4A0AFECD1A511825226F0D3437C6C6BDAE83554040AA7AEB49DEFEAB0AE9EA4 }";
         let signature = keystore.sign(data);
         assert!(Keystore::check(data, keystore.get_public().as_bytes(), &signature), "Wrong signature!")
+    }
+
+    #[test]
+    pub fn test_tail_bytes() {
+        let bytes = Bytes::new(vec![0,255,255,255]);
+        assert_eq!(bytes.get_tail_u64(), 16777215);
     }
 }

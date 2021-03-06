@@ -6,6 +6,8 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::{LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
+#[allow(unused_imports)]
+use log::{trace, debug, info, warn, error};
 use derive_more::{Display, From, Error};
 
 use crate::dns::buffer::{PacketBuffer, StreamPacketBuffer, VectorPacketBuffer};
@@ -71,7 +73,13 @@ impl<'a> Zones {
     }
 
     pub fn load(&mut self) -> Result<()> {
-        let zones_dir = Path::new("zones").read_dir()?;
+        let zones_dir = match Path::new("zones").read_dir() {
+            Ok(result) => { result }
+            Err(_) => {
+                debug!("Authority dir (zones) not found, skipping.");
+                return Ok(());
+            }
+        };
 
         for wrapped_filename in zones_dir {
             let filename = match wrapped_filename {
