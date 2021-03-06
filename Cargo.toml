@@ -35,9 +35,10 @@ mio = { version = "0.7", features = ["os-poll", "net"] }
 derive_more = "0.99.9"
 
 [target.'cfg(windows)'.dependencies]
+thread-priority = "0.2.1"
 winapi = { version = "0.3.7", features = ["impl-default", "wincon"]}
 
-[target.'cfg(not(macos))'.dependencies]
+[target.'cfg(linux)'.dependencies]
 thread-priority = "0.2.1"
 
 [build-dependencies]
