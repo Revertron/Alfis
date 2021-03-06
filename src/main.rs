@@ -140,14 +140,14 @@ fn start_dns_server(context: &Arc<Mutex<Context>>, settings: &Settings) {
     let server_context = create_server_context(context.clone(), &settings);
 
     if server_context.enable_udp {
-        let udp_server = DnsUdpServer::new(server_context.clone(), 20);
+        let udp_server = DnsUdpServer::new(server_context.clone(), settings.dns.threads);
         if let Err(e) = udp_server.run_server() {
             error!(target: LOG_TARGET_MAIN, "Failed to bind UDP listener: {:?}", e);
         }
     }
 
     if server_context.enable_tcp {
-        let tcp_server = DnsTcpServer::new(server_context.clone(), 20);
+        let tcp_server = DnsTcpServer::new(server_context.clone(), settings.dns.threads);
         if let Err(e) = tcp_server.run_server() {
             error!(target: LOG_TARGET_MAIN, "Failed to bind TCP listener: {:?}", e);
         }
@@ -468,8 +468,7 @@ fn generate_key(difficulty: usize, mining: Arc<AtomicBool>) -> Option<Keystore> 
 fn create_server_context(context: Arc<Mutex<Context>>, settings: &Settings) -> Arc<ServerContext> {
     let mut server_context = ServerContext::new();
     server_context.allow_recursive = true;
-    server_context.dns_host = settings.dns.host.clone();
-    server_context.dns_port = settings.dns.port;
+    server_context.dns_listen = settings.dns.listen.clone();
     server_context.resolve_strategy = match settings.dns.forwarders.is_empty() {
         true => { ResolveStrategy::Recursive }
         false => { ResolveStrategy::Forward { upstreams: settings.dns.forwarders.clone() } }
