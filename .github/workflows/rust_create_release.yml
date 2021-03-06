@@ -88,7 +88,7 @@ jobs:
       - name: Packaging
         uses: papeloto/action-zip@v1
         with:
-          files: ${{ env.BIN_PATH }} alfis.cfg README.md LICENSE
+          files: ${{ env.BIN_PATH }} alfis.toml README.md LICENSE
           dest: ${{ env.ZIP_NAME }}
       - name: Upload binary
         id: upload-binary
