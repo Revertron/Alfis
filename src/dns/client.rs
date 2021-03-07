@@ -79,7 +79,7 @@ impl DnsNetworkClient {
             total_failed: AtomicUsize::new(0),
             seq: AtomicUsize::new(0),
             socket_ipv4: UdpSocket::bind(format!("0.0.0.0:{}", port)).expect("Error binding IPv4"),
-            socket_ipv6: UdpSocket::bind(format!("[::]:{}", port)).expect("Error binding IPv6"),
+            socket_ipv6: UdpSocket::bind(format!("[::]:{}", port + 1)).expect("Error binding IPv6"),
             pending_queries: Arc::new(Mutex::new(Vec::new())),
         }
     }
@@ -247,7 +247,7 @@ impl DnsClient for DnsNetworkClient {
                 })?;
         }
 
-        // Start the save thread for IPv6
+        // Start the same thread for IPv6
         {
             let socket_copy = self.socket_ipv6.try_clone()?;
             let pending_queries_lock = self.pending_queries.clone();
@@ -406,7 +406,7 @@ pub mod tests {
 
     #[test]
     pub fn test_tcp_client() {
-        let client = DnsNetworkClient::new(31457);
+        let client = DnsNetworkClient::new(31458);
         let res = client
             .send_tcp_query("google.com", QueryType::A, ("8.8.8.8", 53), true)
             .unwrap();
