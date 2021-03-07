@@ -1,18 +1,18 @@
 # Settings
-origin = "00000DFBFFCFADC09751E7085872F9AE6464075E626401904D8C779E215A21B1"
+origin = "0000002CE5D1D28A93B89ED426A70F337D6FB3A222C64585FB1159A397E9722F"
 version = 1
 key_file = "default.key"
 listen = "[::]:4244"
 public = false
 
 # Bootstrap nodes
-peers = ["test2-ip4.alfis.name:4244", "test2-ip6.alfis.name:4244"]
+peers = ["test-ip4.alfis.name:4244", "test-ip6.alfis.name:4244"]
 
 # DNS server options
 [dns]
-listen = "127.0.0.1:53"
+listen = "127.0.0.1:5300"
 threads = 20
 #AdGuard DNS servers to filter ads and trackers
-#forwarders = ["94.140.14.14:53", "94.140.15.15:53"]
+forwarders = ["94.140.14.14:53", "94.140.15.15:53"]
 #forwarders = ["[301:2522::53]:53", "[301:2923::53]:53"]
-forwarders = ["[301:2522::53]:53", "[301:2923::53]:53", "94.140.14.14:53", "94.140.15.15:53"]
+#forwarders = ["[301:2522::53]:53", "[301:2923::53]:53", "94.140.14.14:53", "94.140.15.15:53"]
