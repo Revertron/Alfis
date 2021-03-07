@@ -27,7 +27,7 @@ pub struct Keystore {
     #[serde(skip)]
     path: String,
     #[serde(skip)]
-    seed: Vec<u8>
+    seed: Vec<u8>,
 }
 
 impl Keystore {
@@ -36,12 +36,12 @@ impl Keystore {
         let mut rng = thread_rng();
         rng.fill(&mut buf);
         let (private, public) = keypair(&buf);
-        Keystore {private_key: Bytes::from_bytes(&private), public_key: Bytes::from_bytes(&public), path: String::new(), seed: Vec::from(&buf[..])}
+        Keystore { private_key: Bytes::from_bytes(&private), public_key: Bytes::from_bytes(&public), path: String::new(), seed: Vec::from(&buf[..]) }
     }
 
     pub fn from_bytes(seed: &[u8]) -> Self {
         let (private, public) = keypair(&seed);
-        Keystore {private_key: Bytes::from_bytes(&private), public_key: Bytes::from_bytes(&public), path: String::new(), seed: Vec::from(seed)}
+        Keystore { private_key: Bytes::from_bytes(&private), public_key: Bytes::from_bytes(&public), path: String::new(), seed: Vec::from(seed) }
     }
 
     pub fn from_file(filename: &str, _password: &str) -> Option<Self> {
@@ -51,10 +51,10 @@ impl Keystore {
                 let mut keystore = Self::from_bytes(key.as_slice());
                 keystore.path = path.to_str().unwrap().to_owned();
                 Some(keystore)
-            },
+            }
             Err(_) => {
                 None
-            },
+            }
         }
     }
 
@@ -247,7 +247,7 @@ mod tests {
 
     #[test]
     pub fn test_tail_bytes() {
-        let bytes = Bytes::new(vec![0,255,255,255]);
-        assert_eq!(bytes.get_tail_u64(), 16777215);
+        let bytes = Bytes::new(vec![0, 255, 255, 255, 0, 255, 255, 255]);
+        assert_eq!(bytes.get_tail_u64(), 72057589759737855u64);
     }
 }
