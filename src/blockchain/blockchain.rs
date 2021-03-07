@@ -221,13 +221,8 @@ impl Blockchain {
             return false;
         }
         let identity_hash = hash_identity(domain, None);
-        let mut statement = self.db.prepare(SQL_GET_PUBLIC_KEY_BY_ID).unwrap();
-        statement.bind(1, identity_hash.as_bytes()).expect("Error in bind");
-        while let State::Row = statement.next().unwrap() {
-            let pub_key = Bytes::from_bytes(statement.read::<Vec<u8>>(0).unwrap().as_slice());
-            if !pub_key.eq(&keystore.get_public()) {
-                return false;
-            }
+        if !self.is_id_available(identity_hash, &keystore.get_public()) {
+            return false;
         }
 
         let parts: Vec<&str> = domain.rsplitn(2, ".").collect();
@@ -238,7 +233,19 @@ impl Blockchain {
             }
             return self.is_zone_in_blockchain(parts.first().unwrap());
         }
+        true
+    }
 
+    /// Checks if this identity is free or is owned by the same pub_key
+    pub fn is_id_available(&self, identity: &Bytes, public_key: &Bytes) -> bool {
+        let mut statement = self.db.prepare(SQL_GET_PUBLIC_KEY_BY_ID).unwrap();
+        statement.bind(1, identity.as_bytes()).expect("Error in bind");
+        while let State::Row = statement.next().unwrap() {
+            let pub_key = Bytes::from_bytes(statement.read::<Vec<u8>>(0).unwrap().as_slice());
+            if !pub_key.eq(public_key) {
+                return false;
+            }
+        }
         true
     }
 
@@ -340,6 +347,20 @@ impl Blockchain {
             warn!("Ignoring block with low difficulty:\n{:?}", &block);
             return Bad;
         }
+        if !check_block_hash(block) {
+            warn!("Block {:?} has wrong hash! Ignoring!", &block);
+            return Bad;
+        }
+        if !check_block_signature(&block) {
+            warn!("Block {:?} has wrong signature! Ignoring!", &block);
+            return Bad;
+        }
+        if let Some(transaction) = &block.transaction {
+            if !self.is_id_available(&transaction.identity, &block.pub_key) {
+                warn!("Block {:?} is trying to spoof an identity!", &block);
+                return Bad;
+            }
+        }
         match &self.last_block {
             None => {
                 if !block.is_genesis() {
@@ -384,14 +405,6 @@ impl Blockchain {
                     }
                 }
             }
-        }
-        if !check_block_hash(block) {
-            warn!("Block {:?} has wrong hash! Ignoring!", &block);
-            return Bad;
-        }
-        if !check_block_signature(&block) {
-            warn!("Block {:?} has wrong signature! Ignoring!", &block);
-            return Bad;
         }
 
         Good
