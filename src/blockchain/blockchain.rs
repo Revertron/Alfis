@@ -221,7 +221,7 @@ impl Blockchain {
             return false;
         }
         let identity_hash = hash_identity(domain, None);
-        if !self.is_id_available(identity_hash, &keystore.get_public()) {
+        if !self.is_id_available(&identity_hash, &keystore.get_public()) {
             return false;
         }
 
