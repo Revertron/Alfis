@@ -15,7 +15,7 @@ use log::{trace, debug, info, warn, error};
 
 use crate::{Context, Block, p2p::Message, p2p::State, p2p::Peer, p2p::Peers};
 use std::net::{SocketAddr, IpAddr, SocketAddrV4, ToSocketAddrs};
-use crate::blockchain::blockchain::BlockQuality;
+use crate::blockchain::enums::BlockQuality;
 use crate::blockchain::CHAIN_VERSION;
 use chrono::Utc;
 
@@ -95,7 +95,7 @@ impl Network {
                             if !handle_connection_event(context.clone(), &mut peers, &poll.registry(), &event) {
                                 let _ = peers.close_peer(poll.registry(), &token);
                                 let mut context = context.lock().unwrap();
-                                let blocks_count = context.blockchain.height();
+                                let blocks_count = context.chain.height();
                                 context.bus.post(crate::event::Event::NetworkStatus { nodes: peers.get_peers_active_count(), blocks: blocks_count });
                             }
                         }
@@ -106,7 +106,7 @@ impl Network {
                 // Send pings to idle peers
                 let (height, hash) = {
                     let context = context.lock().unwrap();
-                    (context.blockchain.height(), context.blockchain.last_hash())
+                    (context.chain.height(), context.chain.last_hash())
                 };
                 mine_locker_block(context.clone());
                 peers.send_pings(poll.registry(), height, hash);
@@ -193,7 +193,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                         if from.elapsed().as_secs() >= 30 {
                             let data: String = {
                                 let c = context.lock().unwrap();
-                                let message = Message::ping(c.blockchain.height(), c.blockchain.last_hash());
+                                let message = Message::ping(c.chain.height(), c.chain.last_hash());
                                 serde_json::to_string(&message).unwrap()
                             };
                             send_message(peer.get_stream(), &data.into_bytes());
@@ -267,7 +267,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
     let (my_height, my_hash, my_origin, my_version) = {
         let context = context.lock().unwrap();
         // TODO cache it somewhere
-        (context.blockchain.height(), context.blockchain.last_hash(), &context.settings.origin.clone(), CHAIN_VERSION)
+        (context.chain.height(), context.chain.last_hash(), &context.settings.origin.clone(), CHAIN_VERSION)
     };
     match message {
         Message::Hand { origin, version, public } => {
@@ -290,10 +290,10 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 peer.set_height(height);
                 peer.set_active(true);
                 let mut context = context.lock().unwrap();
-                let blocks_count = context.blockchain.height();
+                let blocks_count = context.chain.height();
                 context.bus.post(crate::event::Event::NetworkStatus { nodes: active_count + 1, blocks: blocks_count });
                 if peer.is_higher(my_height) {
-                    context.blockchain.update_max_height(height);
+                    context.chain.update_max_height(height);
                     context.bus.post(crate::event::Event::Syncing { have: my_height, height});
                     State::message(Message::GetBlock { index: my_height + 1 })
                 } else {
@@ -321,7 +321,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             let is_higher = peer.is_higher(my_height);
 
             let mut context = context.lock().unwrap();
-            let blocks_count = context.blockchain.height();
+            let blocks_count = context.chain.height();
             context.bus.post(crate::event::Event::NetworkStatus { nodes: peers.get_peers_active_count(), blocks: blocks_count });
 
             if is_higher {
@@ -342,7 +342,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
         }
         Message::GetBlock { index } => {
             let context = context.lock().unwrap();
-            match context.blockchain.get_block(index) {
+            match context.chain.get_block(index) {
                 Some(block) => State::message(Message::block(block.index, serde_json::to_string(&block).unwrap())),
                 None => State::Error
             }
@@ -359,11 +359,11 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             let peers_count = peers.get_peers_active_count();
             thread::spawn(move || {
                 let mut context = context.lock().unwrap();
-                let max_height = context.blockchain.max_height();
-                match context.blockchain.check_new_block(&block) {
+                let max_height = context.chain.max_height();
+                match context.chain.check_new_block(&block) {
                     BlockQuality::Good => {
-                        context.blockchain.add_block(block);
-                        let my_height = context.blockchain.height();
+                        context.chain.add_block(block);
+                        let my_height = context.chain.height();
                         context.bus.post(crate::event::Event::BlockchainChanged);
                         // If it was the last block to sync
                         if my_height == max_height {
@@ -392,12 +392,12 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
 /// Sends an Event to miner to start mining locker block if "locker" is our public key
 fn mine_locker_block(context: Arc<Mutex<Context>>) {
     let mut context = context.lock().unwrap();
-    if let Some(block) = context.blockchain.last_block() {
-        if block.index < context.blockchain.max_height() {
+    if let Some(block) = context.chain.last_block() {
+        if block.index < context.chain.max_height() {
             info!("No locker mining while syncing");
             return;
         }
-        match context.blockchain.get_block_locker(&block, Utc::now().timestamp()) {
+        match context.chain.get_block_locker(&block, Utc::now().timestamp()) {
             Some(key) => {
                 if key == context.keystore.get_public() {
                     info!("We have an honor to mine locker block!");
@@ -419,7 +419,7 @@ fn deal_with_fork(context: MutexGuard<Context>, peer: &mut Peer, block: Block) {
     if vector[0].index == 0 {
         return;
     }
-    if let Some(prev_block) = context.blockchain.get_block(vector[0].index - 1) {
+    if let Some(prev_block) = context.chain.get_block(vector[0].index - 1) {
         // If this block is not root of the fork (we need to go ~deeper~ more backwards)
         if vector[0].prev_block_hash != prev_block.hash {
             return;

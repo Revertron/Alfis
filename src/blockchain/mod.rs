@@ -1,10 +1,12 @@
 pub mod transaction;
 pub mod block;
-pub mod blockchain;
+pub mod chain;
 pub mod filter;
 pub mod constants;
+pub mod hash_utils;
+pub mod enums;
 
 pub use transaction::Transaction;
 pub use block::Block;
-pub use blockchain::Blockchain;
+pub use chain::Chain;
 pub use constants::*;

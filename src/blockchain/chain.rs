@@ -1,15 +1,17 @@
+use std::cell::RefCell;
+use std::collections::HashSet;
+
+use chrono::Utc;
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
 use sqlite::{Connection, State, Statement};
 
-use crate::{Block, Bytes, Keystore, Transaction, hash_is_good};
+use crate::{Block, Bytes, Keystore, Transaction};
+use crate::blockchain::constants::{BLOCK_DIFFICULTY, CHAIN_VERSION, LOCKER_BLOCK_COUNT, LOCKER_BLOCK_INTERVAL, LOCKER_BLOCK_START, LOCKER_DIFFICULTY};
+use crate::blockchain::enums::BlockQuality;
+use crate::blockchain::enums::BlockQuality::*;
+use crate::blockchain::hash_utils::*;
 use crate::settings::Settings;
-#[allow(unused_imports)]
-use log::{trace, debug, info, warn, error};
-use std::collections::HashSet;
-use std::cell::RefCell;
-use chrono::Utc;
-use crate::blockchain::transaction::hash_identity;
-use crate::blockchain::blockchain::BlockQuality::*;
-use crate::blockchain::{BLOCK_DIFFICULTY, CHAIN_VERSION, LOCKER_BLOCK_START, LOCKER_DIFFICULTY, LOCKER_BLOCK_COUNT, LOCKER_BLOCK_INTERVAL};
 
 const DB_NAME: &str = "blockchain.db";
 const SQL_CREATE_TABLES: &str = "CREATE TABLE blocks (
@@ -37,7 +39,7 @@ const SQL_GET_PUBLIC_KEY_BY_ID: &str = "SELECT pub_key FROM transactions WHERE i
 const SQL_GET_ID_BY_ID: &str = "SELECT identity FROM transactions WHERE identity = ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_TRANSACTION_BY_ID: &str = "SELECT * FROM transactions WHERE identity = ? ORDER BY id DESC LIMIT 1;";
 
-pub struct Blockchain {
+pub struct Chain {
     origin: Bytes,
     pub version: u32,
     pub blocks: Vec<Block>,
@@ -48,12 +50,12 @@ pub struct Blockchain {
     zones: RefCell<HashSet<String>>,
 }
 
-impl Blockchain {
+impl Chain {
     pub fn new(settings: &Settings) -> Self {
         let origin = settings.get_origin();
 
         let db = sqlite::open(DB_NAME).expect("Unable to open blockchain DB");
-        let mut blockchain = Blockchain {
+        let mut chain = Chain {
             origin,
             version: CHAIN_VERSION,
             blocks: Vec::new(),
@@ -63,8 +65,8 @@ impl Blockchain {
             db,
             zones: RefCell::new(HashSet::new()),
         };
-        blockchain.init_db();
-        blockchain
+        chain.init_db();
+        chain
     }
 
     /// Reads options from DB or initializes and writes them to DB if not found
@@ -147,21 +149,21 @@ impl Blockchain {
                 statement.bind(7, transaction.to_string().as_str())?;
             }
         }
-        statement.bind(8, block.prev_block_hash.as_bytes())?;
-        statement.bind(9, block.hash.as_bytes())?;
-        statement.bind(10, block.pub_key.as_bytes())?;
-        statement.bind(11, block.signature.as_bytes())?;
+        statement.bind(8, block.prev_block_hash.as_slice())?;
+        statement.bind(9, block.hash.as_slice())?;
+        statement.bind(10, block.pub_key.as_slice())?;
+        statement.bind(11, block.signature.as_slice())?;
         statement.next()
     }
 
     /// Adds transaction to transactions table
     fn add_transaction_to_table(&mut self, t: &Transaction) -> sqlite::Result<State> {
         let mut statement = self.db.prepare(SQL_ADD_TRANSACTION)?;
-        statement.bind(1, t.identity.as_bytes())?;
-        statement.bind(2, t.confirmation.as_bytes())?;
+        statement.bind(1, t.identity.as_slice())?;
+        statement.bind(2, t.confirmation.as_slice())?;
         statement.bind(3, t.method.as_ref() as &str)?;
         statement.bind(4, t.data.as_ref() as &str)?;
-        statement.bind(5, t.pub_key.as_bytes())?;
+        statement.bind(5, t.pub_key.as_slice())?;
         statement.next()
     }
 
@@ -239,7 +241,7 @@ impl Blockchain {
     /// Checks if this identity is free or is owned by the same pub_key
     pub fn is_id_available(&self, identity: &Bytes, public_key: &Bytes) -> bool {
         let mut statement = self.db.prepare(SQL_GET_PUBLIC_KEY_BY_ID).unwrap();
-        statement.bind(1, identity.as_bytes()).expect("Error in bind");
+        statement.bind(1, identity.as_slice()).expect("Error in bind");
         while let State::Row = statement.next().unwrap() {
             let pub_key = Bytes::from_bytes(statement.read::<Vec<u8>>(0).unwrap().as_slice());
             if !pub_key.eq(public_key) {
@@ -258,7 +260,7 @@ impl Blockchain {
         // Checking for existing zone in DB
         let identity_hash = hash_identity(zone, None);
         let mut statement = self.db.prepare(SQL_GET_ID_BY_ID).unwrap();
-        statement.bind(1, identity_hash.as_bytes()).expect("Error in bind");
+        statement.bind(1, identity_hash.as_slice()).expect("Error in bind");
         while let State::Row = statement.next().unwrap() {
             // If there is such a zone
             self.zones.borrow_mut().insert(zone.to_owned());
@@ -275,7 +277,7 @@ impl Blockchain {
         let identity_hash = hash_identity(domain, None);
 
         let mut statement = self.db.prepare(SQL_GET_TRANSACTION_BY_ID).unwrap();
-        statement.bind(1, identity_hash.as_bytes()).expect("Error in bind");
+        statement.bind(1, identity_hash.as_slice()).expect("Error in bind");
         while let State::Row = statement.next().unwrap() {
             let identity = Bytes::from_bytes(statement.read::<Vec<u8>>(1).unwrap().as_slice());
             let confirmation = Bytes::from_bytes(statement.read::<Vec<u8>>(2).unwrap().as_slice());
@@ -343,7 +345,7 @@ impl Blockchain {
             warn!("Block difficulty is lower than needed");
             return Bad;
         }
-        if !hash_is_good(block.hash.as_bytes(), block.difficulty as usize) {
+        if !hash_is_good(block.hash.as_slice(), block.difficulty as usize) {
             warn!("Ignoring block with low difficulty:\n{:?}", &block);
             return Bad;
         }
@@ -456,27 +458,4 @@ impl Blockchain {
         let signature = Bytes::from_bytes(statement.read::<Vec<u8>>(10).unwrap().as_slice());
         Some(Block::from_all_params(index, timestamp, version, difficulty, random, nonce, prev_block_hash, hash, pub_key, signature, transaction))
     }
-}
-
-#[derive(PartialEq)]
-pub enum BlockQuality {
-    Good,
-    Twin,
-    Future,
-    Bad,
-    Fork,
-}
-
-pub fn check_block_hash(block: &Block) -> bool {
-    let mut copy: Block = block.clone();
-    copy.hash = Bytes::default();
-    copy.signature = Bytes::default();
-    let data = serde_json::to_string(&copy).unwrap();
-    crate::blockchain::block::hash(data.as_bytes()) == block.hash
-}
-
-pub fn check_block_signature(block: &Block) -> bool {
-    let mut copy = block.clone();
-    copy.signature = Bytes::default();
-    Keystore::check(&copy.as_bytes(), copy.pub_key.as_bytes(), block.signature.as_bytes())
 }

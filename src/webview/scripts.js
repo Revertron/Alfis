@@ -281,12 +281,14 @@ function setRightStatusBarText(text) {
     bar.innerHTML = text;
 }
 
-function keystoreChanged(path, pub_key) {
+function keystoreChanged(path, pub_key, hash) {
     if (path == '') {
         path = "In memory";
     }
-    key_file_name = document.getElementById("key_file_name");
+    var key_file_name = document.getElementById("key_file_name");
     key_file_name.innerHTML = path;
-    key_file_key = document.getElementById("key_public_key");
-    key_file_key.innerHTML = pub_key;
+    var key_public_key = document.getElementById("key_public_key");
+    key_public_key.innerHTML = pub_key;
+    var key_public_hash = document.getElementById("key_public_hash");
+    key_public_hash.innerHTML = hash;
 }

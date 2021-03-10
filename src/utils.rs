@@ -1,6 +1,4 @@
 use std::num;
-use num_bigint::BigUint;
-use num_traits::One;
 
 /// Convert bytes array to HEX format
 pub fn to_hex(buf: &[u8]) -> String {
@@ -54,23 +52,6 @@ fn split_n(s: &str, n: usize) -> Vec<&str> {
     (0..=(s.len() - n + 1) / 2)
         .map(|i| &s[2 * i..2 * i + n])
         .collect()
-}
-
-/// There is no default PartialEq implementation for arrays > 32 in size
-pub fn same_hash(left: &[u8], right: &[u8]) -> bool {
-    for (x, y) in left.iter().zip(right) {
-        if x != y {
-            return false;
-        }
-    }
-    true
-}
-
-pub fn hash_is_good(hash: &[u8], difficulty: usize) -> bool {
-    let target = BigUint::one() << ((hash.len() << 3) - difficulty);
-    let hash_int = BigUint::from_bytes_be(&hash);
-
-    return hash_int < target;
 }
 
 #[cfg(test)]

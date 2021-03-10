@@ -2,28 +2,38 @@ extern crate crypto;
 extern crate serde;
 extern crate serde_json;
 
-use crypto::ed25519::{keypair, signature, verify};
-use rand::{thread_rng, Rng};
-use std::fmt;
-use std::fmt::{Error, Formatter};
+use std::thread;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
-// For deserialization
-use serde::de::{Error as DeError, Visitor};
+use std::sync::{Arc, atomic, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicUsize};
+
+use crypto::ed25519::{keypair, signature, verify};
 #[allow(unused_imports)]
-use log::{trace, debug, info, warn, error};
-use crate::hash_is_good;
-use std::cmp::Ordering;
-use num_bigint::BigUint;
-use std::convert::TryInto;
+use log::{debug, error, info, trace, warn};
+use rand::{Rng, RngCore, thread_rng};
+use serde::{Deserialize, Serialize};
+#[cfg(not(target_os = "macos"))]
+use thread_priority::{set_current_thread_priority, ThreadPriority};
+
+use crate::blockchain::hash_utils::*;
+use crate::Context;
+use crate::event::Event;
+use crate::blockchain::KEYSTORE_DIFFICULTY;
+use crate::bytes::Bytes;
+use blakeout::Blakeout;
+use self::crypto::digest::Digest;
+use std::time::Instant;
+use std::cell::RefCell;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Keystore {
     private_key: Bytes,
     public_key: Bytes,
+    #[serde(skip)]
+    hash: RefCell<Bytes>,
     #[serde(skip)]
     path: String,
     #[serde(skip)]
@@ -36,12 +46,12 @@ impl Keystore {
         let mut rng = thread_rng();
         rng.fill(&mut buf);
         let (private, public) = keypair(&buf);
-        Keystore { private_key: Bytes::from_bytes(&private), public_key: Bytes::from_bytes(&public), path: String::new(), seed: Vec::from(&buf[..]) }
+        Keystore { private_key: Bytes::from_bytes(&private), public_key: Bytes::from_bytes(&public), hash: RefCell::new(Bytes::default()), path: String::new(), seed: Vec::from(&buf[..]) }
     }
 
     pub fn from_bytes(seed: &[u8]) -> Self {
         let (private, public) = keypair(&seed);
-        Keystore { private_key: Bytes::from_bytes(&private), public_key: Bytes::from_bytes(&public), path: String::new(), seed: Vec::from(seed) }
+        Keystore { private_key: Bytes::from_bytes(&private), public_key: Bytes::from_bytes(&public), hash: RefCell::new(Bytes::default()), path: String::new(), seed: Vec::from(seed) }
     }
 
     pub fn from_file(filename: &str, _password: &str) -> Option<Self> {
@@ -82,159 +92,96 @@ impl Keystore {
         &self.path
     }
 
+    pub fn get_hash(&self) -> Bytes {
+        if self.hash.borrow().is_empty() {
+            self.hash.replace(hash_data(&mut Blakeout::default(), &self.public_key.as_slice()));
+        }
+        self.hash.borrow().clone()
+    }
+
     pub fn sign(&self, message: &[u8]) -> [u8; 64] {
-        signature(message, self.private_key.data.as_slice())
+        signature(message, self.private_key.as_slice())
     }
 
     pub fn check(message: &[u8], public_key: &[u8], signature: &[u8]) -> bool {
         verify(message, public_key, signature)
     }
-
-    pub fn hash_is_good(&self, difficulty: usize) -> bool {
-        hash_is_good(self.public_key.as_bytes(), difficulty)
-    }
 }
 
-#[derive(Clone)]
-pub struct Bytes {
-    data: Vec<u8>
-}
-
-impl Bytes {
-    pub fn new(data: Vec<u8>) -> Self {
-        Bytes { data }
-    }
-
-    pub fn from_bytes(data: &[u8]) -> Self {
-        Bytes { data: Vec::from(data) }
-    }
-
-    pub fn length(&self) -> usize {
-        self.data.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.data.is_empty()
-    }
-
-    pub fn is_zero(&self) -> bool {
-        if self.data.is_empty() {
-            return true;
-        }
-        for x in self.data.iter() {
-            if *x != 0 {
-                return false;
+pub fn create_key(context: Arc<Mutex<Context>>) {
+    let mining = Arc::new(AtomicBool::new(true));
+    let miners_count = Arc::new(AtomicUsize::new(0));
+    { context.lock().unwrap().bus.post(Event::KeyGeneratorStarted); }
+    for _ in 0..num_cpus::get() {
+        let context = context.clone();
+        let mining = mining.clone();
+        let miners_count = miners_count.clone();
+        thread::spawn(move || {
+            #[cfg(not(target_os = "macos"))]
+                let _ = set_current_thread_priority(ThreadPriority::Min);
+            miners_count.fetch_add(1, atomic::Ordering::SeqCst);
+            match generate_key(KEYSTORE_DIFFICULTY, mining.clone()) {
+                None => {
+                    debug!("Keystore mining finished");
+                }
+                Some(keystore) => {
+                    mining.store(false, atomic::Ordering::SeqCst);
+                    let mut context = context.lock().unwrap();
+                    let hash = keystore.get_hash().to_string();
+                    info!("Key mined successfully: {:?}, hash: {}", &keystore.get_public(), &hash);
+                    context.bus.post(Event::KeyCreated { path: keystore.get_path().to_owned(), public: keystore.get_public().to_string(), hash });
+                    context.set_keystore(keystore);
+                }
             }
-        }
-        return true;
+            let miners = miners_count.fetch_sub(1, atomic::Ordering::SeqCst) - 1;
+            if miners == 0 {
+                context.lock().unwrap().bus.post(Event::KeyGeneratorStopped);
+            }
+        });
     }
-
-    /// Returns a byte slice of the hash contents.
-    pub fn as_bytes(&self) -> &[u8] {
-        self.data.as_slice()
-    }
-
-    pub fn to_string(&self) -> String {
-        crate::utils::to_hex(&self.data)
-    }
-
-    pub fn get_tail_u64(&self) -> u64 {
-        let index = self.data.len() - 8;
-        let bytes: [u8; 8] = self.data[index..].try_into().unwrap();
-        u64::from_be_bytes(bytes)
-    }
-
-    pub fn zero32() -> Self {
-        Bytes { data: [0u8; 32].to_vec() }
-    }
-
-    pub fn zero64() -> Self {
-        Bytes { data: [0u8; 64].to_vec() }
-    }
-}
-
-impl Default for Bytes {
-    fn default() -> Bytes {
-        Bytes { data: Vec::new() }
-    }
-}
-
-impl PartialEq for Bytes {
-    fn eq(&self, other: &Self) -> bool {
-        crate::utils::same_hash(&self.data, &other.data)
-    }
-
-    fn ne(&self, other: &Self) -> bool {
-        !crate::utils::same_hash(&self.data, &other.data)
-    }
-}
-
-impl Eq for Bytes {}
-
-impl PartialOrd for Bytes {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        let self_hash_int = BigUint::from_bytes_be(&self.data);
-        let other_hash_int = BigUint::from_bytes_be(&other.data);
-        Some(self_hash_int.cmp(&other_hash_int))
-    }
-}
-
-impl Ord for Bytes {
-    fn cmp(&self, other: &Self) -> Ordering {
-        let self_hash_int = BigUint::from_bytes_be(&self.data);
-        let other_hash_int = BigUint::from_bytes_be(&other.data);
-        self_hash_int.cmp(&other_hash_int)
-    }
-}
-
-impl fmt::Debug for Bytes {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.write_str(&crate::utils::to_hex(&self.data))
-    }
-}
-
-impl Serialize for Bytes {
-    fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> where
-        S: Serializer {
-        serializer.serialize_str(&crate::utils::to_hex(&self.data))
-    }
-}
-
-struct BytesVisitor;
-
-impl<'de> Visitor<'de> for BytesVisitor {
-    type Value = Bytes;
-
-    fn expecting(&self, formatter: &mut Formatter) -> Result<(), Error> {
-        formatter.write_str("32 or 64 bytes")
-    }
-
-    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E> where E: DeError, {
-        if value.len() == 64 || value.len() == 128 {
-            Ok(Bytes::new(crate::from_hex(value).unwrap()))
+    context.lock().unwrap().bus.register(move |_uuid, e| {
+        if e == Event::ActionStopMining {
+            info!("Stopping keystore miner");
+            mining.store(false, atomic::Ordering::SeqCst);
+            false
         } else {
-            Err(E::custom("Key must be 32 or 64 bytes!"))
+            true
         }
-    }
-
-    fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E> where E: DeError, {
-        if value.len() == 32 || value.len() == 64 {
-            Ok(Bytes::from_bytes(value))
-        } else {
-            Err(E::custom("Key must be 32 or 64 bytes!"))
-        }
-    }
+    });
 }
 
-impl<'dd> Deserialize<'dd> for Bytes {
-    fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'dd>>::Error> where D: Deserializer<'dd> {
-        deserializer.deserialize_str(BytesVisitor)
+fn generate_key(difficulty: usize, mining: Arc<AtomicBool>) -> Option<Keystore> {
+    let mut rng = rand::thread_rng();
+    let mut buf = [0u8; 32];
+    let mut digest = Blakeout::default();
+    let mut time = Instant::now();
+    let mut count = 0u128;
+    loop {
+        rng.fill_bytes(&mut buf);
+        let keystore = Keystore::from_bytes(&buf);
+        digest.reset();
+        digest.input(keystore.public_key.as_slice());
+        digest.result(&mut buf);
+        if hash_is_good(&buf, difficulty) {
+            info!("Generated keypair: {:?}", &keystore);
+            return Some(keystore);
+        }
+        if !mining.load(atomic::Ordering::SeqCst) {
+            return None;
+        }
+        let elapsed = time.elapsed().as_millis();
+        if elapsed >= 60000 {
+            debug!("Mining speed {} H/s", count / 60);
+            time = Instant::now();
+            count = 0;
+        }
+        count += 1;
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{Keystore, Bytes};
+    use crate::{Bytes, Keystore};
 
     #[test]
     pub fn test_signature() {
@@ -242,12 +189,6 @@ mod tests {
         let data = b"{ identity: 178135D209C697625E3EC71DA5C760382E54936F824EE5083908DA66B14ECE18,\
     confirmation: A4A0AFECD1A511825226F0D3437C6C6BDAE83554040AA7AEB49DEFEAB0AE9EA4 }";
         let signature = keystore.sign(data);
-        assert!(Keystore::check(data, keystore.get_public().as_bytes(), &signature), "Wrong signature!")
-    }
-
-    #[test]
-    pub fn test_tail_bytes() {
-        let bytes = Bytes::new(vec![0, 255, 255, 255, 0, 255, 255, 255]);
-        assert_eq!(bytes.get_tail_u64(), 72057589759737855u64);
+        assert!(Keystore::check(data, keystore.get_public().as_slice(), &signature), "Wrong signature!")
     }
 }

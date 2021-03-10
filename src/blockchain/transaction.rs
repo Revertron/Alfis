@@ -1,13 +1,13 @@
-use crate::keys::*;
+use std::fmt;
+
+use serde::{Deserialize, Serialize, Serializer};
+use serde::ser::SerializeStruct;
+
+use crate::blockchain::hash_utils::*;
+use crate::bytes::Bytes;
 
 extern crate serde;
 extern crate serde_json;
-
-use serde::{Serialize, Deserialize, Serializer};
-use serde::ser::SerializeStruct;
-use std::fmt;
-use crypto::sha2::Sha256;
-use crypto::digest::Digest;
 
 #[derive(Clone, Deserialize, PartialEq)]
 pub struct Transaction {
@@ -75,15 +75,4 @@ impl Serialize for Transaction {
         structure.serialize_field("pub_key", &self.pub_key)?;
         structure.end()
     }
-}
-
-pub fn hash_identity(identity: &str, key: Option<&Bytes>) -> Bytes {
-    let mut buf: [u8; 32] = [0; 32];
-    let mut digest = Sha256::new();
-    digest.input_str(identity);
-    if let Some(key) = key {
-        digest.input(key.as_bytes());
-    }
-    digest.result(&mut buf);
-    Bytes::from_bytes(&buf)
 }

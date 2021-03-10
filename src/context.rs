@@ -1,20 +1,19 @@
-use crate::{Blockchain, Bus, Keystore};
+use crate::{Chain, Bus, Keystore, Settings};
 use crate::event::Event;
-use crate::settings::Settings;
 #[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
 
 pub struct Context {
     pub settings: Settings,
     pub keystore: Keystore,
-    pub blockchain: Blockchain,
+    pub chain: Chain,
     pub bus: Bus<Event>,
 }
 
 impl Context {
     /// Creating an essential context to work with
-    pub fn new(settings: Settings, keystore: Keystore, blockchain: Blockchain) -> Context {
-        Context { settings, keystore, blockchain, bus: Bus::new() }
+    pub fn new(settings: Settings, keystore: Keystore, chain: Chain) -> Context {
+        Context { settings, keystore, chain, bus: Bus::new() }
     }
 
     /// Load keystore and return Context
@@ -39,7 +38,7 @@ impl Context {
         self.keystore = keystore;
     }
 
-    pub fn get_blockchain(&self) -> &Blockchain {
-        &self.blockchain
+    pub fn get_chain(&self) -> &Chain {
+        &self.chain
     }
 }

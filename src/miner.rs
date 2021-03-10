@@ -12,9 +12,10 @@ use num_cpus;
 #[cfg(not(target_os = "macos"))]
 use thread_priority::*;
 
-use crate::{Block, Bytes, Context, hash_is_good};
-use crate::blockchain::blockchain::BlockQuality;
+use crate::{Block, Bytes, Context};
 use crate::blockchain::{BLOCK_DIFFICULTY, CHAIN_VERSION, LOCKER_DIFFICULTY};
+use crate::blockchain::enums::BlockQuality;
+use crate::blockchain::hash_utils::*;
 use crate::event::Event;
 
 pub struct Miner {
@@ -112,7 +113,7 @@ impl Miner {
             info!("Mining locker block");
             block.difficulty = LOCKER_DIFFICULTY;
             block.pub_key = context.lock().unwrap().keystore.get_public();
-            match context.lock().unwrap().blockchain.last_block() {
+            match context.lock().unwrap().chain.last_block() {
                 None => {}
                 Some(last_block) => {
                     info!("Last block found");
@@ -127,8 +128,8 @@ impl Miner {
             }
         } else {
             block.difficulty = BLOCK_DIFFICULTY;
-            block.index = context.lock().unwrap().blockchain.height() + 1;
-            block.prev_block_hash = match context.lock().unwrap().blockchain.last_block() {
+            block.index = context.lock().unwrap().chain.height() + 1;
+            block.prev_block_hash = match context.lock().unwrap().chain.last_block() {
                 None => { Bytes::default() }
                 Some(block) => { block.hash }
             };
@@ -161,13 +162,13 @@ impl Miner {
                         let index = block.index;
                         let mut context = context.lock().unwrap();
                         block.signature = Bytes::from_bytes(&context.keystore.sign(&block.as_bytes()));
-                        if context.blockchain.check_new_block(&block) != BlockQuality::Good {
+                        if context.chain.check_new_block(&block) != BlockQuality::Good {
                             warn!("Error adding mined block!");
                             if index == 0 {
                                 error!("To mine genesis block you need to make 'origin' an empty string in config.");
                             }
                         } else {
-                            context.blockchain.add_block(block);
+                            context.chain.add_block(block);
                         }
                         context.bus.post(Event::MinerStopped);
                         mining.store(false, Ordering::SeqCst);

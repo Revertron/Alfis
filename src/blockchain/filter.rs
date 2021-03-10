@@ -33,11 +33,11 @@ impl DnsFilter for BlockchainFilter {
         }
         debug!("Searching domain {} and record {}", &search, &subdomain);
 
-        let data = self.context.lock().unwrap().blockchain.get_domain_info(&search);
+        let data = self.context.lock().unwrap().chain.get_domain_info(&search);
         match data {
             None => {
                 debug!("Not found data for domain {}", &search);
-                if self.context.lock().unwrap().blockchain.is_zone_in_blockchain(parts[0]) {
+                if self.context.lock().unwrap().chain.is_zone_in_blockchain(parts[0]) {
                     // Create DnsPacket
                     let mut packet = DnsPacket::new();
                     packet.questions.push(DnsQuestion::new(String::from(qname), qtype));

@@ -5,9 +5,7 @@ extern crate num_traits;
 
 use std::fmt::Debug;
 use serde::{Serialize, Deserialize};
-use crypto::sha2::Sha256;
-use crypto::digest::Digest;
-use crate::keys::Bytes;
+use crate::bytes::Bytes;
 use crate::Transaction;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
@@ -70,12 +68,4 @@ impl Block {
     pub fn as_bytes(&self) -> Vec<u8> {
         Vec::from(serde_json::to_string(&self).unwrap().as_bytes())
     }
-}
-
-pub fn hash(data: &[u8]) -> Bytes {
-    let mut buf: [u8; 32] = [0; 32];
-    let mut digest = Sha256::new();
-    digest.input(data);
-    digest.result(&mut buf);
-    Bytes::new(buf.to_vec())
 }
