@@ -1,4 +1,4 @@
-use crate::{Chain, Bus, Keystore, Settings};
+use crate::{Chain, Bus, Keystore, Settings, Iana};
 use crate::event::Event;
 #[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
@@ -7,13 +7,14 @@ pub struct Context {
     pub settings: Settings,
     pub keystore: Keystore,
     pub chain: Chain,
+    pub iana: Iana,
     pub bus: Bus<Event>,
 }
 
 impl Context {
     /// Creating an essential context to work with
     pub fn new(settings: Settings, keystore: Keystore, chain: Chain) -> Context {
-        Context { settings, keystore, chain, bus: Bus::new() }
+        Context { settings, keystore, chain, iana: Iana::new(), bus: Bus::new() }
     }
 
     /// Load keystore and return Context

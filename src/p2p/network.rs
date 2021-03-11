@@ -355,6 +355,12 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             };
             let peer = peers.get_mut_peer(token).unwrap();
             peer.set_received_block(block.index);
+            if let Some(transaction) = &block.transaction {
+                if context.lock().unwrap().iana.has_hash(&transaction.identity.to_string()) {
+                    // This peer has mined some of the forbidden zones
+                    return State::Banned;
+                }
+            }
             let context = context.clone();
             let peers_count = peers.get_peers_active_count();
             thread::spawn(move || {
