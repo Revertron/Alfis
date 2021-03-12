@@ -7,7 +7,7 @@ use num_traits::One;
 use crate::{Block, Bytes, Keystore};
 
 /// Creates needed hasher by current blockchain version
-fn get_hasher_for_version(version: u32) -> Box<dyn Digest> {
+pub(crate) fn get_hasher_for_version(version: u32) -> Box<dyn Digest> {
     match version {
         2 => Box::new(Blakeout::default()),
         _ => Box::new(Sha256::new())
@@ -41,7 +41,7 @@ pub fn hash_data(digest: &mut dyn Digest, data: &[u8]) -> Bytes {
 pub fn check_block_signature(block: &Block) -> bool {
     let mut copy = block.clone();
     copy.signature = Bytes::default();
-    Keystore::check(&copy.as_bytes(), copy.pub_key.as_slice(), block.signature.as_slice())
+    Keystore::check(&copy.as_bytes(), &copy.pub_key, &block.signature)
 }
 
 /// Hashes some identity (domain in case of DNS). If you give it a public key, it will hash with it as well.

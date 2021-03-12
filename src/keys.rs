@@ -94,18 +94,25 @@ impl Keystore {
 
     pub fn get_hash(&self) -> Bytes {
         if self.hash.borrow().is_empty() {
-            self.hash.replace(hash_data(&mut Blakeout::default(), &self.public_key.as_slice()));
+            self.hash.replace(hash_data(&mut Blakeout::default(), &self.public_key));
         }
         self.hash.borrow().clone()
     }
 
     pub fn sign(&self, message: &[u8]) -> [u8; 64] {
-        signature(message, self.private_key.as_slice())
+        signature(message, &self.private_key)
     }
 
     pub fn check(message: &[u8], public_key: &[u8], signature: &[u8]) -> bool {
         verify(message, public_key, signature)
     }
+}
+
+/// Checks if some public key is "strong" enough to mine domains
+/// TODO Optimize by caching Blakeout somewhere
+pub fn check_public_key_strength(key: &Bytes, strength: usize) -> bool {
+    let bytes = hash_data(&mut Blakeout::default(), &key);
+    hash_is_good(&bytes, strength)
 }
 
 pub fn create_key(context: Arc<Mutex<Context>>) {
@@ -160,7 +167,7 @@ fn generate_key(difficulty: usize, mining: Arc<AtomicBool>) -> Option<Keystore> 
         rng.fill_bytes(&mut buf);
         let keystore = Keystore::from_bytes(&buf);
         digest.reset();
-        digest.input(keystore.public_key.as_slice());
+        digest.input(&keystore.public_key);
         digest.result(&mut buf);
         if hash_is_good(&buf, difficulty) {
             info!("Generated keypair: {:?}", &keystore);
@@ -181,7 +188,7 @@ fn generate_key(difficulty: usize, mining: Arc<AtomicBool>) -> Option<Keystore> 
 
 #[cfg(test)]
 mod tests {
-    use crate::{Bytes, Keystore};
+    use crate::Keystore;
 
     #[test]
     pub fn test_signature() {
@@ -189,6 +196,6 @@ mod tests {
         let data = b"{ identity: 178135D209C697625E3EC71DA5C760382E54936F824EE5083908DA66B14ECE18,\
     confirmation: A4A0AFECD1A511825226F0D3437C6C6BDAE83554040AA7AEB49DEFEAB0AE9EA4 }";
         let signature = keystore.sign(data);
-        assert!(Keystore::check(data, keystore.get_public().as_slice(), &signature), "Wrong signature!")
+        assert!(Keystore::check(data, &keystore.get_public(), &signature), "Wrong signature!")
     }
 }

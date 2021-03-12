@@ -12,6 +12,8 @@ use crate::blockchain::enums::BlockQuality;
 use crate::blockchain::enums::BlockQuality::*;
 use crate::blockchain::hash_utils::*;
 use crate::settings::Settings;
+use crate::keys::check_public_key_strength;
+use crate::blockchain::KEYSTORE_DIFFICULTY;
 
 const DB_NAME: &str = "blockchain.db";
 const SQL_CREATE_TABLES: &str = "CREATE TABLE blocks (
@@ -149,21 +151,21 @@ impl Chain {
                 statement.bind(7, transaction.to_string().as_str())?;
             }
         }
-        statement.bind(8, block.prev_block_hash.as_slice())?;
-        statement.bind(9, block.hash.as_slice())?;
-        statement.bind(10, block.pub_key.as_slice())?;
-        statement.bind(11, block.signature.as_slice())?;
+        statement.bind(8, &**block.prev_block_hash)?;
+        statement.bind(9, &**block.hash)?;
+        statement.bind(10, &**block.pub_key)?;
+        statement.bind(11, &**block.signature)?;
         statement.next()
     }
 
     /// Adds transaction to transactions table
     fn add_transaction_to_table(&mut self, t: &Transaction) -> sqlite::Result<State> {
         let mut statement = self.db.prepare(SQL_ADD_TRANSACTION)?;
-        statement.bind(1, t.identity.as_slice())?;
-        statement.bind(2, t.confirmation.as_slice())?;
+        statement.bind(1, &**t.identity)?;
+        statement.bind(2, &**t.confirmation)?;
         statement.bind(3, t.method.as_ref() as &str)?;
         statement.bind(4, t.data.as_ref() as &str)?;
-        statement.bind(5, t.pub_key.as_slice())?;
+        statement.bind(5, &**t.pub_key)?;
         statement.next()
     }
 
@@ -241,9 +243,9 @@ impl Chain {
     /// Checks if this identity is free or is owned by the same pub_key
     pub fn is_id_available(&self, identity: &Bytes, public_key: &Bytes) -> bool {
         let mut statement = self.db.prepare(SQL_GET_PUBLIC_KEY_BY_ID).unwrap();
-        statement.bind(1, identity.as_slice()).expect("Error in bind");
+        statement.bind(1, &***identity).expect("Error in bind");
         while let State::Row = statement.next().unwrap() {
-            let pub_key = Bytes::from_bytes(statement.read::<Vec<u8>>(0).unwrap().as_slice());
+            let pub_key = Bytes::from_bytes(&statement.read::<Vec<u8>>(0).unwrap());
             if !pub_key.eq(public_key) {
                 return false;
             }
@@ -260,7 +262,7 @@ impl Chain {
         // Checking for existing zone in DB
         let identity_hash = hash_identity(zone, None);
         let mut statement = self.db.prepare(SQL_GET_ID_BY_ID).unwrap();
-        statement.bind(1, identity_hash.as_slice()).expect("Error in bind");
+        statement.bind(1, &**identity_hash).expect("Error in bind");
         while let State::Row = statement.next().unwrap() {
             // If there is such a zone
             self.zones.borrow_mut().insert(zone.to_owned());
@@ -277,13 +279,13 @@ impl Chain {
         let identity_hash = hash_identity(domain, None);
 
         let mut statement = self.db.prepare(SQL_GET_TRANSACTION_BY_ID).unwrap();
-        statement.bind(1, identity_hash.as_slice()).expect("Error in bind");
+        statement.bind(1, &**identity_hash).expect("Error in bind");
         while let State::Row = statement.next().unwrap() {
-            let identity = Bytes::from_bytes(statement.read::<Vec<u8>>(1).unwrap().as_slice());
-            let confirmation = Bytes::from_bytes(statement.read::<Vec<u8>>(2).unwrap().as_slice());
+            let identity = Bytes::from_bytes(&statement.read::<Vec<u8>>(1).unwrap());
+            let confirmation = Bytes::from_bytes(&statement.read::<Vec<u8>>(2).unwrap());
             let method = statement.read::<String>(3).unwrap();
             let data = statement.read::<String>(4).unwrap();
-            let pub_key = Bytes::from_bytes(statement.read::<Vec<u8>>(5).unwrap().as_slice());
+            let pub_key = Bytes::from_bytes(&statement.read::<Vec<u8>>(5).unwrap());
             let transaction = Transaction { identity, confirmation, method, data, pub_key };
             debug!("Found transaction for domain {}: {:?}", domain, &transaction);
             if transaction.check_identity(domain) {
@@ -337,6 +339,10 @@ impl Chain {
             warn!("Ignoring block from the future:\n{:?}", &block);
             return Bad;
         }
+        if !check_public_key_strength(&block.pub_key, KEYSTORE_DIFFICULTY) {
+            warn!("Ignoring block with weak public key:\n{:?}", &block);
+            return Bad;
+        }
         let difficulty = match block.transaction {
             None => { LOCKER_DIFFICULTY }
             Some(_) => { BLOCK_DIFFICULTY }
@@ -345,7 +351,7 @@ impl Chain {
             warn!("Block difficulty is lower than needed");
             return Bad;
         }
-        if !hash_is_good(block.hash.as_slice(), block.difficulty as usize) {
+        if !hash_is_good(&block.hash, block.difficulty as usize) {
             warn!("Ignoring block with low difficulty:\n{:?}", &block);
             return Bad;
         }

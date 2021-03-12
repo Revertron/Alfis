@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use chrono::Utc;
 use crypto::digest::Digest;
-use crypto::sha2::Sha256;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use num_cpus;
@@ -13,9 +12,10 @@ use num_cpus;
 use thread_priority::*;
 
 use crate::{Block, Bytes, Context};
-use crate::blockchain::{BLOCK_DIFFICULTY, CHAIN_VERSION, LOCKER_DIFFICULTY};
+use crate::blockchain::{BLOCK_DIFFICULTY, CHAIN_VERSION, LOCKER_DIFFICULTY, KEYSTORE_DIFFICULTY};
 use crate::blockchain::enums::BlockQuality;
 use crate::blockchain::hash_utils::*;
+use crate::keys::check_public_key_strength;
 use crate::event::Event;
 
 pub struct Miner {
@@ -113,6 +113,12 @@ impl Miner {
             info!("Mining locker block");
             block.difficulty = LOCKER_DIFFICULTY;
             block.pub_key = context.lock().unwrap().keystore.get_public();
+            if !check_public_key_strength(&block.pub_key, KEYSTORE_DIFFICULTY) {
+                warn!("Can not mine block with weak public key!");
+                context.lock().unwrap().bus.post(Event::MinerStopped);
+                mining.store(false, Ordering::SeqCst);
+                return;
+            }
             match context.lock().unwrap().chain.last_block() {
                 None => {}
                 Some(last_block) => {
@@ -148,7 +154,7 @@ impl Miner {
                 #[cfg(not(target_os = "macos"))]
                 let _ = set_current_thread_priority(ThreadPriority::Min);
                 live_threads.fetch_add(1, Ordering::SeqCst);
-                match find_hash(&mut Sha256::new(), block, mining.clone()) {
+                match find_hash(&mut *get_hasher_for_version(block.version), block, mining.clone()) {
                     None => {
                         debug!("Mining was cancelled");
                         let count = live_threads.fetch_sub(1, Ordering::SeqCst);

@@ -11,6 +11,7 @@ use num_bigint::BigUint;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 // For deserialization
 use serde::de::{Error as DeError, Visitor};
+use std::ops::Deref;
 
 #[derive(Clone)]
 pub struct Bytes {
@@ -56,10 +57,6 @@ impl Bytes {
         self.data.as_mut_slice()
     }
 
-    pub fn as_vec(&self) -> &Vec<u8> {
-        &self.data
-    }
-
     pub fn to_string(&self) -> String {
         crate::utils::to_hex(&self.data)
     }
@@ -87,11 +84,11 @@ impl Default for Bytes {
 
 impl PartialEq for Bytes {
     fn eq(&self, other: &Self) -> bool {
-        crate::blockchain::hash_utils::same_hash(&self.data, &other.data)
+        crate::blockchain::hash_utils::same_hash(&self, &other)
     }
 
     fn ne(&self, other: &Self) -> bool {
-        !crate::blockchain::hash_utils::same_hash(&self.data, &other.data)
+        !crate::blockchain::hash_utils::same_hash(&self, &other)
     }
 }
 
@@ -99,17 +96,25 @@ impl Eq for Bytes {}
 
 impl PartialOrd for Bytes {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        let self_hash_int = BigUint::from_bytes_be(&self.data);
-        let other_hash_int = BigUint::from_bytes_be(&other.data);
+        let self_hash_int = BigUint::from_bytes_le(&self);
+        let other_hash_int = BigUint::from_bytes_le(&other);
         Some(self_hash_int.cmp(&other_hash_int))
     }
 }
 
 impl Ord for Bytes {
     fn cmp(&self, other: &Self) -> Ordering {
-        let self_hash_int = BigUint::from_bytes_be(&self.data);
-        let other_hash_int = BigUint::from_bytes_be(&other.data);
+        let self_hash_int = BigUint::from_bytes_le(&self);
+        let other_hash_int = BigUint::from_bytes_le(&other);
         self_hash_int.cmp(&other_hash_int)
+    }
+}
+
+impl Deref for Bytes {
+    type Target = Vec<u8>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
     }
 }
 
@@ -161,10 +166,17 @@ impl<'dd> Deserialize<'dd> for Bytes {
 #[cfg(test)]
 mod tests {
     use crate::bytes::Bytes;
+    use crate::blockchain::hash_utils::same_hash;
 
     #[test]
     pub fn test_tail_bytes() {
         let bytes = Bytes::new(vec![0, 255, 255, 255, 0, 255, 255, 255]);
         assert_eq!(bytes.get_tail_u64(), 72057589759737855u64);
+    }
+
+    #[test]
+    pub fn test_deref() {
+        let bytes = Bytes::zero32();
+        assert!(same_hash(&bytes, &vec!(0u8,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)));
     }
 }
