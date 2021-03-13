@@ -1,0 +1,32 @@
+# OpenNIC zones
+bbs
+chan
+cyb
+dyn
+geek
+gopher
+indy
+libre
+neo
+null
+o
+oss
+oz
+parody
+pirate
+# Namecoin zone
+bit
+# Etherium
+eth
+# EmerCoin
+emc
+coin
+lib
+bazar
+# Reserved
+example
+invalid
+local
+localhost
+onion
+test

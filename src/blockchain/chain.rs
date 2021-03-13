@@ -7,13 +7,12 @@ use log::{debug, error, info, trace, warn};
 use sqlite::{Connection, State, Statement};
 
 use crate::{Block, Bytes, Keystore, Transaction};
-use crate::blockchain::constants::{BLOCK_DIFFICULTY, CHAIN_VERSION, LOCKER_BLOCK_COUNT, LOCKER_BLOCK_INTERVAL, LOCKER_BLOCK_START, LOCKER_DIFFICULTY};
+use crate::blockchain::constants::*;
 use crate::blockchain::enums::BlockQuality;
 use crate::blockchain::enums::BlockQuality::*;
 use crate::blockchain::hash_utils::*;
 use crate::settings::Settings;
 use crate::keys::check_public_key_strength;
-use crate::blockchain::KEYSTORE_DIFFICULTY;
 
 const DB_NAME: &str = "blockchain.db";
 const SQL_CREATE_TABLES: &str = "CREATE TABLE blocks (
@@ -37,6 +36,7 @@ const SQL_GET_LAST_BLOCK: &str = "SELECT * FROM blocks ORDER BY id DESC LIMIT 1;
 const SQL_ADD_TRANSACTION: &str = "INSERT INTO transactions (identity, confirmation, method, data, pub_key) VALUES (?, ?, ?, ?, ?)";
 const SQL_GET_BLOCK_BY_ID: &str = "SELECT * FROM blocks WHERE id=? LIMIT 1;";
 const SQL_GET_LAST_FULL_BLOCK: &str = "SELECT * FROM blocks WHERE `transaction`<>'' ORDER BY id DESC LIMIT 1;";
+const SQL_GET_LAST_FULL_BLOCK_FOR_KEY: &str = "SELECT * FROM blocks WHERE `transaction`<>'' AND pub_key = ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_PUBLIC_KEY_BY_ID: &str = "SELECT pub_key FROM transactions WHERE identity = ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_ID_BY_ID: &str = "SELECT identity FROM transactions WHERE identity = ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_TRANSACTION_BY_ID: &str = "SELECT * FROM transactions WHERE identity = ? ORDER BY id DESC LIMIT 1;";
@@ -112,7 +112,7 @@ impl Chain {
             if block.transaction.is_some() {
                 self.last_full_block = Some(block);
             } else {
-                self.last_full_block = self.get_last_full_block();
+                self.last_full_block = self.get_last_full_block(None);
             }
         }
     }
@@ -195,28 +195,30 @@ impl Chain {
     }
 
     /// Gets last block that has a Transaction within
-    pub fn get_last_full_block(&self) -> Option<Block> {
-        match self.db.prepare(SQL_GET_LAST_FULL_BLOCK) {
-            Ok(mut statement) => {
-                while statement.next().unwrap() == State::Row {
-                    return match Self::get_block_from_statement(&mut statement) {
-                        None => {
-                            error!("Something wrong with block in DB!");
-                            None
-                        }
-                        Some(block) => {
-                            trace!("Got last full block: {:?}", &block);
-                            Some(block)
-                        }
-                    };
+    pub fn get_last_full_block(&self, pub_key: Option<&[u8]>) -> Option<Block> {
+        let mut statement = match pub_key {
+            None => {
+                self.db.prepare(SQL_GET_LAST_FULL_BLOCK).expect("Unable to prepare")
+            }
+            Some(pub_key) => {
+                let mut statement = self.db.prepare(SQL_GET_LAST_FULL_BLOCK_FOR_KEY).expect("Unable to prepare");
+                statement.bind(1, pub_key).expect("Unable to bind");
+                statement
+            }
+        };
+        while statement.next().unwrap() == State::Row {
+            return match Self::get_block_from_statement(&mut statement) {
+                None => {
+                    error!("Something wrong with block in DB!");
+                    None
                 }
-                None
-            }
-            Err(e) => {
-                warn!("Can't find any full blocks: {}", e);
-                None
-            }
+                Some(block) => {
+                    trace!("Got last full block: {:?}", &block);
+                    Some(block)
+                }
+            };
         }
+        None
     }
 
     /// Checks if any domain is available to mine for this client (pub_key)
@@ -368,6 +370,13 @@ impl Chain {
                 warn!("Block {:?} is trying to spoof an identity!", &block);
                 return Bad;
             }
+            // TODO check only blocks with new identity
+            if let Some(last) = self.get_last_full_block(Some(&block.pub_key)) {
+                if last.timestamp + FULL_BLOCKS_INTERVAL > block.timestamp {
+                    warn!("Block {:?} is mined too early!", &block);
+                    return Bad;
+                }
+            }
         }
         match &self.last_block {
             None => {
@@ -426,7 +435,7 @@ impl Chain {
         if block.index < LOCKER_BLOCK_START {
             return None;
         }
-        match self.get_last_full_block() {
+        match self.get_last_full_block(None) {
             Some(b) => {
                 if b.index + LOCKER_BLOCK_COUNT <= block.index {
                     trace!("Block {} is locked enough", b.index);

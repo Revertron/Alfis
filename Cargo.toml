@@ -12,8 +12,8 @@ repository = "https://github.com/Revertron/Alfis"
 [dependencies]
 getopts = "0.2.21"
 log = "0.4.14"
-toml = "0.5.8"
 simple_logger = "1.11.0"
+toml = "0.5.8"
 rust-crypto = "^0.2"
 blakeout = "0.1.0"
 num_cpus = "1.13.0"
@@ -27,7 +27,7 @@ num-traits = "0.2"
 bincode = "1.2.0"
 base64 = "0.11.0"
 chrono = { version = "0.4.13", features = ["serde"] }
-rand = "0.7.2"
+rand = "0.8.3"
 sqlite = "0.25.3"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 mio = { version = "0.7", features = ["os-poll", "net"] }

@@ -8,7 +8,7 @@ pub use crate::p2p::Network;
 pub use crate::settings::Settings;
 pub use crate::bytes::Bytes;
 pub use crate::keys::Keystore;
-pub use crate::iana::Iana;
+pub use crate::x_zones::ExternalZones;
 pub use crate::simplebus::*;
 pub use crate::utils::*;
 
@@ -24,5 +24,5 @@ pub mod dns;
 pub mod dns_utils;
 pub mod settings;
 pub mod bytes;
-pub mod iana;
+pub mod x_zones;
 
