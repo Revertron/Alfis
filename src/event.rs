@@ -10,7 +10,7 @@ pub enum Event {
     KeyLoaded { path: String, public: String, hash: String },
     KeySaved { path: String, public: String, hash: String },
     NewBlockReceived,
-    BlockchainChanged,
+    BlockchainChanged { index: u64 },
     ActionStopMining,
     ActionMineLocker { index: u64, hash: Bytes },
     NetworkStatus { nodes: usize, blocks: u64 },

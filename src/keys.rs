@@ -170,7 +170,7 @@ fn generate_key(difficulty: usize, mining: Arc<AtomicBool>) -> Option<Keystore> 
         digest.input(&keystore.public_key);
         digest.result(&mut buf);
         if hash_is_good(&buf, difficulty) {
-            info!("Generated keypair: {:?}", &keystore);
+            info!("Generated keypair with public key: {:?} and hash {:?}", &keystore.get_public(), &keystore.get_hash());
             return Some(keystore);
         }
         if !mining.load(atomic::Ordering::SeqCst) {

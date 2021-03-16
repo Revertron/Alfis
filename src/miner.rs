@@ -1,5 +1,5 @@
 use std::sync::{Arc, Condvar, Mutex};
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering, AtomicU64};
 use std::thread;
 use std::time::Duration;
 
@@ -80,7 +80,7 @@ impl Miner {
         self.context.lock().unwrap().bus.register(move |_uuid, e| {
             match e {
                 Event::NewBlockReceived => {}
-                Event::BlockchainChanged => {}
+                Event::BlockchainChanged {..} => {}
                 Event::ActionStopMining => {
                     mining.store(false, Ordering::SeqCst);
                 }
@@ -142,19 +142,37 @@ impl Miner {
         }
 
         context.lock().unwrap().bus.post(Event::MinerStarted);
+        let thread_spawn_interval = Duration::from_millis(10);
         let live_threads = Arc::new(AtomicU32::new(0u32));
+        let top_block = Arc::new(AtomicU64::new(block.index - 1));
         let cpus = num_cpus::get();
         debug!("Starting {} threads for mining", cpus);
-        for _ in 0..cpus {
-            let context = context.clone();
+        for cpu in 0..cpus {
+            let context = Arc::clone(&context);
             let block = block.clone();
-            let mining = mining.clone();
-            let live_threads = live_threads.clone();
+            let mining = Arc::clone(&mining);
+            let top_block = Arc::clone(&top_block);
+            let live_threads = Arc::clone(&live_threads);
             thread::spawn(move || {
+                // Register this thread to receive events from bus
+                let top = Arc::clone(&top_block);
+                context.lock().unwrap().bus.register(move |_uuid, e| {
+                    match e {
+                        Event::NewBlockReceived => {}
+                        Event::BlockchainChanged { index } => {
+                            top.store(index, Ordering::SeqCst);
+                        }
+                        _ => {}
+                    }
+                    true
+                });
+
                 #[cfg(not(target_os = "macos"))]
                 let _ = set_current_thread_priority(ThreadPriority::Min);
+                let _ = set_current_thread_ideal_processor(IdealProcessor::from(cpu as u32));
                 live_threads.fetch_add(1, Ordering::SeqCst);
-                match find_hash(&mut *get_hasher_for_version(block.version), block, mining.clone()) {
+                let mut hasher = get_hasher_for_version(block.version);
+                match find_hash(Arc::clone(&context), &mut *hasher, block, Arc::clone(&mining), top_block) {
                     None => {
                         debug!("Mining was cancelled");
                         let count = live_threads.fetch_sub(1, Ordering::SeqCst);
@@ -181,15 +199,26 @@ impl Miner {
                     },
                 }
             });
+            thread::sleep(thread_spawn_interval);
         }
     }
 }
 
-fn find_hash(digest: &mut dyn Digest, mut block: Block, running: Arc<AtomicBool>) -> Option<Block> {
+fn find_hash(context: Arc<Mutex<Context>>, digest: &mut dyn Digest, mut block: Block, running: Arc<AtomicBool>, top_block: Arc<AtomicU64>) -> Option<Block> {
     let mut buf: [u8; 32] = [0; 32];
     let difficulty = block.difficulty as usize;
     loop {
         block.random = rand::random();
+        block.index = context.lock().unwrap().chain.height() + 1;
+        if let Some(last_block) = context.lock().unwrap().chain.last_block() {
+            block.prev_block_hash = last_block.hash;
+            if block.transaction.is_some() && last_block.transaction.is_some() {
+                // We can't mine our domain block over a block with domain
+                // TODO make a method in Chain to get next available to mine bock index
+                thread::sleep(Duration::from_millis(1000));
+                continue;
+            }
+        }
         debug!("Mining block {}", serde_json::to_string(&block).unwrap());
         for nonce in 0..std::u64::MAX {
             if !running.load(Ordering::Relaxed) {
@@ -204,6 +233,11 @@ fn find_hash(digest: &mut dyn Digest, mut block: Block, running: Arc<AtomicBool>
             if hash_is_good(&buf, difficulty) {
                 block.hash = Bytes::from_bytes(&buf);
                 return Some(block);
+            }
+
+            if top_block.load(Ordering::SeqCst) >= block.index {
+                // If there is a new block in chain we restart hashing with new data
+                break;
             }
         }
     }

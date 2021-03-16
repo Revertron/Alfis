@@ -370,7 +370,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                     BlockQuality::Good => {
                         context.chain.add_block(block);
                         let my_height = context.chain.height();
-                        context.bus.post(crate::event::Event::BlockchainChanged);
+                        context.bus.post(crate::event::Event::BlockchainChanged { index: my_height });
                         // If it was the last block to sync
                         if my_height == max_height {
                             context.bus.post(crate::event::Event::SyncFinished);
