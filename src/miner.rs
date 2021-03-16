@@ -188,6 +188,9 @@ impl Miner {
                                 error!("To mine genesis block you need to make 'origin' an empty string in config.");
                             }
                         } else {
+                            if block.index == 1 {
+                                context.settings.origin = block.hash.to_string();
+                            }
                             context.chain.add_block(block);
                         }
                         context.bus.post(Event::MinerStopped);

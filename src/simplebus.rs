@@ -52,7 +52,7 @@ mod tests {
         }
         let bus2 = bus.clone();
         thread::spawn(move || {
-            bus2.lock().unwrap().post(Event::BlockchainChanged);
+            bus2.lock().unwrap().post(Event::BlockchainChanged { index: 1 });
         });
 
         let guard = string.lock().unwrap();
