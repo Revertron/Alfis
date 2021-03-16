@@ -27,7 +27,6 @@ use blakeout::Blakeout;
 use self::crypto::digest::Digest;
 use std::time::Instant;
 use std::cell::RefCell;
-use thread_priority::set_current_thread_ideal_processor;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Keystore {
