@@ -7,14 +7,14 @@ pub struct Context {
     pub settings: Settings,
     pub keystore: Keystore,
     pub chain: Chain,
-    pub iana: ExternalZones,
+    pub x_zones: ExternalZones,
     pub bus: Bus<Event>,
 }
 
 impl Context {
     /// Creating an essential context to work with
     pub fn new(settings: Settings, keystore: Keystore, chain: Chain) -> Context {
-        Context { settings, keystore, chain, iana: ExternalZones::new(), bus: Bus::new() }
+        Context { settings, keystore, chain, x_zones: ExternalZones::new(), bus: Bus::new() }
     }
 
     /// Load keystore and return Context

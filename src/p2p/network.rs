@@ -13,11 +13,11 @@ use mio::net::{TcpListener, TcpStream};
 #[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
 
-use crate::{Context, Block, p2p::Message, p2p::State, p2p::Peer, p2p::Peers};
+use crate::{Context, Block, p2p::Message, p2p::State, p2p::Peer, p2p::Peers, Bytes};
 use std::net::{SocketAddr, IpAddr, SocketAddrV4, ToSocketAddrs};
 use crate::blockchain::enums::BlockQuality;
 use crate::blockchain::CHAIN_VERSION;
-use chrono::Utc;
+use std::collections::HashSet;
 
 const SERVER: Token = Token(0);
 const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(3000));
@@ -356,7 +356,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             let peer = peers.get_mut_peer(token).unwrap();
             peer.set_received_block(block.index);
             if let Some(transaction) = &block.transaction {
-                if context.lock().unwrap().iana.has_hash(&transaction.identity.to_string()) {
+                if context.lock().unwrap().x_zones.has_hash(&transaction.identity.to_string()) {
                     // This peer has mined some of the forbidden zones
                     return State::Banned;
                 }
@@ -403,16 +403,12 @@ fn mine_locker_block(context: Arc<Mutex<Context>>) {
             info!("No locker mining while syncing");
             return;
         }
-        match context.chain.get_block_locker(&block, Utc::now().timestamp()) {
-            Some(key) => {
-                if key == context.keystore.get_public() {
-                    info!("We have an honor to mine locker block!");
-                    context.bus.post(crate::event::Event::ActionMineLocker { index: block.index + 1, hash: block.hash });
-                } else {
-                    info!("Locker block must be mined by another node: {:?}", &key);
-                }
-            }
-            None => {}
+        let lockers: HashSet<Bytes> = context.chain.get_block_lockers(&block).into_iter().collect();
+        if lockers.contains(&context.keystore.get_public()) {
+            info!("We have an honor to mine locker block!");
+            context.bus.post(crate::event::Event::ActionMineLocker { index: block.index + 1, hash: block.hash });
+        } else {
+            info!("Locker block must be mined by other nodes");
         }
     }
 }

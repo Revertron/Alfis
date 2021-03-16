@@ -185,7 +185,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                 TransferDomain { .. } => {}
                 CheckZone { name } => {
                     let name = name.to_lowercase();
-                    if !check_domain(&name, false) || context.lock().unwrap().iana.has_zone(&name) {
+                    if name.len() > 10 || !check_domain(&name, false) || context.lock().unwrap().x_zones.has_zone(&name) {
                         web_view.eval("zoneAvailable(false)").expect("Error evaluating!");
                     } else {
                         let c = context.lock().unwrap();
@@ -195,6 +195,11 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                 }
                 CreateZone { name, data } => {
                     let name = name.to_lowercase();
+                    if name.len() > 10 || !check_domain(&name, false) || context.lock().unwrap().x_zones.has_zone(&name) {
+                        warn!("This zone is unavailable for mining!");
+                        let _ = web_view.eval(&format!("showWarning('{}');", "This zone is unavailable for mining!"));
+                        return Ok(());
+                    }
                     let data = data.to_lowercase();
                     let (keystore, transaction) = {
                         let context = context.lock().unwrap();
@@ -256,7 +261,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
 fn create_domain<S: Into<String>>(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, name: S, data: S, keystore: &Keystore) {
     let name = name.into();
     info!("Generating domain or zone {}", name);
-    if context.lock().unwrap().iana.has_zone(&name) {
+    if context.lock().unwrap().x_zones.has_zone(&name) {
         error!("Unable to mine IANA zone {}!", &name);
         return;
     }

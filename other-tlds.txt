@@ -29,4 +29,6 @@ invalid
 local
 localhost
 onion
+i2p
+meshname
 test

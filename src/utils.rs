@@ -41,7 +41,7 @@ pub fn check_domain(name: &str, allow_dots: bool) -> bool {
         }
         last_dot = false;
         last_hyphen = false;
-        if !char.is_alphanumeric() {
+        if !char.is_ascii_alphanumeric() {
             return false;
         }
     }

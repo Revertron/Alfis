@@ -13,6 +13,7 @@ use crate::blockchain::enums::BlockQuality::*;
 use crate::blockchain::hash_utils::*;
 use crate::settings::Settings;
 use crate::keys::check_public_key_strength;
+use std::cmp::min;
 
 const DB_NAME: &str = "blockchain.db";
 const SQL_CREATE_TABLES: &str = "CREATE TABLE blocks (
@@ -196,6 +197,10 @@ impl Chain {
 
     /// Gets last block that has a Transaction within
     pub fn get_last_full_block(&self, pub_key: Option<&[u8]>) -> Option<Block> {
+        if self.last_full_block.is_some() && pub_key.is_none() {
+            return Some(self.last_full_block.clone().unwrap());
+        }
+
         let mut statement = match pub_key {
             None => {
                 self.db.prepare(SQL_GET_LAST_FULL_BLOCK).expect("Unable to prepare")
@@ -398,6 +403,28 @@ impl Chain {
                     warn!("Block is from the future, how is this possible?");
                     return Future;
                 }
+                if block.index > LOCKER_BLOCK_START {
+                    // If this block is locked part of blockchain
+                    if let Some(full_block) = &self.last_full_block {
+                        let locker_blocks = self.height() - full_block.index;
+                        if locker_blocks < LOCKER_BLOCK_SIGNS {
+                            // Last full block is not locked enough
+                            if block.transaction.is_some() {
+                                warn!("Someone mined full block over full block");
+                                return Bad;
+                            } else {
+                                if self.check_block_for_lock(&block, full_block) == Bad {
+                                    return Bad;
+                                }
+                            }
+                        } else if locker_blocks < LOCKER_BLOCK_LOCKERS && block.transaction.is_none() {
+                            if self.check_block_for_lock(&block, full_block) == Bad {
+                                return Bad;
+                            }
+                        }
+                    }
+                }
+
                 if block.index <= last_block.index {
                     if last_block.hash == block.hash {
                         warn!("Ignoring block {}, we already have it", block.index);
@@ -413,50 +440,55 @@ impl Chain {
                         };
                     }
                 }
-                if block.transaction.is_none() {
-                    if let Some(locker) = self.get_block_locker(&last_block, block.timestamp) {
-                        if locker != block.pub_key {
-                            warn!("Ignoring block {}, as wrong locker", block.index);
-                            return Bad;
-                        }
-                    }
-                }
+
             }
         }
 
         Good
     }
 
+    fn check_block_for_lock(&self, block: &&Block, full_block: &Block) -> BlockQuality {
+        // If we got a locker/signing block
+        let lockers: HashSet<Bytes> = self.get_block_lockers(full_block).into_iter().collect();
+        if !lockers.contains(&block.pub_key) {
+            warn!("Ignoring block {}, as wrong locker", block.index);
+            return Bad;
+        }
+        // If this locker's public key has already locked/signed that block we return error
+        for i in (full_block.index + 1)..block.index {
+            let locker = self.get_block(i).expect("Error in DB!");
+            if locker.pub_key == block.pub_key {
+                warn!("Ignoring block {}, already locked by this key", block.index);
+                return Bad;
+            }
+        }
+        Good
+    }
+
     /// Gets a public key of a node that needs to mine "locker" block above this block
-    pub fn get_block_locker(&self, block: &Block, timestamp: i64) -> Option<Bytes> {
-        if block.hash.is_empty() || block.hash.is_zero() {
-            return None;
-        }
+    /// block - last full block
+    pub fn get_block_lockers(&self, block: &Block) -> Vec<Bytes> {
+        let mut result = Vec::new();
         if block.index < LOCKER_BLOCK_START {
-            return None;
+            return result;
         }
-        match self.get_last_full_block(None) {
-            Some(b) => {
-                if b.index + LOCKER_BLOCK_COUNT <= block.index {
-                    trace!("Block {} is locked enough", b.index);
-                    return None;
-                }
-            }
-            None => {}
-        }
-        // How many 5 min intervals have passed since this block?
-        let intervals = ((timestamp - block.timestamp) / LOCKER_BLOCK_INTERVAL) as u64;
+        let mut set = HashSet::new();
         let tail = block.hash.get_tail_u64();
-        let start_index = 1 + ((tail + tail * intervals) % (block.index - 2));
-        for index in start_index..block.index {
+        let interval = min(block.index, LOCKER_BLOCK_INTERVAL) - 1;
+        let start_index = block.index - interval;
+        let mut count = 1;
+        while set.len() < LOCKER_BLOCK_LOCKERS as usize {
+            let index = start_index + ((tail * count) % LOCKER_BLOCK_INTERVAL);
             if let Some(b) = self.get_block(index) {
-                if b.pub_key != block.pub_key {
-                    trace!("Locker block for block {} must be mined by owner of block {} block_hash: {:?}", block.index, b.index, block.hash);
-                    return Some(b.pub_key);
+                if b.pub_key != block.pub_key && !set.contains(&b.pub_key) {
+                    result.push(b.pub_key.clone());
+                    set.insert(b.pub_key);
                 }
+                count += 1;
             }
         }
-        None
+        trace!("Got lockers for block {}: {:?}", block.index, &result);
+        result
     }
 
     fn get_block_from_statement(statement: &mut Statement) -> Option<Block> {

@@ -12,6 +12,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 // For deserialization
 use serde::de::{Error as DeError, Visitor};
 use std::ops::Deref;
+use std::hash::{Hash, Hasher};
 
 #[derive(Clone)]
 pub struct Bytes {
@@ -107,6 +108,12 @@ impl Ord for Bytes {
         let self_hash_int = BigUint::from_bytes_le(&self);
         let other_hash_int = BigUint::from_bytes_le(&other);
         self_hash_int.cmp(&other_hash_int)
+    }
+}
+
+impl Hash for Bytes {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write(&self.data);
     }
 }
 
