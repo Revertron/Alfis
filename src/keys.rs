@@ -16,7 +16,7 @@ use log::{debug, error, info, trace, warn};
 use rand::{Rng, RngCore, thread_rng};
 use serde::{Deserialize, Serialize};
 #[cfg(not(target_os = "macos"))]
-use thread_priority::{set_current_thread_priority, ThreadPriority};
+use thread_priority::*;
 
 use crate::blockchain::hash_utils::*;
 use crate::Context;
@@ -27,6 +27,7 @@ use blakeout::Blakeout;
 use self::crypto::digest::Digest;
 use std::time::Instant;
 use std::cell::RefCell;
+use thread_priority::set_current_thread_ideal_processor;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Keystore {
@@ -119,13 +120,16 @@ pub fn create_key(context: Arc<Mutex<Context>>) {
     let mining = Arc::new(AtomicBool::new(true));
     let miners_count = Arc::new(AtomicUsize::new(0));
     { context.lock().unwrap().bus.post(Event::KeyGeneratorStarted); }
-    for _ in 0..num_cpus::get() {
+    for cpu in 0..num_cpus::get() {
         let context = context.clone();
         let mining = mining.clone();
         let miners_count = miners_count.clone();
         thread::spawn(move || {
             #[cfg(not(target_os = "macos"))]
-                let _ = set_current_thread_priority(ThreadPriority::Min);
+                {
+                    let _ = set_current_thread_priority(ThreadPriority::Min);
+                    let _ = set_current_thread_ideal_processor(IdealProcessor::from(cpu as u32));
+                }
             miners_count.fetch_add(1, atomic::Ordering::SeqCst);
             match generate_key(KEYSTORE_DIFFICULTY, mining.clone()) {
                 None => {

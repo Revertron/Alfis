@@ -168,8 +168,10 @@ impl Miner {
                 });
 
                 #[cfg(not(target_os = "macos"))]
-                let _ = set_current_thread_priority(ThreadPriority::Min);
-                let _ = set_current_thread_ideal_processor(IdealProcessor::from(cpu as u32));
+                    {
+                        let _ = set_current_thread_priority(ThreadPriority::Min);
+                        let _ = set_current_thread_ideal_processor(IdealProcessor::from(cpu as u32));
+                    }
                 live_threads.fetch_add(1, Ordering::SeqCst);
                 let mut hasher = get_hasher_for_version(block.version);
                 match find_hash(Arc::clone(&context), &mut *hasher, block, Arc::clone(&mining), top_block) {
@@ -214,7 +216,7 @@ fn find_hash(context: Arc<Mutex<Context>>, digest: &mut dyn Digest, mut block: B
             block.prev_block_hash = last_block.hash;
             if block.transaction.is_some() && last_block.transaction.is_some() {
                 // We can't mine our domain block over a block with domain
-                // TODO make a method in Chain to get next available to mine bock index
+                // TODO make a method in Chain to get next available to mine block index
                 thread::sleep(Duration::from_millis(1000));
                 continue;
             }
