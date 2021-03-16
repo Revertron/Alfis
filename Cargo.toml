@@ -50,6 +50,12 @@ winres = "0.1"
 serde_bytes = "0.11.2"
 serde_derive = "1.0.27"
 
+[profile.dev]
+opt-level = 2
+
+[profile.test]
+opt-level = 2
+
 [package.metadata.winres]
 ProductName="ALFIS"
 FileDescription="Alternative Free Identity System"
