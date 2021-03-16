@@ -15,11 +15,9 @@ use crypto::ed25519::{keypair, signature, verify};
 use log::{debug, error, info, trace, warn};
 use rand::{Rng, RngCore, thread_rng};
 use serde::{Deserialize, Serialize};
-#[cfg(not(target_os = "macos"))]
-use thread_priority::*;
 
 use crate::blockchain::hash_utils::*;
-use crate::Context;
+use crate::{Context, setup_miner_thread};
 use crate::event::Event;
 use crate::blockchain::KEYSTORE_DIFFICULTY;
 use crate::bytes::Bytes;
@@ -124,11 +122,7 @@ pub fn create_key(context: Arc<Mutex<Context>>) {
         let mining = mining.clone();
         let miners_count = miners_count.clone();
         thread::spawn(move || {
-            #[cfg(not(target_os = "macos"))]
-                {
-                    let _ = set_current_thread_priority(ThreadPriority::Min);
-                    let _ = set_current_thread_ideal_processor(IdealProcessor::from(cpu as u32));
-                }
+            setup_miner_thread(cpu as u32);
             miners_count.fetch_add(1, atomic::Ordering::SeqCst);
             match generate_key(KEYSTORE_DIFFICULTY, mining.clone()) {
                 None => {

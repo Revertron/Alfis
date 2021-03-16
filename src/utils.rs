@@ -1,4 +1,6 @@
 use std::num;
+#[cfg(not(target_os = "macos"))]
+use thread_priority::*;
 
 /// Convert bytes array to HEX format
 pub fn to_hex(buf: &[u8]) -> String {
@@ -14,6 +16,17 @@ pub fn from_hex(string: &str) -> Result<Vec<u8>, num::ParseIntError> {
         .iter()
         .map(|b| u8::from_str_radix(b, 16))
         .collect()
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn setup_miner_thread(cpu: u32) {
+    let _ = set_current_thread_priority(ThreadPriority::Min);
+    let _ = set_current_thread_ideal_processor(IdealProcessor::from(cpu));
+}
+
+#[cfg(target_os = "macos")]
+pub fn setup_miner_thread(cpu: u32) {
+    // MacOS is not supported by thread_priority crate
 }
 
 pub fn check_domain(name: &str, allow_dots: bool) -> bool {

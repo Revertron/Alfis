@@ -8,10 +8,8 @@ use crypto::digest::Digest;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use num_cpus;
-#[cfg(not(target_os = "macos"))]
-use thread_priority::*;
 
-use crate::{Block, Bytes, Context};
+use crate::{Block, Bytes, Context, setup_miner_thread};
 use crate::blockchain::{BLOCK_DIFFICULTY, CHAIN_VERSION, LOCKER_DIFFICULTY, KEYSTORE_DIFFICULTY};
 use crate::blockchain::enums::BlockQuality;
 use crate::blockchain::hash_utils::*;
@@ -167,11 +165,7 @@ impl Miner {
                     true
                 });
 
-                #[cfg(not(target_os = "macos"))]
-                    {
-                        let _ = set_current_thread_priority(ThreadPriority::Min);
-                        let _ = set_current_thread_ideal_processor(IdealProcessor::from(cpu as u32));
-                    }
+                setup_miner_thread(cpu as u32);
                 live_threads.fetch_add(1, Ordering::SeqCst);
                 let mut hasher = get_hasher_for_version(block.version);
                 match find_hash(Arc::clone(&context), &mut *hasher, block, Arc::clone(&mining), top_block) {
