@@ -407,7 +407,7 @@ fn mine_locker_block(context: Arc<Mutex<Context>>) {
         if lockers.contains(&context.keystore.get_public()) {
             info!("We have an honor to mine locker block!");
             context.bus.post(crate::event::Event::ActionMineLocker { index: block.index + 1, hash: block.hash });
-        } else {
+        } else if !lockers.is_empty() {
             info!("Locker block must be mined by other nodes");
         }
     }

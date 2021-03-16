@@ -17,6 +17,7 @@ use alfis::miner::Miner;
 use alfis::{keys, check_domain};
 use alfis::event::Event;
 use alfis::dns::protocol::DnsRecord;
+use alfis::blockchain::ZONE_MAX_LENGTH;
 use Cmd::*;
 
 pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
@@ -164,11 +165,11 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                         };
                         match transaction {
                             None => {
-                                create_domain(context.clone(), miner.clone(), name, records, &keystore);
+                                create_domain(context.clone(), miner.clone(), &name, &records, &keystore);
                             }
                             Some(transaction) => {
                                 if transaction.pub_key == keystore.get_public() {
-                                    create_domain(context.clone(), miner.clone(), name, records, &keystore);
+                                    create_domain(context.clone(), miner.clone(), &name, &records, &keystore);
                                 } else {
                                     warn!("Tried to mine not owned domain!");
                                     let _ = web_view.eval(&format!("showWarning('{}');", "You cannot change domain that you don't own!"));
@@ -185,7 +186,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                 TransferDomain { .. } => {}
                 CheckZone { name } => {
                     let name = name.to_lowercase();
-                    if name.len() > 10 || !check_domain(&name, false) || context.lock().unwrap().x_zones.has_zone(&name) {
+                    if name.len() > ZONE_MAX_LENGTH || !check_domain(&name, false) || context.lock().unwrap().x_zones.has_zone(&name) {
                         web_view.eval("zoneAvailable(false)").expect("Error evaluating!");
                     } else {
                         let c = context.lock().unwrap();
@@ -195,7 +196,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                 }
                 CreateZone { name, data } => {
                     let name = name.to_lowercase();
-                    if name.len() > 10 || !check_domain(&name, false) || context.lock().unwrap().x_zones.has_zone(&name) {
+                    if name.len() > ZONE_MAX_LENGTH || !check_domain(&name, false) || context.lock().unwrap().x_zones.has_zone(&name) {
                         warn!("This zone is unavailable for mining!");
                         let _ = web_view.eval(&format!("showWarning('{}');", "This zone is unavailable for mining!"));
                         return Ok(());
@@ -207,11 +208,11 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                     };
                     match transaction {
                         None => {
-                            create_domain(context.clone(), miner.clone(), name, data, &keystore);
+                            create_domain(context.clone(), miner.clone(), &name, &data, &keystore);
                         }
                         Some(transaction) => {
                             if transaction.pub_key == keystore.get_public() {
-                                create_domain(context.clone(), miner.clone(), name, data, &keystore);
+                                create_domain(context.clone(), miner.clone(), &name, &data, &keystore);
                             } else {
                                 warn!("Tried to mine not owned domain!");
                                 let _ = web_view.eval(&format!("showWarning('{}');", "You cannot change domain that you don't own!"));
@@ -258,15 +259,15 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     interface.exit();
 }
 
-fn create_domain<S: Into<String>>(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, name: S, data: S, keystore: &Keystore) {
-    let name = name.into();
-    info!("Generating domain or zone {}", name);
+fn create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, name: &str, data: &str, keystore: &Keystore) {
+    let name = name.to_owned();
+    info!("Generating domain or zone {}", &name);
     if context.lock().unwrap().x_zones.has_zone(&name) {
-        error!("Unable to mine IANA zone {}!", &name);
+        error!("Unable to mine IANA/OpenNIC/etc zone {}!", &name);
         return;
     }
     //let tags_vector: Vec<String> = tags.into().trim().split(",").map(|s| s.trim()).map(String::from).collect();
-    let transaction = Transaction::from_str(name.into(), "dns".into(), data.into(), keystore.get_public().clone());
+    let transaction = Transaction::from_str(name, "dns".to_owned(), data.to_owned(), keystore.get_public().clone());
     let block = Block::new(Some(transaction), keystore.get_public(), Bytes::default());
     miner.lock().unwrap().add_block(block);
 }

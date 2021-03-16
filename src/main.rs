@@ -68,7 +68,8 @@ fn main() {
     SimpleLogger::new().with_level(level).init().unwrap();
     info!(target: LOG_TARGET_MAIN, "Starting ALFIS {}", env!("CARGO_PKG_VERSION"));
 
-    let settings = Settings::load(&config_name).expect("Error loading settings");
+    let settings = Settings::load(&config_name);
+    info!("Loaded settings: {:?}", &settings);
     let keystore: Keystore = match Keystore::from_file(&settings.key_file, "") {
         None => {
             warn!(target: LOG_TARGET_MAIN, "Generated temporary keystore. Please, generate full-privileged keys.");

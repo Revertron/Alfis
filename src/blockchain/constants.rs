@@ -11,3 +11,5 @@ pub const LOCKER_BLOCK_TIME: i64 = 300;
 pub const LOCKER_BLOCK_INTERVAL: u64 = 50;
 
 pub const FULL_BLOCKS_INTERVAL: i64 = 86400; // One day in seconds
+
+pub const ZONE_MAX_LENGTH: usize = 10;
