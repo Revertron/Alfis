@@ -19,12 +19,15 @@ pub fn from_hex(string: &str) -> Result<Vec<u8>, num::ParseIntError> {
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(unused_variables)]
 pub fn setup_miner_thread(cpu: u32) {
     let _ = set_current_thread_priority(ThreadPriority::Min);
-    let _ = set_current_thread_ideal_processor(IdealProcessor::from(cpu));
+    #[cfg(target_os = "windows")]
+        let _ = set_current_thread_ideal_processor(IdealProcessor::from(cpu));
 }
 
 #[cfg(target_os = "macos")]
+#[allow(unused_variables)]
 pub fn setup_miner_thread(cpu: u32) {
     // MacOS is not supported by thread_priority crate
 }
