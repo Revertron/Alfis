@@ -4,6 +4,7 @@ use crate::dns::filter::DnsFilter;
 use crate::dns::protocol::{DnsPacket, QueryType, DnsRecord, DnsQuestion, ResultCode};
 #[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
+use crate::blockchain::transaction::DomainData;
 
 pub struct BlockchainFilter {
     context: Arc<Mutex<Context>>
@@ -48,12 +49,12 @@ impl DnsFilter for BlockchainFilter {
             }
             Some(data) => {
                 info!("Found data for domain {}", &search);
-                let mut records: Vec<DnsRecord> = match serde_json::from_str(&data) {
+                let mut data: DomainData = match serde_json::from_str(&data) {
                     Err(_) => { return None; }
-                    Ok(records) => { records }
+                    Ok(data) => { data }
                 };
                 let mut answers: Vec<DnsRecord> = Vec::new();
-                for mut record in records.iter_mut() {
+                for mut record in data.records.iter_mut() {
                     if record.get_querytype() == qtype {
                         match &mut record {
                             DnsRecord::A { domain, .. }
@@ -98,7 +99,7 @@ impl DnsFilter for BlockchainFilter {
                 }
                 if answers.is_empty() {
                     // If there are no records found we search for *.domain.ltd record
-                    for mut record in records {
+                    for mut record in data.records {
                         if record.get_querytype() == qtype {
                             match record.get_domain() {
                                 None => {}

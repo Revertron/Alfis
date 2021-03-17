@@ -1,5 +1,6 @@
 pub const CHAIN_VERSION: u32 = 1;
 
+pub const ZONE_DIFFICULTY: u32 = 28;
 pub const BLOCK_DIFFICULTY: u32 = 24;
 pub const LOCKER_DIFFICULTY: u32 = 18;
 pub const KEYSTORE_DIFFICULTY: usize = 25;

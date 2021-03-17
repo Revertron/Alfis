@@ -14,6 +14,7 @@ use crate::blockchain::hash_utils::*;
 use crate::settings::Settings;
 use crate::keys::check_public_key_strength;
 use std::cmp::{min, max};
+use crate::blockchain::transaction::{ZoneData, DomainData};
 
 const DB_NAME: &str = "blockchain.db";
 const SQL_CREATE_TABLES: &str = "CREATE TABLE blocks (
@@ -309,6 +310,21 @@ impl Chain {
         }
     }
 
+    pub fn get_zone_difficulty(&self, zone: &str) -> u32 {
+        match self.get_domain_transaction(zone) {
+            None => { u32::max_value() }
+            Some(transaction) => {
+                match serde_json::from_str::<ZoneData>(&transaction.data) {
+                    Ok(data) => { data.difficulty }
+                    Err(_) => {
+                        warn!("Wrong data for zone {}!", zone);
+                        u32::max_value()
+                    }
+                }
+            }
+        }
+    }
+
     pub fn last_block(&self) -> Option<Block> {
         self.last_block.clone()
     }
@@ -392,6 +408,12 @@ impl Chain {
             if let Some(last) = self.get_last_full_block(Some(&block.pub_key)) {
                 if last.timestamp + FULL_BLOCKS_INTERVAL > block.timestamp {
                     warn!("Block {:?} is mined too early!", &block);
+                    return Bad;
+                }
+            }
+            if let Ok(data) = serde_json::from_str::<DomainData>(&transaction.data) {
+                if self.get_zone_difficulty(&data.zone) > block.difficulty {
+                    warn!("Block {:?} is mined with too low difficulty!", &block);
                     return Bad;
                 }
             }

@@ -5,6 +5,7 @@ use serde::ser::SerializeStruct;
 
 use crate::blockchain::hash_utils::*;
 use crate::bytes::Bytes;
+use crate::dns::protocol::DnsRecord;
 
 extern crate serde;
 extern crate serde_json;
@@ -75,4 +76,22 @@ impl Serialize for Transaction {
         structure.serialize_field("pub_key", &self.pub_key)?;
         structure.end()
     }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+pub struct DomainData {
+    pub zone: String,
+    pub records: Vec<DnsRecord>
+}
+
+impl DomainData {
+    pub fn new(zone: String, records: Vec<DnsRecord>) -> Self {
+        Self { zone, records }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+pub struct ZoneData {
+    pub name: String,
+    pub difficulty: u32
 }

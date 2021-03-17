@@ -10,7 +10,7 @@ use log::{debug, error, info, trace, warn};
 use num_cpus;
 
 use crate::{Block, Bytes, Context, setup_miner_thread};
-use crate::blockchain::{BLOCK_DIFFICULTY, CHAIN_VERSION, LOCKER_DIFFICULTY, KEYSTORE_DIFFICULTY};
+use crate::blockchain::{CHAIN_VERSION, LOCKER_DIFFICULTY, KEYSTORE_DIFFICULTY};
 use crate::blockchain::enums::BlockQuality;
 use crate::blockchain::hash_utils::*;
 use crate::keys::check_public_key_strength;
@@ -84,7 +84,7 @@ impl Miner {
                 }
                 Event::ActionMineLocker { index, hash } => {
                     if !mining.load(Ordering::SeqCst) {
-                        let mut block = Block::new(None, Bytes::default(), hash);
+                        let mut block = Block::new(None, Bytes::default(), hash, LOCKER_DIFFICULTY);
                         block.index = index;
                         blocks.lock().unwrap().push(block);
                         cond_var.notify_all();
@@ -109,7 +109,6 @@ impl Miner {
         // If this block needs to be a locker
         if block.index > 0 && !block.prev_block_hash.is_empty() {
             info!("Mining locker block");
-            block.difficulty = LOCKER_DIFFICULTY;
             block.pub_key = context.lock().unwrap().keystore.get_public();
             if !check_public_key_strength(&block.pub_key, KEYSTORE_DIFFICULTY) {
                 warn!("Can not mine block with weak public key!");
@@ -131,7 +130,6 @@ impl Miner {
                 }
             }
         } else {
-            block.difficulty = BLOCK_DIFFICULTY;
             block.index = context.lock().unwrap().chain.height() + 1;
             block.prev_block_hash = match context.lock().unwrap().chain.last_block() {
                 None => { Bytes::default() }

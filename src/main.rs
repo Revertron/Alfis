@@ -16,6 +16,7 @@ use simple_logger::SimpleLogger;
 use winapi::um::wincon::{ATTACH_PARENT_PROCESS, AttachConsole, FreeConsole};
 
 use alfis::{Block, Bytes, Chain, Miner, Context, Network, Settings, dns_utils, Keystore};
+use alfis::blockchain::BLOCK_DIFFICULTY;
 
 mod web_ui;
 
@@ -126,7 +127,7 @@ fn create_genesis_if_needed(context: &Arc<Mutex<Context>>, miner: &Arc<Mutex<Min
     let origin = context.settings.origin.clone();
     if origin.eq("") && last_block.is_none() {
         // If blockchain is empty, we are going to mine a Genesis block
-        let block = Block::new(None, context.get_keystore().get_public(), Bytes::default());
+        let block = Block::new(None, context.get_keystore().get_public(), Bytes::default(), BLOCK_DIFFICULTY);
         miner.lock().unwrap().add_block(block);
     }
 }

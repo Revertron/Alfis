@@ -64,6 +64,15 @@ pub fn check_domain(name: &str, allow_dots: bool) -> bool {
     true
 }
 
+pub fn get_domain_zone(domain: &str) -> String {
+    let parts: Vec<&str> = domain.rsplitn(2, ".").collect();
+    if !parts.is_empty() {
+        parts[0].to_owned()
+    } else {
+        String::new()
+    }
+}
+
 fn split_n(s: &str, n: usize) -> Vec<&str> {
     (0..=(s.len() - n + 1) / 2)
         .map(|i| &s[2 * i..2 * i + n])

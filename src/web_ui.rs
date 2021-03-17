@@ -12,13 +12,14 @@ use web_view::Content;
 use log::{debug, error, info, LevelFilter, trace, warn};
 use serde::Deserialize;
 
-use alfis::{Block, Bytes, Context, Keystore, Transaction};
+use alfis::{Block, Bytes, Context, Keystore, Transaction, get_domain_zone};
 use alfis::miner::Miner;
 use alfis::{keys, check_domain};
 use alfis::event::Event;
 use alfis::dns::protocol::DnsRecord;
-use alfis::blockchain::ZONE_MAX_LENGTH;
+use alfis::blockchain::{ZONE_MAX_LENGTH, ZONE_DIFFICULTY};
 use Cmd::*;
+use alfis::blockchain::transaction::DomainData;
 
 pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let file_content = include_str!("webview/index.html");
@@ -158,27 +159,34 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                     if !check_domain(&name, true) {
                         return Ok(());
                     }
-                    if serde_json::from_str::<Vec<DnsRecord>>(&records).is_ok() {
-                        let (keystore, transaction) = {
-                            let context = context.lock().unwrap();
-                            (context.get_keystore(), context.chain.get_domain_transaction(&name))
-                        };
-                        match transaction {
-                            None => {
-                                create_domain(context.clone(), miner.clone(), &name, &records, &keystore);
-                            }
-                            Some(transaction) => {
-                                if transaction.pub_key == keystore.get_public() {
-                                    create_domain(context.clone(), miner.clone(), &name, &records, &keystore);
-                                } else {
-                                    warn!("Tried to mine not owned domain!");
-                                    let _ = web_view.eval(&format!("showWarning('{}');", "You cannot change domain that you don't own!"));
+                    let rec_vec = serde_json::from_str::<Vec<DnsRecord>>(&records);
+                    match rec_vec {
+                        Ok(records) => {
+                            let zone = get_domain_zone(&name);
+                            let data = DomainData::new(zone.clone(), records);
+                            let (keystore, transaction, difficulty) = {
+                                let context = context.lock().unwrap();
+                                (context.get_keystore(), context.chain.get_domain_transaction(&name), context.chain.get_zone_difficulty(&name))
+                            };
+                            let data = serde_json::to_string(&data).unwrap();
+                            match transaction {
+                                None => {
+                                    create_domain(context.clone(), miner.clone(), &name, &data, difficulty, &keystore);
+                                }
+                                Some(transaction) => {
+                                    if transaction.pub_key == keystore.get_public() {
+                                        create_domain(context.clone(), miner.clone(), &name, &data, difficulty, &keystore);
+                                    } else {
+                                        warn!("Tried to mine not owned domain!");
+                                        let _ = web_view.eval(&format!("showWarning('{}');", "You cannot change domain that you don't own!"));
+                                    }
                                 }
                             }
                         }
-                    } else {
-                        warn!("Error in DNS records for domain!");
-                        let _ = web_view.eval(&format!("showWarning('{}');", "Something wrong with your records! Please, correct the error and try again."));
+                        Err(e) => {
+                            warn!("Error in DNS records for domain!\n{}", e);
+                            let _ = web_view.eval(&format!("showWarning('{}');", "Something wrong with your records! Please, correct the error and try again."));
+                        }
                     }
                 }
                 ChangeDomain { .. } => {}
@@ -208,11 +216,11 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                     };
                     match transaction {
                         None => {
-                            create_domain(context.clone(), miner.clone(), &name, &data, &keystore);
+                            create_domain(context.clone(), miner.clone(), &name, &data, ZONE_DIFFICULTY, &keystore);
                         }
                         Some(transaction) => {
                             if transaction.pub_key == keystore.get_public() {
-                                create_domain(context.clone(), miner.clone(), &name, &data, &keystore);
+                                create_domain(context.clone(), miner.clone(), &name, &data, ZONE_DIFFICULTY, &keystore);
                             } else {
                                 warn!("Tried to mine not owned domain!");
                                 let _ = web_view.eval(&format!("showWarning('{}');", "You cannot change domain that you don't own!"));
@@ -259,7 +267,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     interface.exit();
 }
 
-fn create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, name: &str, data: &str, keystore: &Keystore) {
+fn create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, name: &str, data: &str, difficulty: u32, keystore: &Keystore) {
     let name = name.to_owned();
     info!("Generating domain or zone {}", &name);
     if context.lock().unwrap().x_zones.has_zone(&name) {
@@ -268,7 +276,7 @@ fn create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, name: &
     }
     //let tags_vector: Vec<String> = tags.into().trim().split(",").map(|s| s.trim()).map(String::from).collect();
     let transaction = Transaction::from_str(name, "dns".to_owned(), data.to_owned(), keystore.get_public().clone());
-    let block = Block::new(Some(transaction), keystore.get_public(), Bytes::default());
+    let block = Block::new(Some(transaction), keystore.get_public(), Bytes::default(), difficulty);
     miner.lock().unwrap().add_block(block);
 }
 

@@ -1,5 +1,5 @@
 # Settings
-origin = ""
+origin = "00000087A1BA6F94781C77BBDA96CC548E1E7F502DB3EA3F103ACD9301813B43"
 key_file = "default.key"
 listen = "[::]:4244"
 public = false

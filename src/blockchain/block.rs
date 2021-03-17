@@ -29,12 +29,12 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(transaction: Option<Transaction>, pub_key: Bytes, prev_block_hash: Bytes) -> Self {
+    pub fn new(transaction: Option<Transaction>, pub_key: Bytes, prev_block_hash: Bytes, difficulty: u32) -> Self {
         Block {
             index: 0,
             timestamp: 0,
             version: 0,
-            difficulty: 0,
+            difficulty,
             random: 0,
             nonce: 0,
             transaction,
