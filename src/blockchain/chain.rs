@@ -6,9 +6,9 @@ use chrono::Utc;
 use log::{debug, error, info, trace, warn};
 use sqlite::{Connection, State, Statement};
 
-use crate::{Block, Bytes, Keystore, Transaction};
+use crate::{Block, Bytes, Keystore, Transaction, check_domain, get_domain_zone};
 use crate::blockchain::constants::*;
-use crate::blockchain::enums::BlockQuality;
+use crate::blockchain::enums::{BlockQuality, MineResult};
 use crate::blockchain::enums::BlockQuality::*;
 use crate::blockchain::hash_utils::*;
 use crate::settings::Settings;
@@ -16,6 +16,8 @@ use crate::keys::check_public_key_strength;
 use std::cmp::{min, max};
 use crate::blockchain::transaction::{ZoneData, DomainData};
 use std::ops::Deref;
+use crate::dns::protocol::DnsRecord;
+use crate::blockchain::enums::MineResult::*;
 
 const DB_NAME: &str = "blockchain.db";
 const SQL_CREATE_TABLES: &str = "CREATE TABLE blocks (
@@ -295,6 +297,35 @@ impl Chain {
             return true;
         }
         false
+    }
+
+    pub fn can_mine_domain(&self, domain: &str, records: &str, pub_key: &Bytes) -> MineResult {
+        let name = domain.to_lowercase();
+        if !check_domain(&name, true) {
+            return WrongName;
+        }
+        let zone = get_domain_zone(&name);
+        if !self.is_zone_in_blockchain(&zone) {
+            return WrongZone;
+        }
+        if let Some(transaction) = self.get_domain_transaction(&name) {
+            if transaction.pub_key.ne(pub_key) {
+                return NotOwned;
+            }
+        }
+        if serde_json::from_str::<Vec<DnsRecord>>(&records).is_err() {
+            return WrongData;
+        }
+        let identity_hash = hash_identity(&name, None);
+        if let Some(last) = self.get_last_full_block(Some(&pub_key)) {
+            let new_id = !self.is_id_in_blockchain(&identity_hash);
+            let time = last.timestamp + FULL_BLOCKS_INTERVAL - Utc::now().timestamp();
+            if new_id && time > 0 {
+                return Cooldown { time }
+            }
+        }
+
+        Fine
     }
 
     /// Gets full Transaction info for any domain. Used by DNS part.

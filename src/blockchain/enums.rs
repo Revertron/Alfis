@@ -7,3 +7,13 @@ pub enum BlockQuality {
     Bad,
     Fork,
 }
+
+pub enum MineResult {
+    Fine,
+    WrongName,
+    WrongData,
+    WrongKey,
+    WrongZone,
+    NotOwned,
+    Cooldown { time: i64 }
+}

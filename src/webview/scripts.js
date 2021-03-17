@@ -127,7 +127,7 @@ function createDomain() {
     new_domain = document.getElementById("new_domain").value;
     new_dom_records = JSON.stringify(recordsBuffer);
     new_dom_tags = document.getElementById("new_domain_tags").value;
-    external.invoke(JSON.stringify({cmd: 'createDomain', name: new_domain, records: new_dom_records, tags: new_dom_tags}));
+    external.invoke(JSON.stringify({cmd: 'mineDomain', name: new_domain, records: new_dom_records, tags: new_dom_tags}));
     recordsBuffer = [];
 }
 
@@ -138,7 +138,7 @@ function createZone() {
     obj.name = new_zone;
     obj.difficulty = parseInt(difficulty);
     data = JSON.stringify(obj);
-    external.invoke(JSON.stringify({cmd: 'createZone', name: new_zone, data: data}));
+    external.invoke(JSON.stringify({cmd: 'mineZone', name: new_zone, data: data}));
 }
 
 /*function changeDomain() {

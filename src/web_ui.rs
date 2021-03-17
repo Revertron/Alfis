@@ -20,6 +20,8 @@ use alfis::dns::protocol::DnsRecord;
 use alfis::blockchain::{ZONE_MAX_LENGTH, ZONE_DIFFICULTY};
 use Cmd::*;
 use alfis::blockchain::transaction::{DomainData, ZoneData};
+use self::web_view::WebView;
+use alfis::blockchain::enums::MineResult;
 
 pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let file_content = include_str!("webview/index.html");
@@ -40,209 +42,30 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
         .invoke_handler(|web_view, arg| {
             debug!("Command {}", arg);
             match serde_json::from_str(arg).unwrap() {
-                Loaded => {
-                    web_view.eval("showMiningIndicator(false, false);").expect("Error evaluating!");
-                    let handle = web_view.handle();
-                    let mut status = Status::new();
-                    let mut c = context.lock().unwrap();
-                    c.bus.register(move |_uuid, e| {
-                        debug!("Got event from bus {:?}", &e);
-                        let eval = match e {
-                            Event::KeyCreated { path, public, hash } => { format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash) }
-                            Event::KeyLoaded { path, public, hash } => { format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash) }
-                            Event::KeySaved { path, public, hash } => { format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash) }
-                            Event::MinerStarted => {
-                                status.mining = true;
-                                String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
-                            }
-                            Event::KeyGeneratorStarted => {
-                                status.mining = true;
-                                String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
-                            }
-                            Event::MinerStopped | Event::KeyGeneratorStopped => {
-                                status.mining = false;
-                                if status.syncing {
-                                    String::from("setLeftStatusBarText('Syncing...'); showMiningIndicator(true, true);")
-                                } else {
-                                    String::from("setLeftStatusBarText('Idle'); showMiningIndicator(false, false);")
-                                }
-                            }
-                            Event::Syncing { have, height } => {
-                                status.syncing = true;
-                                status.synced_blocks = have;
-                                status.sync_height = height;
-                                if status.mining {
-                                    String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
-                                } else {
-                                    format!("setLeftStatusBarText('Synchronizing {}/{}'); showMiningIndicator(true, true);", have, height)
-                                }
-                            }
-                            Event::SyncFinished => {
-                                status.syncing = false;
-                                if status.mining {
-                                    String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
-                                } else {
-                                    format!("setLeftStatusBarText('Idle'); showMiningIndicator(false, false);")
-                                }
-                            }
-                            Event::NetworkStatus { nodes, blocks } => {
-                                if status.mining || status.syncing || nodes < 3 {
-                                    format!("setRightStatusBarText('Nodes: {}, Blocks: {}')", nodes, blocks)
-                                } else {
-                                    format!("setLeftStatusBarText('Idle'); setRightStatusBarText('Nodes: {}, Blocks: {}')", nodes, blocks)
-                                }
-                            }
-                            _ => { String::new() }
-                        };
-
-                        if !eval.is_empty() {
-                            debug!("Evaluating {}", &eval);
-                            handle.dispatch(move |web_view| {
-                                web_view.eval(&eval.replace("\\", "\\\\"))
-                            }).expect("Error dispatching!");
-                        }
-                        true
-                    });
-                    let eval = format!("keystoreChanged('{}', '{}', '{}');", c.keystore.get_path(), &c.keystore.get_public().to_string(), &c.keystore.get_hash().to_string());
-                    debug!("Evaluating {}", &eval);
-                    web_view.eval(&eval.replace("\\", "\\\\")).expect("Error evaluating!");
+                Loaded => { action_loaded(&context, web_view); }
+                LoadKey => { action_load_key(&context, web_view); }
+                CreateKey => { keys::create_key(Arc::clone(&context)); }
+                SaveKey => { action_save_key(&context); }
+                CheckDomain { name } => { action_check_domain(&context, web_view, name); }
+                MineDomain { name, records, .. } => {
+                    action_create_domain(Arc::clone(&context), Arc::clone(&miner), web_view, name, &records);
                 }
-                LoadKey {} => {
-                    let result = tfd::open_file_dialog("Open keys file", "", Some((&["*.key"], "*.key")));
-                    match result {
-                        None => {}
-                        Some(file_name) => {
-                            match Keystore::from_file(&file_name, "") {
-                                None => {
-                                    error!("Error loading keystore '{}'!", &file_name);
-                                }
-                                Some(keystore) => {
-                                    info!("Loaded keystore with key: {:?}", &keystore.get_public());
-                                    let mut c = context.lock().unwrap();
-                                    let path = keystore.get_path().to_owned();
-                                    let public = keystore.get_public().to_string();
-                                    let hash = keystore.get_hash().to_string();
-                                    c.bus.post(Event::KeyLoaded { path, public, hash });
-                                    c.set_keystore(keystore);
-                                }
-                            }
-                        }
-                    }
-                }
-                CreateKey {} => {
-                    keys::create_key(context.clone());
-                }
-                SaveKey {} => {
-                    let result = tfd::save_file_dialog_with_filter("Save keys file", "", &["*.key"], "Key files (*.key)");
-                    match result {
-                        None => {}
-                        Some(new_path) => {
-                            let mut c = context.lock().unwrap();
-                            let path = new_path.clone();
-                            let public = c.keystore.get_public().to_string();
-                            let hash = c.keystore.get_hash().to_string();
-                            c.keystore.save(&new_path, "");
-                            info!("Key file saved to {}", &path);
-                            c.bus.post(Event::KeySaved { path, public, hash });
-                        }
-                    }
-                }
-                CheckDomain { name } => {
-                    let name = name.to_lowercase();
-                    let c = context.lock().unwrap();
-                    let available = c.get_chain().is_domain_available(&name, &c.get_keystore());
-                    web_view.eval(&format!("domainAvailable({})", available)).expect("Error evaluating!");
-                }
-                CreateDomain { name, records, .. } => {
-                    debug!("Got records: {}", records);
-                    let name = name.to_lowercase();
-                    if !check_domain(&name, true) {
-                        return Ok(());
-                    }
-                    let rec_vec = serde_json::from_str::<Vec<DnsRecord>>(&records);
-                    match rec_vec {
-                        Ok(records) => {
-                            let zone = get_domain_zone(&name);
-                            let data = DomainData::new(zone.clone(), records);
-                            let (keystore, transaction, difficulty) = {
-                                let context = context.lock().unwrap();
-                                (context.get_keystore(), context.chain.get_domain_transaction(&name), context.chain.get_zone_difficulty(&zone))
-                            };
-                            let data = serde_json::to_string(&data).unwrap();
-                            match transaction {
-                                None => {
-                                    create_domain(context.clone(), miner.clone(), &name, &data, difficulty, &keystore);
-                                }
-                                Some(transaction) => {
-                                    if transaction.pub_key == keystore.get_public() {
-                                        create_domain(context.clone(), miner.clone(), &name, &data, difficulty, &keystore);
-                                    } else {
-                                        warn!("Tried to mine not owned domain!");
-                                        let _ = web_view.eval(&format!("showWarning('{}');", "You cannot change domain that you don't own!"));
-                                    }
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            warn!("Error in DNS records for domain!\n{}", e);
-                            let _ = web_view.eval(&format!("showWarning('{}');", "Something wrong with your records! Please, correct the error and try again."));
-                        }
-                    }
-                }
-                ChangeDomain { .. } => {}
-                RenewDomain { .. } => {}
                 TransferDomain { .. } => {}
-                CheckZone { name } => {
-                    let name = name.to_lowercase();
-                    if name.len() > ZONE_MAX_LENGTH || !check_domain(&name, false) || context.lock().unwrap().x_zones.has_zone(&name) {
-                        web_view.eval("zoneAvailable(false)").expect("Error evaluating!");
-                    } else {
-                        let c = context.lock().unwrap();
-                        let available = c.get_chain().is_domain_available(&name, &c.get_keystore());
-                        web_view.eval(&format!("zoneAvailable({})", available)).expect("Error evaluating!");
-                    }
-                }
-                CreateZone { name, data } => {
-                    let name = name.to_lowercase();
-                    if name.len() > ZONE_MAX_LENGTH || !check_domain(&name, false) || context.lock().unwrap().x_zones.has_zone(&name) {
-                        warn!("This zone is unavailable for mining!");
-                        let _ = web_view.eval(&format!("showWarning('{}');", "This zone is unavailable for mining!"));
-                        return Ok(());
-                    }
-                    let data = data.to_lowercase();
-                    if serde_json::from_str::<ZoneData>(&data).is_err() {
-                        warn!("Something wrong with zone data!");
-                        let _ = web_view.eval(&format!("showWarning('{}');", "Something wrong with zone data!"));
-                        return Ok(());
-                    }
-                    let (keystore, transaction) = {
-                        let context = context.lock().unwrap();
-                        (context.get_keystore(), context.chain.get_domain_transaction(&name))
-                    };
-                    match transaction {
-                        None => {
-                            create_domain(context.clone(), miner.clone(), &name, &data, ZONE_DIFFICULTY, &keystore);
-                        }
-                        Some(transaction) => {
-                            if transaction.pub_key == keystore.get_public() {
-                                create_domain(context.clone(), miner.clone(), &name, &data, ZONE_DIFFICULTY, &keystore);
-                            } else {
-                                warn!("Tried to mine not owned domain!");
-                                let _ = web_view.eval(&format!("showWarning('{}');", "You cannot change domain that you don't own!"));
-                            }
-                        }
-                    }
-                }
-                StopMining => {
-                    context.lock().unwrap().bus.post(Event::ActionStopMining);
-                }
+                CheckZone { name } => { action_check_zone(&context, web_view, name); }
+                MineZone { name, data } => { action_create_zone(&context, Arc::clone(&miner), web_view, name, data); }
+                StopMining => { context.lock().unwrap().bus.post(Event::ActionStopMining); }
             }
-            //dbg!(&signature);
             Ok(())
         })
         .build()
         .expect("Error building GUI");
 
+    run_interface_loop(&mut interface);
+    interface.exit();
+}
+
+/// Indefinitely loops through WebView steps
+fn run_interface_loop(interface: &mut WebView<()>) {
     // We use this ugly loop to lower CPU usage a lot.
     // If we use .run() or only .step() in a loop without sleeps it will try
     // to support 60FPS and uses more CPU than it should.
@@ -269,7 +92,194 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
             start = Instant::now();
         }
     }
-    interface.exit();
+}
+
+fn action_check_zone(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>, name: String) {
+    let name = name.to_lowercase();
+    if name.len() > ZONE_MAX_LENGTH || !check_domain(&name, false) || context.lock().unwrap().x_zones.has_zone(&name) {
+        web_view.eval("zoneAvailable(false)").expect("Error evaluating!");
+    } else {
+        let c = context.lock().unwrap();
+        let available = c.get_chain().is_domain_available(&name, &c.get_keystore());
+        web_view.eval(&format!("zoneAvailable({})", available)).expect("Error evaluating!");
+    }
+}
+
+fn action_check_domain(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>, name: String) {
+    let name = name.to_lowercase();
+    let c = context.lock().unwrap();
+    let available = c.get_chain().is_domain_available(&name, &c.get_keystore());
+    web_view.eval(&format!("domainAvailable({})", available)).expect("Error evaluating!");
+}
+
+fn action_save_key(context: &Arc<Mutex<Context>>) {
+    let result = tfd::save_file_dialog_with_filter("Save keys file", "", &["*.key"], "Key files (*.key)");
+    match result {
+        None => {}
+        Some(new_path) => {
+            let mut context = context.lock().unwrap();
+            let path = new_path.clone();
+            let public = context.keystore.get_public().to_string();
+            let hash = context.keystore.get_hash().to_string();
+            context.keystore.save(&new_path, "");
+            info!("Key file saved to {}", &path);
+            context.bus.post(Event::KeySaved { path, public, hash });
+        }
+    }
+}
+
+fn action_load_key(context: &Arc<Mutex<Context>>, _web_view: &mut WebView<()>) {
+    let result = tfd::open_file_dialog("Open keys file", "", Some((&["*.key"], "*.key")));
+    match result {
+        None => {}
+        Some(file_name) => {
+            match Keystore::from_file(&file_name, "") {
+                None => {
+                    error!("Error loading keystore '{}'!", &file_name);
+                }
+                Some(keystore) => {
+                    info!("Loaded keystore with key: {:?}", &keystore.get_public());
+                    let mut c = context.lock().unwrap();
+                    let path = keystore.get_path().to_owned();
+                    let public = keystore.get_public().to_string();
+                    let hash = keystore.get_hash().to_string();
+                    c.bus.post(Event::KeyLoaded { path, public, hash });
+                    c.set_keystore(keystore);
+                }
+            }
+        }
+    }
+}
+
+fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
+    web_view.eval("showMiningIndicator(false, false);").expect("Error evaluating!");
+    let handle = web_view.handle();
+    let mut status = Status::new();
+    let mut c = context.lock().unwrap();
+    c.bus.register(move |_uuid, e| {
+        debug!("Got event from bus {:?}", &e);
+        let eval = match e {
+            Event::KeyCreated { path, public, hash } |
+            Event::KeyLoaded { path, public, hash } |
+            Event::KeySaved { path, public, hash } => {
+                format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash)
+            }
+            Event::MinerStarted | Event::KeyGeneratorStarted => {
+                status.mining = true;
+                String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
+            }
+            Event::MinerStopped | Event::KeyGeneratorStopped => {
+                status.mining = false;
+                if status.syncing {
+                    String::from("setLeftStatusBarText('Syncing...'); showMiningIndicator(true, true);")
+                } else {
+                    String::from("setLeftStatusBarText('Idle'); showMiningIndicator(false, false);")
+                }
+            }
+            Event::Syncing { have, height } => {
+                status.syncing = true;
+                status.synced_blocks = have;
+                status.sync_height = height;
+                if status.mining {
+                    String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
+                } else {
+                    format!("setLeftStatusBarText('Synchronizing {}/{}'); showMiningIndicator(true, true);", have, height)
+                }
+            }
+            Event::SyncFinished => {
+                status.syncing = false;
+                if status.mining {
+                    String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
+                } else {
+                    format!("setLeftStatusBarText('Idle'); showMiningIndicator(false, false);")
+                }
+            }
+            Event::NetworkStatus { nodes, blocks } => {
+                if status.mining || status.syncing || nodes < 3 {
+                    format!("setRightStatusBarText('Nodes: {}, Blocks: {}')", nodes, blocks)
+                } else {
+                    format!("setLeftStatusBarText('Idle'); setRightStatusBarText('Nodes: {}, Blocks: {}')", nodes, blocks)
+                }
+            }
+            _ => { String::new() }
+        };
+
+        if !eval.is_empty() {
+            debug!("Evaluating {}", &eval);
+            handle.dispatch(move |web_view| {
+                web_view.eval(&eval.replace("\\", "\\\\"))
+            }).expect("Error dispatching!");
+        }
+        true
+    });
+    let eval = format!("keystoreChanged('{}', '{}', '{}');", c.keystore.get_path(), &c.keystore.get_public().to_string(), &c.keystore.get_hash().to_string());
+    debug!("Evaluating {}", &eval);
+    web_view.eval(&eval.replace("\\", "\\\\")).expect("Error evaluating!");
+}
+
+fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, web_view: &mut WebView<()>, name: String, records: &String) {
+    debug!("Creating domain with records: {}", records);
+    let c = Arc::clone(&context);
+    let context = context.lock().unwrap();
+    let pub_key = context.keystore.get_public();
+    match context.chain.can_mine_domain(&name, &records, &pub_key) {
+        MineResult::Fine => {
+            let zone = get_domain_zone(&name);
+            let difficulty = context.chain.get_zone_difficulty(&zone);
+            if let Ok(records) = serde_json::from_str::<Vec<DnsRecord>>(&records) {
+                let data = DomainData::new(zone.clone(), records);
+                let data = serde_json::to_string(&data).unwrap();
+                create_domain(c, miner, &name, &data, difficulty, &context.keystore);
+            }
+        }
+        MineResult::WrongName => { show_warning(web_view, "You can't mine this domain!"); }
+        MineResult::WrongData => { show_warning(web_view, "You have an error in records!"); }
+        MineResult::WrongKey => { show_warning(web_view, "You can't mine with current key!"); }
+        MineResult::WrongZone => { show_warning(web_view, "You can't mine domain in this zone!"); }
+        MineResult::NotOwned => { show_warning(web_view, "This domain is already taken, and it is not yours!"); }
+        MineResult::Cooldown { time } => {
+            show_warning(web_view, &format!("You have cooldown, just {} more minutes!", time / 60));
+        }
+    }
+}
+
+fn action_create_zone(context: &Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, web_view: &mut WebView<()>, name: String, data: String) {
+    let name = name.to_lowercase();
+    if name.len() > ZONE_MAX_LENGTH || !check_domain(&name, false) || context.lock().unwrap().x_zones.has_zone(&name) {
+        warn!("This zone is unavailable for mining!");
+        show_warning(web_view, "This zone is unavailable for mining!");
+        return;
+    }
+    let data = data.to_lowercase();
+    if serde_json::from_str::<ZoneData>(&data).is_err() {
+        warn!("Something wrong with zone data!");
+        show_warning(web_view, "Something wrong with zone data!");
+        return;
+    }
+    let (keystore, transaction) = {
+        let context = context.lock().unwrap();
+        (context.get_keystore(), context.chain.get_domain_transaction(&name))
+    };
+    match transaction {
+        None => {
+            create_domain(context.clone(), miner.clone(), &name, &data, ZONE_DIFFICULTY, &keystore);
+        }
+        Some(transaction) => {
+            if transaction.pub_key == keystore.get_public() {
+                create_domain(context.clone(), miner.clone(), &name, &data, ZONE_DIFFICULTY, &keystore);
+            } else {
+                warn!("Tried to mine not owned domain!");
+                show_warning(web_view, "You cannot change domain that you don't own!");
+            }
+        }
+    }
+}
+
+fn show_warning(web_view: &mut WebView<()>, text: &str) {
+    match web_view.eval(&format!("showWarning('{}');", text)) {
+        Ok(_) => {}
+        Err(_) => { warn!("Error showing warning!"); }
+    }
 }
 
 fn create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, name: &str, data: &str, difficulty: u32, keystore: &Keystore) {
@@ -289,15 +299,13 @@ fn create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, name: &
 #[serde(tag = "cmd", rename_all = "camelCase")]
 pub enum Cmd {
     Loaded,
-    LoadKey {},
-    CreateKey {},
-    SaveKey {},
+    LoadKey,
+    CreateKey,
+    SaveKey,
     CheckZone { name: String },
-    CreateZone { name: String, data: String },
+    MineZone { name: String, data: String },
     CheckDomain { name: String },
-    CreateDomain { name: String, records: String, tags: String },
-    ChangeDomain { name: String, records: String, tags: String },
-    RenewDomain { name: String, days: u16 },
+    MineDomain { name: String, records: String, tags: String },
     TransferDomain { name: String, owner: String },
     StopMining,
 }
