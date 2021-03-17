@@ -15,6 +15,7 @@ use crate::settings::Settings;
 use crate::keys::check_public_key_strength;
 use std::cmp::{min, max};
 use crate::blockchain::transaction::{ZoneData, DomainData};
+use std::ops::Deref;
 
 const DB_NAME: &str = "blockchain.db";
 const SQL_CREATE_TABLES: &str = "CREATE TABLE blocks (
@@ -198,8 +199,15 @@ impl Chain {
 
     /// Gets last block that has a Transaction within
     pub fn get_last_full_block(&self, pub_key: Option<&[u8]>) -> Option<Block> {
-        if self.last_full_block.is_some() && pub_key.is_none() {
-            return Some(self.last_full_block.clone().unwrap());
+        if let Some(block) = &self.last_full_block {
+            match pub_key {
+                None => { return Some(block.clone()); }
+                Some(key) => {
+                    if block.pub_key.deref().eq(key) {
+                        return Some(block.clone());
+                    }
+                }
+            }
         }
 
         let mut statement = match pub_key {
@@ -406,7 +414,7 @@ impl Chain {
             }
             // TODO check only blocks with new identity
             if let Some(last) = self.get_last_full_block(Some(&block.pub_key)) {
-                if last.timestamp + FULL_BLOCKS_INTERVAL > block.timestamp {
+                if last.index < block.index && last.timestamp + FULL_BLOCKS_INTERVAL > block.timestamp {
                     warn!("Block {:?} is mined too early!", &block);
                     return Bad;
                 }
