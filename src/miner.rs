@@ -207,7 +207,7 @@ fn find_hash(context: Arc<Mutex<Context>>, digest: &mut dyn Digest, mut block: B
     loop {
         block.random = rand::random();
         block.index = context.lock().unwrap().chain.height() + 1;
-        if context.lock().unwrap().chain.next_minable_block() > block.index {
+        if context.lock().unwrap().chain.next_allowed_block() > block.index {
             // We can't mine now, as we need to wait for block to be signed
             thread::sleep(Duration::from_millis(1000));
             continue;

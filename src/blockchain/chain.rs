@@ -277,11 +277,21 @@ impl Chain {
 
         // Checking for existing zone in DB
         let identity_hash = hash_identity(zone, None);
-        let mut statement = self.db.prepare(SQL_GET_ID_BY_ID).unwrap();
-        statement.bind(1, &**identity_hash).expect("Error in bind");
-        while let State::Row = statement.next().unwrap() {
+        if self.is_id_in_blockchain(&identity_hash) {
             // If there is such a zone
             self.zones.borrow_mut().insert(zone.to_owned());
+            return true;
+        }
+        false
+    }
+
+    /// Checks if some id exists in our blockchain
+    pub fn is_id_in_blockchain(&self, id: &Bytes) -> bool {
+        // Checking for existing zone in DB
+        let mut statement = self.db.prepare(SQL_GET_ID_BY_ID).unwrap();
+        statement.bind(1, &***id).expect("Error in bind");
+        while let State::Row = statement.next().unwrap() {
+            // If there is such a zone
             return true;
         }
         false
@@ -353,7 +363,7 @@ impl Chain {
         }
     }
 
-    pub fn next_minable_block(&self) -> u64 {
+    pub fn next_allowed_block(&self) -> u64 {
         match self.last_full_block {
             None => { self.height() + 1 }
             Some(ref block) => {
@@ -412,9 +422,9 @@ impl Chain {
                 warn!("Block {:?} is trying to spoof an identity!", &block);
                 return Bad;
             }
-            // TODO check only blocks with new identity
             if let Some(last) = self.get_last_full_block(Some(&block.pub_key)) {
-                if last.index < block.index && last.timestamp + FULL_BLOCKS_INTERVAL > block.timestamp {
+                let new_id = !self.is_id_in_blockchain(&transaction.identity);
+                if new_id && last.timestamp + FULL_BLOCKS_INTERVAL > block.timestamp {
                     warn!("Block {:?} is mined too early!", &block);
                     return Bad;
                 }
@@ -490,7 +500,7 @@ impl Chain {
         Good
     }
 
-    fn check_block_for_lock(&self, block: &&Block, full_block: &Block) -> BlockQuality {
+    fn check_block_for_lock(&self, block: &Block, full_block: &Block) -> BlockQuality {
         // If we got a locker/signing block
         let lockers: HashSet<Bytes> = self.get_block_lockers(full_block).into_iter().collect();
         if !lockers.contains(&block.pub_key) {
