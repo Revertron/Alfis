@@ -209,14 +209,10 @@ fn find_hash(context: Arc<Mutex<Context>>, digest: &mut dyn Digest, mut block: B
     loop {
         block.random = rand::random();
         block.index = context.lock().unwrap().chain.height() + 1;
-        if let Some(last_block) = context.lock().unwrap().chain.last_block() {
-            block.prev_block_hash = last_block.hash;
-            if block.transaction.is_some() && last_block.transaction.is_some() {
-                // We can't mine our domain block over a block with domain
-                // TODO make a method in Chain to get next available to mine block index
-                thread::sleep(Duration::from_millis(1000));
-                continue;
-            }
+        if context.lock().unwrap().chain.next_minable_block() > block.index {
+            // We can't mine now, as we need to wait for block to be signed
+            thread::sleep(Duration::from_millis(1000));
+            continue;
         }
         debug!("Mining block {}", serde_json::to_string(&block).unwrap());
         for nonce in 0..std::u64::MAX {

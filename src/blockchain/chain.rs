@@ -13,7 +13,7 @@ use crate::blockchain::enums::BlockQuality::*;
 use crate::blockchain::hash_utils::*;
 use crate::settings::Settings;
 use crate::keys::check_public_key_strength;
-use std::cmp::min;
+use std::cmp::{min, max};
 
 const DB_NAME: &str = "blockchain.db";
 const SQL_CREATE_TABLES: &str = "CREATE TABLE blocks (
@@ -326,6 +326,19 @@ impl Chain {
         match &self.last_block {
             None => { Bytes::default() }
             Some(block) => { block.hash.clone() }
+        }
+    }
+
+    pub fn next_minable_block(&self) -> u64 {
+        match self.last_full_block {
+            None => { self.height() + 1 }
+            Some(ref block) => {
+                if block.index < LOCKER_BLOCK_START {
+                    self.height() + 1
+                } else {
+                    max(block.index, self.height()) + LOCKER_BLOCK_SIGNS
+                }
+            }
         }
     }
 
