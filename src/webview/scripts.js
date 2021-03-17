@@ -136,7 +136,7 @@ function createZone() {
     difficulty = document.getElementById("new_zone_difficulty").value;
     obj = {};
     obj.name = new_zone;
-    obj.difficulty = difficulty;
+    obj.difficulty = parseInt(difficulty);
     data = JSON.stringify(obj);
     external.invoke(JSON.stringify({cmd: 'createZone', name: new_zone, data: data}));
 }

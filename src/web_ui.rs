@@ -19,7 +19,7 @@ use alfis::event::Event;
 use alfis::dns::protocol::DnsRecord;
 use alfis::blockchain::{ZONE_MAX_LENGTH, ZONE_DIFFICULTY};
 use Cmd::*;
-use alfis::blockchain::transaction::DomainData;
+use alfis::blockchain::transaction::{DomainData, ZoneData};
 
 pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let file_content = include_str!("webview/index.html");
@@ -166,7 +166,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                             let data = DomainData::new(zone.clone(), records);
                             let (keystore, transaction, difficulty) = {
                                 let context = context.lock().unwrap();
-                                (context.get_keystore(), context.chain.get_domain_transaction(&name), context.chain.get_zone_difficulty(&name))
+                                (context.get_keystore(), context.chain.get_domain_transaction(&name), context.chain.get_zone_difficulty(&zone))
                             };
                             let data = serde_json::to_string(&data).unwrap();
                             match transaction {
@@ -210,6 +210,11 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                         return Ok(());
                     }
                     let data = data.to_lowercase();
+                    if serde_json::from_str::<ZoneData>(&data).is_err() {
+                        warn!("Something wrong with zone data!");
+                        let _ = web_view.eval(&format!("showWarning('{}');", "Something wrong with zone data!"));
+                        return Ok(());
+                    }
                     let (keystore, transaction) = {
                         let context = context.lock().unwrap();
                         (context.get_keystore(), context.chain.get_domain_transaction(&name))
