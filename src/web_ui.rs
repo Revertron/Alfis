@@ -53,7 +53,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                 }
                 TransferDomain { .. } => {}
                 CheckZone { name } => { action_check_zone(&context, web_view, name); }
-                MineZone { name, data } => { action_create_zone(&context, Arc::clone(&miner), web_view, name, data); }
+                MineZone { name, data } => { action_create_zone(Arc::clone(&context), Arc::clone(&miner), web_view, name, data); }
                 StopMining => { context.lock().unwrap().bus.post(Event::ActionStopMining); }
             }
             Ok(())
@@ -237,7 +237,9 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
             if let Ok(records) = serde_json::from_str::<Vec<DnsRecord>>(&records) {
                 let data = DomainData::new(zone.clone(), records);
                 let data = serde_json::to_string(&data).unwrap();
-                create_domain(c, miner, &name, &data, difficulty, &context.keystore);
+                let keystore = context.keystore.clone();
+                std::mem::drop(context);
+                create_domain(c, miner, &name, &data, difficulty, &keystore);
                 let _ = web_view.eval("domainMiningStarted()");
             }
         }
@@ -252,7 +254,7 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
     }
 }
 
-fn action_create_zone(context: &Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, web_view: &mut WebView<()>, name: String, data: String) {
+fn action_create_zone(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, web_view: &mut WebView<()>, name: String, data: String) {
     let name = name.to_lowercase();
     if name.len() > ZONE_MAX_LENGTH || !check_domain(&name, false) || context.lock().unwrap().x_zones.has_zone(&name) {
         warn!("This zone is unavailable for mining!");
@@ -271,11 +273,11 @@ fn action_create_zone(context: &Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, w
     };
     match transaction {
         None => {
-            create_domain(context.clone(), miner.clone(), &name, &data, ZONE_DIFFICULTY, &keystore);
+            create_domain(Arc::clone(&context), miner.clone(), &name, &data, ZONE_DIFFICULTY, &keystore);
         }
         Some(transaction) => {
             if transaction.pub_key == keystore.get_public() {
-                create_domain(context.clone(), miner.clone(), &name, &data, ZONE_DIFFICULTY, &keystore);
+                create_domain(Arc::clone(&context), miner.clone(), &name, &data, ZONE_DIFFICULTY, &keystore);
             } else {
                 warn!("Tried to mine not owned domain!");
                 show_warning(web_view, "You cannot change domain that you don't own!");
