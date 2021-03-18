@@ -46,6 +46,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                 LoadKey => { action_load_key(&context, web_view); }
                 CreateKey => { keys::create_key(Arc::clone(&context)); }
                 SaveKey => { action_save_key(&context); }
+                CheckRecord { data } => { action_check_record(web_view, data); }
                 CheckDomain { name } => { action_check_domain(&context, web_view, name); }
                 MineDomain { name, records, .. } => {
                     action_create_domain(Arc::clone(&context), Arc::clone(&miner), web_view, name, &records);
@@ -102,6 +103,13 @@ fn action_check_zone(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>, 
         let c = context.lock().unwrap();
         let available = c.get_chain().is_domain_available(&name, &c.get_keystore());
         web_view.eval(&format!("zoneAvailable({})", available)).expect("Error evaluating!");
+    }
+}
+
+fn action_check_record(web_view: &mut WebView<()>, data: String) {
+    match serde_json::from_str::<DnsRecord>(&data) {
+        Ok(_) => { web_view.eval("recordOkay(true)").expect("Error evaluating!"); }
+        Err(e) => { web_view.eval("recordOkay(false)").expect("Error evaluating!"); dbg!(e); }
     }
 }
 
@@ -230,6 +238,7 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
                 let data = DomainData::new(zone.clone(), records);
                 let data = serde_json::to_string(&data).unwrap();
                 create_domain(c, miner, &name, &data, difficulty, &context.keystore);
+                let _ = web_view.eval("domainMiningStarted()");
             }
         }
         MineResult::WrongName => { show_warning(web_view, "You can't mine this domain!"); }
@@ -304,6 +313,7 @@ pub enum Cmd {
     SaveKey,
     CheckZone { name: String },
     MineZone { name: String, data: String },
+    CheckRecord { data: String },
     CheckDomain { name: String },
     MineDomain { name: String, records: String, tags: String },
     TransferDomain { name: String, owner: String },

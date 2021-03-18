@@ -48,9 +48,7 @@ function refresh_records_list() {
 function showNewRecordDialog() {
     button_positive = document.getElementById("new_record_positive_button");
     button_positive.onclick = function() {
-        addRecord(get_record_from_dialog()); // It will refresh list
-        dialog = document.getElementById("new_record_dialog");
-        dialog.className = "modal";
+        checkRecord(get_record_from_dialog());
     };
 
     button_negative = document.getElementById("new_record_negative_button");
@@ -65,7 +63,7 @@ function showNewRecordDialog() {
 }
 
 function get_record_from_dialog() {
-    record_name = document.getElementById("record_name").value;
+    record_name = document.getElementById("record_name").value.toLowerCase();
     record_type = document.getElementById("record_type").value;
     record_ttl = parseInt(document.getElementById("record_ttl").value);
     record_data = document.getElementById("record_data").value;
@@ -123,11 +121,28 @@ function saveKey() {
     external.invoke(JSON.stringify({cmd: 'saveKey'}));
 }
 
+function checkRecord(data) {
+    external.invoke(JSON.stringify({cmd: 'checkRecord', data: JSON.stringify(data)}));
+}
+
+function recordOkay(okay) {
+    if (okay) {
+        addRecord(get_record_from_dialog()); // It will refresh list
+        dialog = document.getElementById("new_record_dialog");
+        dialog.className = "modal";
+    } else {
+        showWarning('Record is not valid!');
+    }
+}
+
 function createDomain() {
-    new_domain = document.getElementById("new_domain").value;
+    new_domain = document.getElementById("new_domain").value.toLowerCase();
     new_dom_records = JSON.stringify(recordsBuffer);
     new_dom_tags = document.getElementById("new_domain_tags").value;
     external.invoke(JSON.stringify({cmd: 'mineDomain', name: new_domain, records: new_dom_records, tags: new_dom_tags}));
+}
+
+function domainMiningStarted() {
     recordsBuffer = [];
 }
 
