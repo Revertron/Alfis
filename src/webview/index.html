@@ -133,9 +133,22 @@
         </div><!--column-->
 
         <div class="column auto">
-            <div class="content center" id="main"><h1>Welcome to ALFIS!</h1>
+            <div class="content center" id="main">
+                <h1>Welcome to ALFIS!</h1>
                 <p>ALFIS stands for Alternative Free Identity System.</p>
                 <p>It gives you an opportunity to create your own domains and use them in decentralized networks, store security certificates for browsers to trust without any centralized CA.</p>
+                <h2>How this system works?</h2>
+                <h3>If you just want to be able to resolve our domains</h3>
+                <p>Carefully configure DNS section in <strong>alfis.toml</strong> and start ALFIS with <code>-n</code> command line switch.
+                    It will start without GUI, but will work as local DNS-resolver.</p>
+                <h3>If you want to get your own domain</h3>
+                <ul>
+                    <li>Generate a keypair in "Manage keys" part (you need just one for any number of domains)</li>
+                    <li>Check available zones (for now we have a test zone <code>.yy</code>). In future version a list of available zones will be somewhere here</li>
+                    <li>Go to "Mine domain" part and enter desired domain in first field, if it is not red - you can create it</li>
+                    <li>Carefully add needed DNS-records (you can add them later, but you will need to mine it again)</li>
+                    <li>Just click on "Mine domain" and wait for it, your domain (when properly cooked) will propagate to all blockchain nodes automatically</li>
+                </ul>
             </div>
 
             <div class="content is-hidden" id="key_load">
