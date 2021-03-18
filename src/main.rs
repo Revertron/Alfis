@@ -29,6 +29,7 @@ fn main() {
     #[cfg(windows)]
     unsafe {
         AttachConsole(ATTACH_PARENT_PROCESS);
+        winapi::um::shellscalingapi::SetProcessDpiAwareness(2);
     }
 
     let args: Vec<String> = env::args().collect();

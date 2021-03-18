@@ -152,188 +152,174 @@
             </div>
 
             <div class="content is-hidden" id="key_load">
-                <form action="#">
-                    <div class="field">
-                        <label class="label">Key path</label>
-                        <p id="key_file_name">Key not saved</p>
+                <div class="field">
+                    <label class="label">Key path</label>
+                    <p id="key_file_name">Key not saved</p>
+                </div>
+
+                <div class="field">
+                    <label class="label">Public key</label>
+                    <p id="key_public_key">Not loaded</p>
+                </div>
+
+                <div class="field">
+                    <label class="label">Public key hash</label>
+                    <p id="key_public_hash">Not loaded</p>
+                </div>
+
+                <br>
+                <div class="field is-grouped">
+                    <div class="control">
+                        <button class="button is-success" onclick="loadKey();">Load key</button>
                     </div>
 
-                    <div class="field">
-                        <label class="label">Public key</label>
-                        <p id="key_public_key">Not loaded</p>
+                    <div class="control">
+                        <button class="button is-warning" onclick="createKey();">Mine new key</button>
                     </div>
 
-                    <div class="field">
-                        <label class="label">Public key hash</label>
-                        <p id="key_public_hash">Not loaded</p>
+                    <div class="control">
+                        <button class="button is-primary" onclick="saveKey();">Save key</button>
                     </div>
-
-                    <br>
-                    <div class="field is-grouped">
-                        <div class="control">
-                            <button class="button is-success" onclick="loadKey();">Load key</button>
-                        </div>
-
-                        <div class="control">
-                            <button class="button is-warning" onclick="createKey();">Mine new key</button>
-                        </div>
-
-                        <div class="control">
-                            <button class="button is-primary" onclick="saveKey();">Save key</button>
-                        </div>
-                    </div>
-                </form>
+                </div>
             </div>
 
 
             <div class="content is-hidden" id="dom_new">
-                <form action="#">
-
-                    <div class="columns">
-                        <div class="column">
-                            <div class="field">
-                                <label class="label">Domain name</label>
-                                <div class="control">
-                                    <input class="input" type="text" placeholder="example.ygg" id="new_domain" oninput="onDomainChange(this)">
-                                </div>
-                            </div>
-                        </div>
-                        <div class="column">
-                            <div class="field">
-                                <label class="label">Domain tags (will be used for search)</label>
-                                <div class="control">
-                                    <input class="input" type="text" placeholder="blog, community, friendship" id="new_domain_tags">
-                                </div>
+                <div class="columns">
+                    <div class="column">
+                        <div class="field">
+                            <label class="label">Domain name</label>
+                            <div class="control">
+                                <input class="input" type="text" placeholder="example.ygg" id="new_domain" oninput="onDomainChange(this)">
                             </div>
                         </div>
                     </div>
-
-                    <div class="block" id="domain_records">
-                        <!-- Here will be our domain records, added by dialog -->
-                    </div>
-
-                    <div class="field is-grouped">
-                        <div class="control">
-                            <button class="button is-success" id="add_record_button" onclick="showNewRecordDialog();">Add record</button>
-                        </div>
-                        <div class="control">
-                            <button class="button is-link" id="new_domain_button" onclick="createDomain();" disabled>Mine domain</button>
+                    <div class="column">
+                        <div class="field">
+                            <label class="label">Domain tags (will be used for search)</label>
+                            <div class="control">
+                                <input class="input" type="text" placeholder="blog, community, friendship" id="new_domain_tags">
+                            </div>
                         </div>
                     </div>
-                </form>
+                </div>
+
+                <div class="block" id="domain_records">
+                    <!-- Here will be our domain records, added by dialog -->
+                </div>
+
+                <div class="field is-grouped">
+                    <div class="control">
+                        <button class="button is-success" id="add_record_button" onclick="showNewRecordDialog();">Add record</button>
+                    </div>
+                    <div class="control">
+                        <button class="button is-link" id="new_domain_button" onclick="createDomain();" disabled>Mine domain</button>
+                    </div>
+                </div>
             </div>
 
 
             <div class="content is-hidden" id="zone_new">
-                <form action="#">
-
-                    <div class="columns">
-                        <div class="column">
-                            <div class="field">
-                                <label class="label">Zone name</label>
-                                <div class="control">
-                                    <input class="input" type="text" placeholder="ygg" id="new_zone" oninput="onZoneChange()">
-                                </div>
-                            </div>
-                        </div>
-                        <div class="column">
-                            <div class="field">
-                                <label class="label">Difficulty (for all domains in zone)</label>
-                                <div class="control">
-                                    <input class="input" type="number" placeholder="20" id="new_zone_difficulty" oninput="onZoneChange()">
-                                </div>
+                <div class="columns">
+                    <div class="column">
+                        <div class="field">
+                            <label class="label">Zone name</label>
+                            <div class="control">
+                                <input class="input" type="text" placeholder="ygg" id="new_zone" oninput="onZoneChange()">
                             </div>
                         </div>
                     </div>
-
-                    <div class="field is-grouped">
-                        <div class="control">
-                            <button class="button is-link" id="new_zone_button" onclick="createZone();" disabled>Mine zone</button>
+                    <div class="column">
+                        <div class="field">
+                            <label class="label">Difficulty (for all domains in zone)</label>
+                            <div class="control">
+                                <input class="input" type="number" placeholder="20" id="new_zone_difficulty" oninput="onZoneChange()">
+                            </div>
                         </div>
                     </div>
-                </form>
+                </div>
+
+                <div class="field is-grouped">
+                    <div class="control">
+                        <button class="button is-link" id="new_zone_button" onclick="createZone();" disabled>Mine zone</button>
+                    </div>
+                </div>
             </div>
 
 
             <div class="content is-hidden" id="dom_edit">
-                <form action="#">
-                    <div class="field">
-                        <label class="label">Your existing domain name</label>
-                        <div class="control">
-                            <input class="input" type="text" placeholder="example.ygg" id="change_domain">
-                        </div>
+                <div class="field">
+                    <label class="label">Your existing domain name</label>
+                    <div class="control">
+                        <input class="input" type="text" placeholder="example.ygg" id="change_domain">
                     </div>
+                </div>
 
-                    <div class="field">
-                        <label class="label">All new domain records</label>
-                        <div class="control">
-                            <textarea class="textarea" placeholder="@ IN AAAA 200:1111:2222:3333:4444:5555:6666:7777" id="change_domain_records"></textarea>
-                        </div>
+                <div class="field">
+                    <label class="label">All new domain records</label>
+                    <div class="control">
+                        <textarea class="textarea" placeholder="@ IN AAAA 200:1111:2222:3333:4444:5555:6666:7777" id="change_domain_records"></textarea>
                     </div>
+                </div>
 
-                    <div class="field">
-                        <label class="label">Domain tags (will be used for search)</label>
-                        <div class="control">
-                            <input class="input" type="text" placeholder="blog, community, friendship" id="change_domain_tags">
-                        </div>
+                <div class="field">
+                    <label class="label">Domain tags (will be used for search)</label>
+                    <div class="control">
+                        <input class="input" type="text" placeholder="blog, community, friendship" id="change_domain_tags">
                     </div>
+                </div>
 
-                    <div class="field is-grouped">
-                        <div class="control">
-                            <button class="button is-link" onclick="changeDomain();">Replace records</button>
-                        </div>
+                <div class="field is-grouped">
+                    <div class="control">
+                        <button class="button is-link" onclick="changeDomain();">Replace records</button>
                     </div>
-                </form>
+                </div>
             </div>
 
 
             <div class="content is-hidden" id="dom_renew">
-                <form action="#">
-                    <div class="field">
-                        <label class="label">Your existing domain name</label>
-                        <div class="control">
-                            <input class="input" type="text" placeholder="example.ygg" id="renew_domain">
-                        </div>
+                <div class="field">
+                    <label class="label">Your existing domain name</label>
+                    <div class="control">
+                        <input class="input" type="text" placeholder="example.ygg" id="renew_domain">
                     </div>
+                </div>
 
-                    <div class="field">
-                        <label class="label">Days to add</label>
-                        <div class="control">
-                            <input class="input" type="text" placeholder="365" value="365" id="renew_domain_extend_days" disabled>
-                        </div>
+                <div class="field">
+                    <label class="label">Days to add</label>
+                    <div class="control">
+                        <input class="input" type="text" placeholder="365" value="365" id="renew_domain_extend_days" disabled>
                     </div>
+                </div>
 
-                    <div class="field is-grouped">
-                        <div class="control">
-                            <button class="button is-link" onclick="renewDomain();">Renew domain</button>
-                        </div>
+                <div class="field is-grouped">
+                    <div class="control">
+                        <button class="button is-link" onclick="renewDomain();">Renew domain</button>
                     </div>
-                </form>
+                </div>
             </div>
 
 
             <div class="content is-hidden" id="dom_transfer">
-                <form action="#">
-                    <div class="field">
-                        <label class="label">Your existing domain name</label>
-                        <div class="control">
-                            <input class="input" type="text" placeholder="example.ygg" id="transfer_domain">
-                        </div>
+                <div class="field">
+                    <label class="label">Your existing domain name</label>
+                    <div class="control">
+                        <input class="input" type="text" placeholder="example.ygg" id="transfer_domain">
                     </div>
+                </div>
 
-                    <div class="field">
-                        <label class="label">Public key of new owner</label>
-                        <div class="control">
-                            <input class="input" type="text" placeholder="3764ef954577a1815db3cc65aa3e2b18a52f12a3f6fcbd6a10d9ce8d06741ddd" id="transfer_domain_transfer_owner">
-                        </div>
+                <div class="field">
+                    <label class="label">Public key of new owner</label>
+                    <div class="control">
+                        <input class="input" type="text" placeholder="3764ef954577a1815db3cc65aa3e2b18a52f12a3f6fcbd6a10d9ce8d06741ddd" id="transfer_domain_transfer_owner">
                     </div>
+                </div>
 
-                    <div class="field is-grouped">
-                        <div class="control">
-                            <button class="button is-link" onclick="transferDomain();">Transfer domain</button>
-                        </div>
+                <div class="field is-grouped">
+                    <div class="control">
+                        <button class="button is-link" onclick="transferDomain();">Transfer domain</button>
                     </div>
-                </form>
+                </div>
             </div>
 
 
