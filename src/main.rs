@@ -18,7 +18,7 @@ use winapi::um::wincon::{ATTACH_PARENT_PROCESS, AttachConsole, FreeConsole};
 use alfis::{Block, Bytes, Chain, Miner, Context, Network, Settings, dns_utils, Keystore};
 use alfis::blockchain::BLOCK_DIFFICULTY;
 
-#[cfg(webui)]
+#[cfg(feature = "webgui")]
 mod web_ui;
 
 const SETTINGS_FILENAME: &str = "alfis.toml";
@@ -38,8 +38,7 @@ fn main() {
 
     let mut opts = Options::new();
     opts.optflag("h", "help", "Print this help menu");
-    #[cfg(webui)]
-    opts.optflag("n", "nogui", "Run without graphic user interface");
+    opts.optflag("n", "nogui", "Run without graphic user interface (default for no gui builds)");
     opts.optflag("v", "verbose", "Show more debug messages");
     opts.optflag("d", "debug", "Show trace messages, more than debug");
     opts.optflag("l", "list", "List blocks from DB and exit");
@@ -56,9 +55,9 @@ fn main() {
         return;
     }
 
-    #[cfg(webui)]
+    #[cfg(feature = "webgui")]
     let no_gui = opt_matches.opt_present("n");
-    #[cfg(not(webui))]
+    #[cfg(not(feature = "webgui"))]
     let no_gui = true;
 
     let mut level = LevelFilter::Info;
@@ -116,7 +115,7 @@ fn main() {
             thread::sleep(sleep);
         }
     } else {
-        #[cfg(webui)]
+        #[cfg(feature = "webgui")]
         web_ui::run_interface(context.clone(), miner.clone());
     }
 
