@@ -115,6 +115,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload ARM binary
         id: upload-arm-binary
+        if: contains(matrix.os, 'ubuntu')
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
