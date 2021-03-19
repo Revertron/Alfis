@@ -204,10 +204,11 @@ impl Miner {
 fn find_hash(context: Arc<Mutex<Context>>, digest: &mut dyn Digest, mut block: Block, running: Arc<AtomicBool>, top_block: Arc<AtomicU64>) -> Option<Block> {
     let mut buf: [u8; 32] = [0; 32];
     let difficulty = block.difficulty as usize;
+    let full = block.transaction.is_some();
     loop {
         block.random = rand::random();
         block.index = context.lock().unwrap().chain.height() + 1;
-        if context.lock().unwrap().chain.next_allowed_block() > block.index {
+        if full && context.lock().unwrap().chain.next_allowed_block() > block.index {
             // We can't mine now, as we need to wait for block to be signed
             thread::sleep(Duration::from_millis(1000));
             continue;
