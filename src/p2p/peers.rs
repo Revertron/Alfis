@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::net::{SocketAddr, Shutdown};
+use std::net::{SocketAddr, IpAddr, Shutdown, ToSocketAddrs};
 use mio::{Token, Interest, Registry};
 use mio::net::TcpStream;
 use crate::p2p::{Peer, State, Message};
@@ -13,14 +13,15 @@ use crate::Bytes;
 
 pub struct Peers {
     peers: HashMap<Token, Peer>,
-    new_peers: Vec<SocketAddr>
+    new_peers: Vec<SocketAddr>,
+    ignored: HashSet<IpAddr>
 }
 
 const PING_PERIOD: u64 = 30;
 
 impl Peers {
     pub fn new() -> Self {
-        Peers { peers: HashMap::new(), new_peers: Vec::new() }
+        Peers { peers: HashMap::new(), new_peers: Vec::new(), ignored: HashSet::new() }
     }
 
     pub fn add_peer(&mut self, token: Token, peer: Peer) {
@@ -65,26 +66,32 @@ impl Peers {
         debug!("Got {} peers: {:?}", peers.len(), &peers);
         // TODO make it return error if these peers are wrong and seem like an attack
         for peer in peers.iter() {
-            let addr: SocketAddr = peer.parse().expect(&format!("Error parsing peer {}", peer));
+            let addr: SocketAddr = match peer.parse() {
+                Err(_) => {
+                    warn!("Error parsing peer {}", peer);
+                    continue;
+                }
+                Ok(addr) => addr
+            };
 
             if self.peers
                 .iter()
-                .find(|(_token, peer)| peer.get_addr() == addr)
+                .find(|(_token, peer)| peer.get_addr().ip() == addr.ip())
                 .is_some() {
-                debug!("Skipping address from exchange: {}", &addr);
+                //debug!("Skipping address from exchange: {}", &addr);
                 continue;
             }
 
             if self.new_peers
                 .iter()
-                .find(|a| a.clone().eq(&addr))
+                .find(|a| a.ip().eq(&addr.ip()))
                 .is_some() {
-                debug!("Skipping address from exchange: {}", &addr);
+                //debug!("Skipping address from exchange: {}", &addr);
                 continue;
             }
 
             if skip_addr(&addr) {
-                debug!("Skipping address from exchange: {}", &addr);
+                //debug!("Skipping address from exchange: {}", &addr);
                 continue; // Return error in future
             }
             let mut found = false;
@@ -98,6 +105,15 @@ impl Peers {
                 continue;
             }
             self.new_peers.push(addr);
+        }
+    }
+
+    pub fn is_our_own_connect(&self, rand: &str) -> bool {
+        match self.peers.values().find(|p| p.get_rand() == rand) {
+            None => { false }
+            Some(p) => {
+                !p.is_inbound()
+            }
         }
     }
 
@@ -124,6 +140,28 @@ impl Peers {
         count
     }
 
+    pub fn ignore_peer(&mut self, registry: &Registry, token: &Token) {
+        let peer = self.peers.get_mut(token).unwrap();
+        peer.set_state(State::Banned);
+        let ip = peer.get_addr().ip().clone();
+        self.close_peer(registry, token);
+        self.ignored.insert(ip);
+        match self.peers
+            .iter()
+            .find(|(_, p)| p.get_addr().ip() == ip)
+            .map(|(t, _)| t.clone()) {
+            None => {}
+            Some(t) => {
+                self.close_peer(registry, &t);
+                self.peers.remove(&t);
+            }
+        }
+    }
+
+    pub fn ignore_ip(&mut self, ip: &IpAddr) {
+        self.ignored.insert(ip.clone());
+    }
+
     pub fn skip_peer_connection(&self, addr: &SocketAddr) -> bool {
         for (_, peer) in self.peers.iter() {
             if peer.equals(addr) && (!peer.is_public() || peer.active() || peer.disabled()) {
@@ -138,7 +176,8 @@ impl Peers {
         for (token, peer) in self.peers.iter_mut() {
             match peer.get_state() {
                 State::Idle { from } => {
-                    if from.elapsed().as_secs() >= PING_PERIOD {
+                    let random_time = random::<u64>() % PING_PERIOD;
+                    if from.elapsed().as_secs() >= PING_PERIOD + random_time {
                         // Sometimes we check for new peers instead of pinging
                         let random: u8 = random();
                         let message = if random < 16 {
@@ -195,10 +234,10 @@ impl Peers {
                 let addr = peer.get_addr();
                 match TcpStream::connect(addr.clone()) {
                     Ok(mut stream) => {
+                        info!("Created connection to peer {}, state = {:?}", &addr, peer.get_state());
                         registry.register(&mut stream, token.clone(), Interest::WRITABLE).unwrap();
                         peer.set_state(State::Connecting);
                         peer.set_stream(stream);
-                        info!("Created connection to peer {}", &addr);
                     }
                     Err(e) => {
                         error!("Error connecting to peer {}: {}", &addr, e);
@@ -213,6 +252,9 @@ impl Peers {
             return;
         }
         for addr in self.new_peers.iter() {
+            if self.ignored.contains(&addr.ip()) {
+                continue;
+            }
             match TcpStream::connect(addr.clone()) {
                 Ok(mut stream) => {
                     info!("Created connection to peer {}", &addr);
@@ -228,6 +270,32 @@ impl Peers {
             }
         }
         self.new_peers.clear();
+    }
+
+    /// Connecting to configured (bootstrap) peers
+    pub fn connect_peers(&mut self, peers_addrs: Vec<String>, registry: &Registry, unique_token: &mut Token) {
+        for peer in peers_addrs.iter() {
+            let addresses: Vec<SocketAddr> = match peer.to_socket_addrs() {
+                Ok(peers) => { peers.collect() }
+                Err(_) => { error!("Can't resolve address {}", &peer); continue; }
+            };
+
+            for addr in addresses {
+                match TcpStream::connect(addr.clone()) {
+                    Ok(mut stream) => {
+                        info!("Created connection to peer {}", &addr);
+                        let token = next(unique_token);
+                        registry.register(&mut stream, token, Interest::WRITABLE).unwrap();
+                        let mut peer = Peer::new(addr, stream, State::Connecting, false);
+                        peer.set_public(true);
+                        self.add_peer(token, peer);
+                    }
+                    Err(e) => {
+                        error!("Error connecting to peer {}: {}", &addr, e);
+                    }
+                }
+            }
+        }
     }
 }
 

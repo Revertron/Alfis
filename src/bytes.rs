@@ -59,7 +59,7 @@ impl Bytes {
     }
 
     pub fn to_string(&self) -> String {
-        crate::utils::to_hex(&self.data)
+        crate::commons::to_hex(&self.data)
     }
 
     pub fn get_tail_u64(&self) -> u64 {
@@ -127,14 +127,14 @@ impl Deref for Bytes {
 
 impl fmt::Debug for Bytes {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.write_str(&crate::utils::to_hex(&self.data))
+        fmt.write_str(&crate::commons::to_hex(&self.data))
     }
 }
 
 impl Serialize for Bytes {
     fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> where
         S: Serializer {
-        serializer.serialize_str(&crate::utils::to_hex(&self.data))
+        serializer.serialize_str(&crate::commons::to_hex(&self.data))
     }
 }
 

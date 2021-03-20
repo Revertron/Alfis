@@ -2,13 +2,14 @@ use std::net::SocketAddr;
 use std::collections::HashMap;
 use mio::net::TcpStream;
 use crate::p2p::State;
-use crate::Block;
+use crate::{Block, commons};
 
 #[derive(Debug)]
 pub struct Peer {
     addr: SocketAddr,
     stream: TcpStream,
     state: State,
+    rand: String,
     height: u64,
     inbound: bool,
     public: bool,
@@ -19,7 +20,7 @@ pub struct Peer {
 
 impl Peer {
     pub fn new(addr: SocketAddr, stream: TcpStream, state: State, inbound: bool) -> Self {
-        Peer { addr, stream, state, height: 0, inbound, public: false, active: false, received_block: 0, fork: HashMap::new() }
+        Peer { addr, stream, state, rand: commons::random_string(6), height: 0, inbound, public: false, active: false, received_block: 0, fork: HashMap::new() }
     }
 
     pub fn get_addr(&self) -> SocketAddr {
@@ -40,6 +41,10 @@ impl Peer {
 
     pub fn set_state(&mut self, state: State) {
         self.state = state;
+    }
+
+    pub fn get_rand(&self) -> &str {
+        &self.rand
     }
 
     pub fn set_height(&mut self, height: u64) {

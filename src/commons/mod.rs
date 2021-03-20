@@ -1,4 +1,5 @@
 use std::num;
+use rand::Rng;
 #[cfg(not(target_os = "macos"))]
 use thread_priority::*;
 
@@ -77,6 +78,19 @@ fn split_n(s: &str, n: usize) -> Vec<&str> {
     (0..=(s.len() - n + 1) / 2)
         .map(|i| &s[2 * i..2 * i + n])
         .collect()
+}
+
+/// Generates random string of given length
+pub fn random_string(length: usize) -> String {
+    let chars: Vec<char> = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?".chars().collect();
+    let mut rng = rand::thread_rng();
+    let mut result = String::with_capacity(length);
+    for _ in 0..length {
+        let position: usize = rng.gen::<usize>() % chars.len();
+        let c: char = *chars.get(position).unwrap();
+        result.push(c);
+    }
+    result
 }
 
 #[cfg(test)]

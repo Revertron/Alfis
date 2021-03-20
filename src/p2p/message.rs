@@ -7,7 +7,7 @@ use crate::Bytes;
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Message {
     Error,
-    Hand { origin: String, version: u32, public: bool },
+    Hand { origin: String, version: u32, public: bool, #[serde(default)] rand: String },
     Shake { origin: String, version: u32, ok: bool, height: u64 },
     Ping { height: u64, hash: Bytes },
     Pong { height: u64, hash: Bytes },
@@ -26,8 +26,8 @@ impl Message {
         }
     }
 
-    pub fn hand(origin: &str, version: u32, public: bool) -> Self {
-        Message::Hand { origin: origin.to_owned(), version, public }
+    pub fn hand(origin: &str, version: u32, public: bool, rand: &str) -> Self {
+        Message::Hand { origin: origin.to_owned(), version, public, rand: rand.to_owned() }
     }
 
     pub fn shake(origin: &str, version: u32, ok: bool, height: u64) -> Self {
@@ -45,4 +45,17 @@ impl Message {
     pub fn block(height: u64, str: String) -> Self {
         Message::Block { index: height, block: str }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::p2p::Message;
+
+    #[test]
+    pub fn test_hand() {
+        assert!(serde_json::from_str::<Message>("\"Error\"").is_ok());
+        assert!(serde_json::from_str::<Message>("{\"Hand\":{\"origin\":\"\",\"version\":1,\"public\":false,\"rand\":\"123\"}}").is_ok());
+        assert!(serde_json::from_str::<Message>("{\"Hand\":{\"origin\":\"\",\"version\":1,\"public\":false}}").is_ok());
+    }
+
 }

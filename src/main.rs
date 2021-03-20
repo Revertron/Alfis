@@ -71,7 +71,7 @@ fn main() {
         None => { SETTINGS_FILENAME.to_owned() }
         Some(path) => { path }
     };
-    SimpleLogger::new().with_level(level).init().unwrap();
+    SimpleLogger::new().with_level(level).with_module_level("mio::poll", LevelFilter::Warn).init().unwrap();
     info!(target: LOG_TARGET_MAIN, "Starting ALFIS {}", env!("CARGO_PKG_VERSION"));
 
     let settings = Settings::load(&config_name);

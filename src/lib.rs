@@ -10,10 +10,10 @@ pub use crate::bytes::Bytes;
 pub use crate::keys::Keystore;
 pub use crate::x_zones::ExternalZones;
 pub use crate::simplebus::*;
-pub use crate::utils::*;
+pub use crate::commons::*;
 
 pub mod blockchain;
-pub mod utils;
+pub mod commons;
 pub mod simplebus;
 pub mod keys;
 pub mod miner;

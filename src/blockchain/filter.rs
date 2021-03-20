@@ -43,12 +43,12 @@ impl DnsFilter for BlockchainFilter {
                     let mut packet = DnsPacket::new();
                     packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
                     packet.header.rescode = ResultCode::SERVFAIL;
-                    trace!("Returning packet: {:?}", &packet);
+                    //trace!("Returning packet: {:?}", &packet);
                     return Some(packet);
                 }
             }
             Some(data) => {
-                info!("Found data for domain {}", &search);
+                debug!("Found data for domain {}", &search);
                 let mut data: DomainData = match serde_json::from_str(&data) {
                     Err(_) => { return None; }
                     Ok(data) => { data }
@@ -136,14 +136,14 @@ impl DnsFilter for BlockchainFilter {
                     for answer in answers {
                         packet.answers.push(answer);
                     }
-                    trace!("Returning packet: {:?}", &packet);
+                    //trace!("Returning packet: {:?}", &packet);
                     Some(packet)
                 } else {
                     // Create DnsPacket
                     let mut packet = DnsPacket::new();
                     packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
                     packet.header.rescode = ResultCode::SERVFAIL;
-                    trace!("Returning packet: {:?}", &packet);
+                    //trace!("Returning packet: {:?}", &packet);
                     Some(packet)
                 }
             }

@@ -185,7 +185,7 @@ impl Chain {
                             None
                         }
                         Some(block) => {
-                            trace!("Loaded block: {:?}", &block);
+                            //trace!("Loaded block: {:?}", &block);
                             Some(block)
                         }
                     };
@@ -229,7 +229,7 @@ impl Chain {
                     None
                 }
                 Some(block) => {
-                    trace!("Got last full block: {:?}", &block);
+                    //trace!("Got last full block: {:?}", &block);
                     Some(block)
                 }
             };

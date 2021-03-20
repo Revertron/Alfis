@@ -165,7 +165,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
     let mut status = Status::new();
     let mut c = context.lock().unwrap();
     c.bus.register(move |_uuid, e| {
-        debug!("Got event from bus {:?}", &e);
+        //debug!("Got event from bus {:?}", &e);
         let eval = match e {
             Event::KeyCreated { path, public, hash } |
             Event::KeyLoaded { path, public, hash } |
@@ -213,7 +213,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
         };
 
         if !eval.is_empty() {
-            debug!("Evaluating {}", &eval);
+            //debug!("Evaluating {}", &eval);
             handle.dispatch(move |web_view| {
                 web_view.eval(&eval.replace("\\", "\\\\"))
             }).expect("Error dispatching!");
