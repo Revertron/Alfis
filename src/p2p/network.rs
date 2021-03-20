@@ -187,7 +187,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                         debug!("Sending hello to {}", &peer.get_addr());
                         let data: String = {
                             let c = context.lock().unwrap();
-                            let message = Message::hand(&c.settings.origin, CHAIN_VERSION, c.settings.public, peer.get_rand());
+                            let message = Message::hand(&c.app_version, &c.settings.origin, CHAIN_VERSION, c.settings.public, peer.get_rand());
                             serde_json::to_string(&message).unwrap()
                         };
                         send_message(peer.get_stream(), &data.into_bytes()).unwrap_or_else(|e| warn!("Error sending hello {}", e));
@@ -279,7 +279,8 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
         (context.chain.height(), context.chain.last_hash(), &context.settings.origin.clone(), CHAIN_VERSION)
     };
     match message {
-        Message::Hand { origin, version, public, rand} => {
+        Message::Hand { app_version, origin, version, public, rand} => {
+            debug!("Hello from v{}", &app_version);
             if peers.is_our_own_connect(&rand) {
                 warn!("Detected loop connect");
                 State::Error

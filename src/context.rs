@@ -4,6 +4,7 @@ use crate::event::Event;
 use log::{trace, debug, info, warn, error};
 
 pub struct Context {
+    pub app_version: String,
     pub settings: Settings,
     pub keystore: Keystore,
     pub chain: Chain,
@@ -13,8 +14,8 @@ pub struct Context {
 
 impl Context {
     /// Creating an essential context to work with
-    pub fn new(settings: Settings, keystore: Keystore, chain: Chain) -> Context {
-        Context { settings, keystore, chain, x_zones: ExternalZones::new(), bus: Bus::new() }
+    pub fn new(app_version: String, settings: Settings, keystore: Keystore, chain: Chain) -> Context {
+        Context { app_version, settings, keystore, chain, x_zones: ExternalZones::new(), bus: Bus::new() }
     }
 
     /// Load keystore and return Context

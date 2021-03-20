@@ -71,7 +71,11 @@ fn main() {
         None => { SETTINGS_FILENAME.to_owned() }
         Some(path) => { path }
     };
-    SimpleLogger::new().with_level(level).with_module_level("mio::poll", LevelFilter::Warn).init().unwrap();
+    SimpleLogger::new()
+        .with_level(level)
+        .with_module_level("mio::poll", LevelFilter::Warn)
+        .init()
+        .unwrap();
     info!(target: LOG_TARGET_MAIN, "Starting ALFIS {}", env!("CARGO_PKG_VERSION"));
 
     let settings = Settings::load(&config_name);
@@ -98,7 +102,7 @@ fn main() {
         Some(block) => { trace!(target: LOG_TARGET_MAIN, "Loaded DB with origin {:?}", &block.hash); }
     }
     let settings_copy = settings.clone();
-    let context: Arc<Mutex<Context>> = Arc::new(Mutex::new(Context::new(settings, keystore, chain)));
+    let context: Arc<Mutex<Context>> = Arc::new(Mutex::new(Context::new(env!("CARGO_PKG_VERSION").to_owned(), settings, keystore, chain)));
     dns_utils::start_dns_server(&context, &settings_copy);
 
     let mut miner_obj = Miner::new(context.clone());

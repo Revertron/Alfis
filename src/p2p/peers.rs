@@ -234,7 +234,7 @@ impl Peers {
                 let addr = peer.get_addr();
                 match TcpStream::connect(addr.clone()) {
                     Ok(mut stream) => {
-                        info!("Created connection to peer {}, state = {:?}", &addr, peer.get_state());
+                        info!("Created connection to peer {}", &addr);
                         registry.register(&mut stream, token.clone(), Interest::WRITABLE).unwrap();
                         peer.set_state(State::Connecting);
                         peer.set_stream(stream);

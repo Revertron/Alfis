@@ -7,7 +7,7 @@ use crate::Bytes;
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Message {
     Error,
-    Hand { origin: String, version: u32, public: bool, #[serde(default)] rand: String },
+    Hand { #[serde(default = "default_version")] app_version: String, origin: String, version: u32, public: bool, #[serde(default)] rand: String },
     Shake { origin: String, version: u32, ok: bool, height: u64 },
     Ping { height: u64, hash: Bytes },
     Pong { height: u64, hash: Bytes },
@@ -26,8 +26,8 @@ impl Message {
         }
     }
 
-    pub fn hand(origin: &str, version: u32, public: bool, rand: &str) -> Self {
-        Message::Hand { origin: origin.to_owned(), version, public, rand: rand.to_owned() }
+    pub fn hand(app_version: &str, origin: &str, version: u32, public: bool, rand: &str) -> Self {
+        Message::Hand { app_version: app_version.to_owned(), origin: origin.to_owned(), version, public, rand: rand.to_owned() }
     }
 
     pub fn shake(origin: &str, version: u32, ok: bool, height: u64) -> Self {
@@ -45,6 +45,10 @@ impl Message {
     pub fn block(height: u64, str: String) -> Self {
         Message::Block { index: height, block: str }
     }
+}
+
+fn default_version() -> String {
+    String::from("0.0.0")
 }
 
 #[cfg(test)]
