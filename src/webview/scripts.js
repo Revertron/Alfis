@@ -16,11 +16,14 @@ function refresh_records_list() {
         buf = "<label class=\"label\">Records:</label>\n";
     }
     function getInput(text) {
+        if (typeof text === "string"){
+            // TODO sanitize
+        }
         return '<input class="input" type="text" value="' + text + '" readonly>';
     }
 
     function makeRecord(value, index, array) {
-        data = value.addr;
+        var data = value.addr;
         if (value.type == "MX") {
             data = value.priority + " " + value.host;
         } else if (value.type == "CNAME") {
@@ -73,7 +76,6 @@ function get_record_from_dialog() {
         record_priority = parseInt(document.getElementById("record_priority").value);
         return { type: record_type, domain: record_name, ttl: record_ttl, priority: record_priority, host: record_data }
     }  else if (record_type == "TXT") {
-        record_priority = parseInt(document.getElementById("record_priority").value);
         return { type: record_type, domain: record_name, ttl: record_ttl, data: record_data }
     } else if (record_type == "SRV") {
         record_priority = parseInt(document.getElementById("record_priority").value);
@@ -107,6 +109,7 @@ function openTab(element, tabName) {
     // Show the current tab, and add an "active" class to the button that opened the tab
     document.getElementById(tabName).className = "content";
     element.className = "is-active";
+    refresh_records_list();
 }
 
 function loadKey() {
