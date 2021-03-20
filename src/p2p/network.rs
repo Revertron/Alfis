@@ -86,7 +86,7 @@ impl Network {
                                     let local_ip = stream.local_addr().unwrap_or("0.0.0.0:0".parse().unwrap());
                                     if !local_ip.ip().is_loopback() && local_ip.ip() == address.ip() {
                                         peers.ignore_ip(&address.ip());
-                                        stream.shutdown(Shutdown::Both);
+                                        stream.shutdown(Shutdown::Both).unwrap_or_else(|e|{ warn!("Error in shutdown, {}", e); });
                                         warn!("Detected connection loop, ignoring IP: {}", &address.ip());
                                     } else {
                                         info!("Accepted connection from: {} to local IP: {}", address, local_ip);
@@ -153,13 +153,8 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                     let stream = peer.get_stream();
                     match new_state {
                         State::Message { data } => {
-                            if event.is_writable() {
-                                // TODO handle all errors and buffer data to send
-                                send_message(stream, &data);
-                            } else {
-                                registry.reregister(stream, event.token(), Interest::WRITABLE).unwrap();
-                                peer.set_state(State::Message { data });
-                            }
+                            registry.reregister(stream, event.token(), Interest::WRITABLE).unwrap();
+                            peer.set_state(State::Message { data });
                         }
                         State::Connecting => {}
                         State::Connected => {}
@@ -195,12 +190,12 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                             let message = Message::hand(&c.settings.origin, CHAIN_VERSION, c.settings.public, peer.get_rand());
                             serde_json::to_string(&message).unwrap()
                         };
-                        send_message(peer.get_stream(), &data.into_bytes());
+                        send_message(peer.get_stream(), &data.into_bytes()).unwrap_or_else(|e| warn!("Error sending hello {}", e));
                         //debug!("Sent hello to {}", &peer.get_addr());
                     }
                     State::Message { data } => {
                         debug!("Sending data to {}: {}", &peer.get_addr(), &String::from_utf8(data.clone()).unwrap());
-                        send_message(peer.get_stream(), &data);
+                        send_message(peer.get_stream(), &data).unwrap_or_else(|e| warn!("Error sending message {}", e));
                     }
                     State::Connected => {}
                     State::Idle { from } => {
@@ -211,7 +206,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                                 let message = Message::ping(c.chain.height(), c.chain.last_hash());
                                 serde_json::to_string(&message).unwrap()
                             };
-                            send_message(peer.get_stream(), &data.into_bytes());
+                            send_message(peer.get_stream(), &data.into_bytes()).unwrap_or_else(|e| warn!("Error sending ping {}", e));
                         }
                     }
                     State::Error => {}
