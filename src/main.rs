@@ -16,7 +16,7 @@ use simple_logger::SimpleLogger;
 use winapi::um::wincon::{ATTACH_PARENT_PROCESS, AttachConsole, FreeConsole};
 
 use alfis::{Block, Bytes, Chain, Miner, Context, Network, Settings, dns_utils, Keystore};
-use alfis::blockchain::BLOCK_DIFFICULTY;
+use alfis::commons::BLOCK_DIFFICULTY;
 
 #[cfg(feature = "webgui")]
 mod web_ui;

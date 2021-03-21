@@ -10,6 +10,7 @@ use rand::seq::IteratorRandom;
 #[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
 use crate::Bytes;
+use crate::commons::MAX_RECONNECTS;
 
 pub struct Peers {
     peers: HashMap<Token, Peer>,
@@ -229,6 +230,9 @@ impl Peers {
             }
         }
 
+        // Remove all peers that are offline for a long time
+        self.peers.retain(|_, p| { !(p.get_state().need_reconnect() && p.reconnects() >= MAX_RECONNECTS) });
+
         for (token, peer) in self.peers.iter_mut() {
             if peer.get_state().need_reconnect() {
                 let addr = peer.get_addr();
@@ -237,6 +241,7 @@ impl Peers {
                         info!("Created connection to peer {}", &addr);
                         registry.register(&mut stream, token.clone(), Interest::WRITABLE).unwrap();
                         peer.set_state(State::Connecting);
+                        peer.inc_reconnects();
                         peer.set_stream(stream);
                     }
                     Err(e) => {

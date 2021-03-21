@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use crate::blockchain::hash_utils::*;
 use crate::{Context, setup_miner_thread};
 use crate::event::Event;
-use crate::blockchain::KEYSTORE_DIFFICULTY;
+use crate::commons::KEYSTORE_DIFFICULTY;
 use crate::bytes::Bytes;
 use blakeout::Blakeout;
 use self::crypto::digest::Digest;

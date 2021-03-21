@@ -10,7 +10,7 @@ use log::{debug, error, info, trace, warn};
 use num_cpus;
 
 use crate::{Block, Bytes, Context, setup_miner_thread};
-use crate::blockchain::{CHAIN_VERSION, LOCKER_DIFFICULTY, KEYSTORE_DIFFICULTY};
+use crate::commons::{CHAIN_VERSION, LOCKER_DIFFICULTY, KEYSTORE_DIFFICULTY};
 use crate::blockchain::enums::BlockQuality;
 use crate::blockchain::hash_utils::*;
 use crate::keys::check_public_key_strength;

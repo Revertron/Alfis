@@ -3,6 +3,9 @@ use rand::Rng;
 #[cfg(not(target_os = "macos"))]
 use thread_priority::*;
 
+pub mod constants;
+pub use constants::*;
+
 /// Convert bytes array to HEX format
 pub fn to_hex(buf: &[u8]) -> String {
     let mut result = String::new();

@@ -14,13 +14,26 @@ pub struct Peer {
     inbound: bool,
     public: bool,
     active: bool,
+    reconnects: u32,
     received_block: u64,
     fork: HashMap<u64, Block>
 }
 
 impl Peer {
     pub fn new(addr: SocketAddr, stream: TcpStream, state: State, inbound: bool) -> Self {
-        Peer { addr, stream, state, rand: commons::random_string(6), height: 0, inbound, public: false, active: false, received_block: 0, fork: HashMap::new() }
+        Peer {
+            addr,
+            stream,
+            state,
+            rand: commons::random_string(6),
+            height: 0,
+            inbound,
+            public: false,
+            active: false,
+            reconnects: 0,
+            received_block: 0,
+            fork: HashMap::new()
+        }
     }
 
     pub fn get_addr(&self) -> SocketAddr {
@@ -81,6 +94,18 @@ impl Peer {
 
     pub fn active(&self) -> bool {
         self.active
+    }
+
+    pub fn reconnects(&self) -> u32 {
+        self.reconnects
+    }
+
+    pub fn inc_reconnects(&mut self) {
+        self.reconnects += 1;
+    }
+
+    pub fn reset_reconnects(&mut self) {
+        self.reconnects = 0;
     }
 
     pub fn disabled(&self) -> bool {

@@ -7,7 +7,7 @@ use log::{debug, error, info, trace, warn};
 use sqlite::{Connection, State, Statement};
 
 use crate::{Block, Bytes, Keystore, Transaction, check_domain, get_domain_zone};
-use crate::blockchain::constants::*;
+use crate::commons::constants::*;
 use crate::blockchain::enums::{BlockQuality, MineResult};
 use crate::blockchain::enums::BlockQuality::*;
 use crate::blockchain::hash_utils::*;

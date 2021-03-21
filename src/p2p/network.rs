@@ -17,7 +17,7 @@ use std::net::{SocketAddr, IpAddr, SocketAddrV4, Shutdown};
 use std::collections::HashSet;
 use crate::{Context, Block, p2p::Message, p2p::State, p2p::Peer, p2p::Peers, Bytes};
 use crate::blockchain::enums::BlockQuality;
-use crate::blockchain::CHAIN_VERSION;
+use crate::commons::CHAIN_VERSION;
 
 const SERVER: Token = Token(0);
 const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(3000));
@@ -304,6 +304,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 let peer = peers.get_mut_peer(token).unwrap();
                 peer.set_height(height);
                 peer.set_active(true);
+                peer.reset_reconnects();
                 let mut context = context.lock().unwrap();
                 let blocks_count = context.chain.height();
                 context.bus.post(crate::event::Event::NetworkStatus { nodes: active_count + 1, blocks: blocks_count });

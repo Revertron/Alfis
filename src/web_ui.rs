@@ -17,7 +17,7 @@ use alfis::miner::Miner;
 use alfis::{keys, check_domain};
 use alfis::event::Event;
 use alfis::dns::protocol::DnsRecord;
-use alfis::blockchain::{ZONE_MAX_LENGTH, ZONE_DIFFICULTY};
+use alfis::commons::{ZONE_MAX_LENGTH, ZONE_DIFFICULTY};
 use Cmd::*;
 use alfis::blockchain::transaction::{DomainData, ZoneData};
 use self::web_view::WebView;

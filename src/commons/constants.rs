@@ -14,3 +14,4 @@ pub const LOCKER_BLOCK_INTERVAL: u64 = 50;
 pub const FULL_BLOCKS_INTERVAL: i64 = 86400; // One day in seconds
 
 pub const ZONE_MAX_LENGTH: usize = 10;
+pub const MAX_RECONNECTS: u32 = 5;
