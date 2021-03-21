@@ -17,7 +17,7 @@ use rand::{Rng, RngCore, thread_rng};
 use serde::{Deserialize, Serialize};
 
 use crate::blockchain::hash_utils::*;
-use crate::{Context, setup_miner_thread};
+use crate::Context;
 use crate::event::Event;
 use crate::commons::KEYSTORE_DIFFICULTY;
 use crate::bytes::Bytes;
@@ -117,12 +117,11 @@ pub fn create_key(context: Arc<Mutex<Context>>) {
     let mining = Arc::new(AtomicBool::new(true));
     let miners_count = Arc::new(AtomicUsize::new(0));
     { context.lock().unwrap().bus.post(Event::KeyGeneratorStarted); }
-    for cpu in 0..num_cpus::get() {
+    for _cpu in 0..num_cpus::get() {
         let context = context.clone();
         let mining = mining.clone();
         let miners_count = miners_count.clone();
         thread::spawn(move || {
-            setup_miner_thread(cpu as u32);
             miners_count.fetch_add(1, atomic::Ordering::SeqCst);
             match generate_key(KEYSTORE_DIFFICULTY, mining.clone()) {
                 None => {

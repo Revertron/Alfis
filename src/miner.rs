@@ -1,5 +1,5 @@
 use std::sync::{Arc, Condvar, Mutex};
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering, AtomicU64};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::thread;
 use std::time::Duration;
 
@@ -9,7 +9,7 @@ use crypto::digest::Digest;
 use log::{debug, error, info, trace, warn};
 use num_cpus;
 
-use crate::{Block, Bytes, Context, setup_miner_thread};
+use crate::{Block, Bytes, Context};
 use crate::commons::{CHAIN_VERSION, LOCKER_DIFFICULTY, KEYSTORE_DIFFICULTY};
 use crate::blockchain::enums::BlockQuality;
 use crate::blockchain::hash_utils::*;
@@ -140,33 +140,17 @@ impl Miner {
         context.lock().unwrap().bus.post(Event::MinerStarted);
         let thread_spawn_interval = Duration::from_millis(10);
         let live_threads = Arc::new(AtomicU32::new(0u32));
-        let top_block = Arc::new(AtomicU64::new(block.index - 1));
         let cpus = num_cpus::get();
         debug!("Starting {} threads for mining", cpus);
-        for cpu in 0..cpus {
+        for _cpu in 0..cpus {
             let context = Arc::clone(&context);
             let block = block.clone();
             let mining = Arc::clone(&mining);
-            let top_block = Arc::clone(&top_block);
             let live_threads = Arc::clone(&live_threads);
             thread::spawn(move || {
-                // Register this thread to receive events from bus
-                let top = Arc::clone(&top_block);
-                context.lock().unwrap().bus.register(move |_uuid, e| {
-                    match e {
-                        Event::NewBlockReceived => {}
-                        Event::BlockchainChanged { index } => {
-                            top.store(index, Ordering::SeqCst);
-                        }
-                        _ => {}
-                    }
-                    true
-                });
-
-                setup_miner_thread(cpu as u32);
                 live_threads.fetch_add(1, Ordering::SeqCst);
                 let mut hasher = get_hasher_for_version(block.version);
-                match find_hash(Arc::clone(&context), &mut *hasher, block, Arc::clone(&mining), top_block) {
+                match find_hash(Arc::clone(&context), &mut *hasher, block, Arc::clone(&mining)) {
                     None => {
                         debug!("Mining was cancelled");
                         let count = live_threads.fetch_sub(1, Ordering::SeqCst);
@@ -201,14 +185,23 @@ impl Miner {
     }
 }
 
-fn find_hash(context: Arc<Mutex<Context>>, digest: &mut dyn Digest, mut block: Block, running: Arc<AtomicBool>, top_block: Arc<AtomicU64>) -> Option<Block> {
+fn find_hash(context: Arc<Mutex<Context>>, digest: &mut dyn Digest, mut block: Block, running: Arc<AtomicBool>) -> Option<Block> {
     let mut buf: [u8; 32] = [0; 32];
     let difficulty = block.difficulty as usize;
     let full = block.transaction.is_some();
     loop {
         block.random = rand::random();
-        block.index = context.lock().unwrap().chain.height() + 1;
-        if full && context.lock().unwrap().chain.next_allowed_block() > block.index {
+        let next_allowed_block = {
+            let context = context.lock().unwrap();
+            // We use this block to fill some fields of our block as well
+            block.index = context.chain.height() + 1;
+            if let Some(b) = context.chain.last_block() {
+                block.prev_block_hash = b.hash;
+            }
+            context.chain.next_allowed_block()
+        };
+
+        if full && next_allowed_block > block.index {
             // We can't mine now, as we need to wait for block to be signed
             thread::sleep(Duration::from_millis(1000));
             continue;
@@ -229,9 +222,12 @@ fn find_hash(context: Arc<Mutex<Context>>, digest: &mut dyn Digest, mut block: B
                 return Some(block);
             }
 
-            if top_block.load(Ordering::SeqCst) >= block.index {
-                // If there is a new block in chain we restart hashing with new data
-                break;
+            if nonce % 1000 == 0 {
+                if let Ok(context) = context.lock() {
+                    if context.chain.height() >= block.index {
+                        break;
+                    }
+                }
             }
         }
     }

@@ -1,6 +1,6 @@
 [package]
 name = "alfis"
-version = "0.3.3"
+version = "0.3.4"
 authors = ["Revertron <alfis@revertron.com>"]
 edition = "2018"
 build = "build.rs"
@@ -35,11 +35,7 @@ web-view = { version = "0.7.3", features = [], optional = true }
 tinyfiledialogs = { version = "3.3.10", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-thread-priority = "0.2.1"
 winapi = { version = "0.3.7", features = ["impl-default", "wincon", "shellscalingapi"]}
-
-[target.'cfg(target_os = "linux")'.dependencies]
-thread-priority = "0.2.1"
 
 [build-dependencies]
 minreq = { version = "2.3.1", features = ["punycode", "https-rustls"] }
@@ -47,8 +43,8 @@ rust-crypto = "^0.2"
 winres = "0.1"
 
 [dev-dependencies]
-serde_bytes = "0.11.2"
-serde_derive = "1.0.27"
+serde_bytes = "0.11.5"
+serde_derive = "1.0.124"
 
 [profile.dev]
 opt-level = 2
