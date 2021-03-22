@@ -1,4 +1,5 @@
-extern crate crypto;
+extern crate rand;
+extern crate ed25519_dalek;
 extern crate serde;
 extern crate serde_json;
 
@@ -10,11 +11,9 @@ use std::path::Path;
 use std::sync::{Arc, atomic, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 
-use crypto::ed25519::{keypair, signature, verify};
+use ed25519_dalek::Keypair;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use rand::{Rng, RngCore, thread_rng};
-use serde::{Deserialize, Serialize};
 
 use crate::blockchain::hash_utils::*;
 use crate::Context;
@@ -22,40 +21,51 @@ use crate::event::Event;
 use crate::commons::KEYSTORE_DIFFICULTY;
 use crate::bytes::Bytes;
 use blakeout::Blakeout;
-use self::crypto::digest::Digest;
 use std::time::Instant;
 use std::cell::RefCell;
+use self::ed25519_dalek::{Signer, PublicKey, Verifier, SecretKey};
+use self::ed25519_dalek::ed25519::signature::Signature;
+use rand_old::{CryptoRng, RngCore};
+use rand_old::rngs::OsRng;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct Keystore {
-    private_key: Bytes,
-    public_key: Bytes,
-    #[serde(skip)]
+    keypair: Keypair,
     hash: RefCell<Bytes>,
-    #[serde(skip)]
     path: String,
-    #[serde(skip)]
-    seed: Vec<u8>,
 }
 
 impl Keystore {
     pub fn new() -> Self {
-        let mut buf = [0u8; 32];
-        let mut rng = thread_rng();
-        rng.fill(&mut buf);
-        let (private, public) = keypair(&buf);
-        Keystore { private_key: Bytes::from_bytes(&private), public_key: Bytes::from_bytes(&public), hash: RefCell::new(Bytes::default()), path: String::new(), seed: Vec::from(&buf[..]) }
+        let mut csprng = OsRng::default();
+        let keypair = ed25519_dalek::Keypair::generate(&mut csprng);
+        Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new() }
+    }
+
+    pub fn from_random<R>(csprng: &mut R) -> Self where R: CryptoRng + RngCore {
+        let keypair = ed25519_dalek::Keypair::generate(csprng);
+        Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new() }
     }
 
     pub fn from_bytes(seed: &[u8]) -> Self {
-        let (private, public) = keypair(&seed);
-        Keystore { private_key: Bytes::from_bytes(&private), public_key: Bytes::from_bytes(&public), hash: RefCell::new(Bytes::default()), path: String::new(), seed: Vec::from(seed) }
+        let keypair = Keypair::from_bytes(seed).expect("Error creating keypair from bytes!");
+        Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new() }
+    }
+
+    pub fn from_random_bytes(key: &[u8]) -> Self {
+        let secret = SecretKey::from_bytes(&key).unwrap();
+        let public = PublicKey::from(&secret);
+        let keypair = Keypair { secret, public };
+        Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new() }
     }
 
     pub fn from_file(filename: &str, _password: &str) -> Option<Self> {
         let path = Path::new(filename);
         match fs::read(&path) {
             Ok(key) => {
+                if key.len() == 32 {
+                    return Some(Keystore::from_random_bytes(key.as_slice()));
+                }
                 let mut keystore = Self::from_bytes(key.as_slice());
                 keystore.path = path.to_str().unwrap().to_owned();
                 Some(keystore)
@@ -66,12 +76,12 @@ impl Keystore {
         }
     }
 
-    //TODO Implement error conditions
     pub fn save(&mut self, filename: &str, _password: &str) {
         match File::create(Path::new(filename)) {
             Ok(mut f) => {
                 //TODO implement key encryption
-                f.write_all(&self.seed).expect("Error saving keystore");
+                let bytes = self.keypair.to_bytes();
+                f.write_all(&bytes).expect("Error saving keystore");
                 self.path = filename.to_owned();
             }
             Err(_) => { error!("Error saving key file!"); }
@@ -79,11 +89,11 @@ impl Keystore {
     }
 
     pub fn get_public(&self) -> Bytes {
-        self.public_key.clone()
+        Bytes::from_bytes(&self.keypair.public.to_bytes())
     }
 
     pub fn get_private(&self) -> Bytes {
-        self.private_key.clone()
+        Bytes::from_bytes(&self.keypair.secret.to_bytes())
     }
 
     pub fn get_path(&self) -> &str {
@@ -92,24 +102,36 @@ impl Keystore {
 
     pub fn get_hash(&self) -> Bytes {
         if self.hash.borrow().is_empty() {
-            self.hash.replace(hash_data(&mut Blakeout::default(), &self.public_key));
+            self.hash.replace(blakeout_data(&self.get_public()));
         }
         self.hash.borrow().clone()
     }
 
     pub fn sign(&self, message: &[u8]) -> [u8; 64] {
-        signature(message, &self.private_key)
+        self.keypair.sign(message).to_bytes()
     }
 
     pub fn check(message: &[u8], public_key: &[u8], signature: &[u8]) -> bool {
-        verify(message, public_key, signature)
+        let key = PublicKey::from_bytes(public_key).expect("Wrong public key!");
+        let signature = Signature::from_bytes(signature).unwrap();
+        match key.verify(message, &signature) {
+            Ok(_) => { true }
+            Err(_) => { false }
+        }
+    }
+}
+
+impl Clone for Keystore {
+    fn clone(&self) -> Self {
+        let keypair = Keypair::from_bytes(&self.keypair.to_bytes()).unwrap();
+        Self { keypair, hash: RefCell::new(Bytes::default()), path: self.path.clone() }
     }
 }
 
 /// Checks if some public key is "strong" enough to mine domains
 /// TODO Optimize by caching Blakeout somewhere
 pub fn check_public_key_strength(key: &Bytes, strength: usize) -> bool {
-    let bytes = hash_data(&mut Blakeout::default(), &key);
+    let bytes = blakeout_data(&key);
     hash_is_good(&bytes, strength)
 }
 
@@ -154,18 +176,18 @@ pub fn create_key(context: Arc<Mutex<Context>>) {
 }
 
 fn generate_key(difficulty: usize, mining: Arc<AtomicBool>) -> Option<Keystore> {
+    use self::rand::RngCore;
     let mut rng = rand::thread_rng();
-    let mut buf = [0u8; 32];
-    let mut digest = Blakeout::default();
     let mut time = Instant::now();
     let mut count = 0u128;
+    let mut digest = Blakeout::default();
+    let mut buf = [0u8; 32];
     loop {
         rng.fill_bytes(&mut buf);
-        let keystore = Keystore::from_bytes(&buf);
+        let keystore = Keystore::from_random_bytes(&buf);
         digest.reset();
-        digest.input(&keystore.public_key);
-        digest.result(&mut buf);
-        if hash_is_good(&buf, difficulty) {
+        digest.update(keystore.get_public().as_slice());
+        if hash_is_good(digest.result(), difficulty) {
             info!("Generated keypair with public key: {:?} and hash {:?}", &keystore.get_public(), &keystore.get_hash());
             return Some(keystore);
         }

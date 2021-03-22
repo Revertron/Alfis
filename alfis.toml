@@ -5,13 +5,14 @@ listen = "[::]:4244"
 public = false
 
 # Bootstrap nodes
-peers = ["test-ip4.alfis.name:4244", "test-ip6.alfis.name:4244"]
+#peers = ["test-ip4.alfis.name:4244", "test-ip6.alfis.name:4244"]
+peers = ["[300:1251::1]:4244"]
 
 # DNS server options
 [dns]
 listen = "127.0.0.1:5300"
 threads = 20
 #AdGuard DNS servers to filter ads and trackers
-forwarders = ["94.140.14.14:53", "94.140.15.15:53"]
-#forwarders = ["[301:2522::53]:53", "[301:2923::53]:53"]
+#forwarders = ["94.140.14.14:53", "94.140.15.15:53"]
+forwarders = ["[301:2522::53]:53", "[303:8b1a::53]:53"]
 #forwarders = ["[301:2522::53]:53", "[301:2923::53]:53", "94.140.14.14:53", "94.140.15.15:53"]

@@ -4,7 +4,6 @@ use std::thread;
 use std::time::Duration;
 
 use chrono::Utc;
-use crypto::digest::Digest;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use num_cpus;
@@ -15,6 +14,7 @@ use crate::blockchain::enums::BlockQuality;
 use crate::blockchain::hash_utils::*;
 use crate::keys::check_public_key_strength;
 use crate::event::Event;
+use blakeout::Blakeout;
 
 pub struct Miner {
     context: Arc<Mutex<Context>>,
@@ -149,8 +149,7 @@ impl Miner {
             let live_threads = Arc::clone(&live_threads);
             thread::spawn(move || {
                 live_threads.fetch_add(1, Ordering::SeqCst);
-                let mut hasher = get_hasher_for_version(block.version);
-                match find_hash(Arc::clone(&context), &mut *hasher, block, Arc::clone(&mining)) {
+                match find_hash(Arc::clone(&context), block, Arc::clone(&mining)) {
                     None => {
                         debug!("Mining was cancelled");
                         let count = live_threads.fetch_sub(1, Ordering::SeqCst);
@@ -185,10 +184,10 @@ impl Miner {
     }
 }
 
-fn find_hash(context: Arc<Mutex<Context>>, digest: &mut dyn Digest, mut block: Block, running: Arc<AtomicBool>) -> Option<Block> {
-    let mut buf: [u8; 32] = [0; 32];
+fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<AtomicBool>) -> Option<Block> {
     let difficulty = block.difficulty as usize;
     let full = block.transaction.is_some();
+    let mut digest = Blakeout::new();
     loop {
         block.random = rand::random();
         let next_allowed_block = {
@@ -215,10 +214,9 @@ fn find_hash(context: Arc<Mutex<Context>>, digest: &mut dyn Digest, mut block: B
             block.nonce = nonce;
 
             digest.reset();
-            digest.input(&block.as_bytes());
-            digest.result(&mut buf);
-            if hash_is_good(&buf, difficulty) {
-                block.hash = Bytes::from_bytes(&buf);
+            digest.update(&block.as_bytes());
+            if hash_is_good(digest.result(), difficulty) {
+                block.hash = Bytes::from_bytes(digest.result());
                 return Some(block);
             }
 
