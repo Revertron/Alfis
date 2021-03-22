@@ -15,7 +15,7 @@ log = "0.4.14"
 simple_logger = "1.11.0"
 toml = "0.5.8"
 rust-crypto = "^0.2"
-blakeout = "0.1.0"
+blakeout = "0.3.0"
 num_cpus = "1.13.0"
 byteorder = "1.4.3"
 serde = { version = "1.0.123", features = ["derive"] }
