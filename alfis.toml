@@ -1,6 +1,6 @@
 # Settings
 origin = "00000102C2F9BFD2803284D93327F089D60FC72A06F19AF2384567F2646B8348"
-key_file = "default1.key"
+key_file = "default.key"
 listen = "[::]:4244"
 public = true
 
