@@ -5,7 +5,7 @@ pub const BLOCK_DIFFICULTY: u32 = 20;
 pub const LOCKER_DIFFICULTY: u32 = 14;
 pub const KEYSTORE_DIFFICULTY: usize = 23;
 
-pub const LOCKER_BLOCK_START: u64 = 16;
+pub const LOCKER_BLOCK_START: u64 = 35;
 pub const LOCKER_BLOCK_LOCKERS: u64 = 7;
 pub const LOCKER_BLOCK_SIGNS: u64 = 4;
 pub const LOCKER_BLOCK_TIME: i64 = 300;

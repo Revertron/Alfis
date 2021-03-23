@@ -80,7 +80,7 @@ impl ForwardingDnsResolver {
 
 impl DnsResolver for ForwardingDnsResolver {
     fn get_context(&self) -> Arc<ServerContext> {
-        self.context.clone()
+        Arc::clone(&self.context)
     }
 
     fn perform(&mut self, qname: &str, qtype: QueryType) -> Result<DnsPacket> {
@@ -114,7 +114,7 @@ impl RecursiveDnsResolver {
 
 impl DnsResolver for RecursiveDnsResolver {
     fn get_context(&self) -> Arc<ServerContext> {
-        self.context.clone()
+        Arc::clone(&self.context)
     }
 
     fn perform(&mut self, qname: &str, qtype: QueryType) -> Result<DnsPacket> {
@@ -242,7 +242,7 @@ mod tests {
             None => panic!(),
         }
 
-        let mut resolver = context.create_resolver(context.clone());
+        let mut resolver = context.create_resolver(Arc::clone(&context));
 
         // First verify that we get a match back
         {
@@ -303,7 +303,7 @@ mod tests {
             Ok(packet)
         }));
 
-        let mut resolver = context.create_resolver(context.clone());
+        let mut resolver = context.create_resolver(Arc::clone(&context));
 
         // Expect failure when no name servers are available
         if let Ok(_) = resolver.resolve("google.com", QueryType::A, true) {
@@ -319,7 +319,7 @@ mod tests {
             Ok(packet)
         }));
 
-        let mut resolver = context.create_resolver(context.clone());
+        let mut resolver = context.create_resolver(Arc::clone(&context));
 
         // Expect failure when no name servers are available
         if let Ok(_) = resolver.resolve("google.com", QueryType::A, true) {
@@ -383,7 +383,7 @@ mod tests {
             Ok(packet)
         }));
 
-        let mut resolver = context.create_resolver(context.clone());
+        let mut resolver = context.create_resolver(Arc::clone(&context));
 
         // Expect failure when no name servers are available
         if let Ok(_) = resolver.resolve("google.com", QueryType::A, true) {
@@ -493,7 +493,7 @@ mod tests {
             Ok(packet)
         }));
 
-        let mut resolver = context.create_resolver(context.clone());
+        let mut resolver = context.create_resolver(Arc::clone(&context));
 
         // Insert name servers
         let mut nameservers = Vec::new();

@@ -140,7 +140,7 @@ pub fn create_key(context: Arc<Mutex<Context>>) {
     let miners_count = Arc::new(AtomicUsize::new(0));
     { context.lock().unwrap().bus.post(Event::KeyGeneratorStarted); }
     for _cpu in 0..num_cpus::get() {
-        let context = context.clone();
+        let context = Arc::clone(&context);
         let mining = mining.clone();
         let miners_count = miners_count.clone();
         thread::spawn(move || {

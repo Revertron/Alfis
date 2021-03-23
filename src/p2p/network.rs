@@ -48,7 +48,7 @@ impl Network {
         let mut events = Events::with_capacity(64);
         let mut poll = Poll::new().expect("Unable to create poll");
         poll.registry().register(&mut server, SERVER, Interest::READABLE).expect("Error registering poll");
-        let context = self.context.clone();
+        let context = Arc::clone(&self.context);
         thread::spawn(move || {
             // Give UI some time to appear :)
             thread::sleep(Duration::from_millis(2000));
@@ -100,7 +100,7 @@ impl Network {
                             poll.registry().reregister(&mut server, SERVER, Interest::READABLE).expect("Error reregistering server");
                         }
                         token => {
-                            if !handle_connection_event(context.clone(), &mut peers, &poll.registry(), &event) {
+                            if !handle_connection_event(Arc::clone(&context), &mut peers, &poll.registry(), &event) {
                                 let _ = peers.close_peer(poll.registry(), &token);
                                 let mut context = context.lock().unwrap();
                                 let blocks_count = context.chain.height();
@@ -121,7 +121,7 @@ impl Network {
                     }
                     (height, context.chain.last_hash())
                 };
-                mine_locker_block(context.clone());
+                mine_locker_block(Arc::clone(&context));
                 peers.send_pings(poll.registry(), height, hash);
                 peers.connect_new_peers(poll.registry(), &mut unique_token);
             }
@@ -147,7 +147,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
             match Message::from_bytes(data) {
                 Ok(message) => {
                     let m = format!("{:?}", &message);
-                    let new_state = handle_message(context.clone(), message, peers, &event.token());
+                    let new_state = handle_message(Arc::clone(&context), message, peers, &event.token());
                     let peer = peers.get_mut_peer(&event.token()).unwrap();
                     debug!("Got message from {}: {:?}", &peer.get_addr(), &m);
                     let stream = peer.get_stream();
@@ -377,7 +377,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                     return State::Banned;
                 }
             }
-            let context = context.clone();
+            let context = Arc::clone(&context);
             let peers_count = peers.get_peers_active_count();
             thread::spawn(move || {
                 let mut context = context.lock().unwrap();

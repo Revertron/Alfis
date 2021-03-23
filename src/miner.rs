@@ -27,7 +27,7 @@ pub struct Miner {
 impl Miner {
     pub fn new(context: Arc<Mutex<Context>>) -> Self {
         Miner {
-            context: context.clone(),
+            context,
             blocks: Arc::new(Mutex::new(Vec::new())),
             running: Arc::new(AtomicBool::new(false)),
             mining: Arc::new(AtomicBool::new(false)),
@@ -47,7 +47,7 @@ impl Miner {
     }
 
     pub fn start_mining_thread(&mut self) {
-        let context = self.context.clone();
+        let context = Arc::clone(&self.context);
         let blocks = self.blocks.clone();
         let running = self.running.clone();
         let mining = self.mining.clone();
@@ -66,7 +66,7 @@ impl Miner {
                     info!("Got new block to mine");
                     let block = lock.remove(0);
                     mining.store(true, Ordering::SeqCst);
-                    Miner::mine_internal(context.clone(), block, mining.clone());
+                    Miner::mine_internal(Arc::clone(&context), block, mining.clone());
                 } else {
                     let _ = cond_var.wait(lock).expect("Error in wait lock!");
                 }

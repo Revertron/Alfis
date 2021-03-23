@@ -111,7 +111,7 @@ pub fn execute_query(context: Arc<ServerContext>, request: &DnsPacket) -> DnsPac
         let question = &request.questions[0];
         packet.questions.push(question.clone());
 
-        let mut resolver = context.create_resolver(context.clone());
+        let mut resolver = context.create_resolver(Arc::clone(&context));
         let rescode = match resolver.resolve(&question.name, question.qtype, request.header.recursion_desired) {
             Ok(result) => {
                 let rescode = result.header.rescode;
@@ -188,7 +188,7 @@ impl DnsServer for DnsUdpServer {
                 }
             };
 
-            let context = self.context.clone();
+            let context = Arc::clone(&self.context);
             let request_cond = self.request_cond.clone();
             let request_queue = self.request_queue.clone();
 
@@ -222,7 +222,7 @@ impl DnsServer for DnsUdpServer {
                     // Create a response buffer, and ask the context for an appropriate resolver
                     let mut res_buffer = VectorPacketBuffer::new();
 
-                    let mut packet = execute_query(context.clone(), &request);
+                    let mut packet = execute_query(Arc::clone(&context), &request);
                     let _ = packet.write(&mut res_buffer, size_limit);
 
                     // Fire off the response
@@ -298,7 +298,7 @@ impl DnsServer for DnsTcpServer {
             let (tx, rx) = channel();
             self.senders.push(tx);
 
-            let context = self.context.clone();
+            let context = Arc::clone(&self.context);
 
             let name = "DnsTcpServer-request-".to_string() + &thread_id.to_string();
             let _ = Builder::new().name(name).spawn(move || {
@@ -322,7 +322,7 @@ impl DnsServer for DnsTcpServer {
 
                     let mut res_buffer = VectorPacketBuffer::new();
 
-                    let mut packet = execute_query(context.clone(), &request);
+                    let mut packet = execute_query(Arc::clone(&context), &request);
                     ignore_or_report!(packet.write(&mut res_buffer, 0xFFFF), "Failed to write packet to buffer");
 
                     // As is the case for incoming queries, we need to send a 2 byte length
@@ -446,7 +446,7 @@ mod tests {
 
         // A successful resolve
         {
-            let res = execute_query(context.clone(), &build_query("google.com", QueryType::A));
+            let res = execute_query(Arc::clone(&context), &build_query("google.com", QueryType::A));
             assert_eq!(1, res.answers.len());
 
             match res.answers[0] {
@@ -460,7 +460,7 @@ mod tests {
         // A successful resolve, that also resolves a CNAME without recursive lookup
         {
             let res = execute_query(
-                context.clone(),
+                Arc::clone(&context),
                 &build_query("www.facebook.com", QueryType::CNAME),
             );
             assert_eq!(2, res.answers.len());
@@ -483,7 +483,7 @@ mod tests {
         // A successful resolve, that also resolves a CNAME through recursive lookup
         {
             let res = execute_query(
-                context.clone(),
+                Arc::clone(&context),
                 &build_query("www.microsoft.com", QueryType::CNAME),
             );
             assert_eq!(2, res.answers.len());
@@ -505,7 +505,7 @@ mod tests {
 
         // An unsuccessful resolve, but without any error
         {
-            let res = execute_query(context.clone(), &build_query("yahoo.com", QueryType::A));
+            let res = execute_query(Arc::clone(&context), &build_query("yahoo.com", QueryType::A));
             assert_eq!(ResultCode::NXDOMAIN, res.header.rescode);
             assert_eq!(0, res.answers.len());
         };
@@ -521,7 +521,7 @@ mod tests {
         // This should generate an error code, since recursive resolves are
         // no longer allowed
         {
-            let res = execute_query(context.clone(), &build_query("yahoo.com", QueryType::A));
+            let res = execute_query(Arc::clone(&context), &build_query("yahoo.com", QueryType::A));
             assert_eq!(ResultCode::REFUSED, res.header.rescode);
             assert_eq!(0, res.answers.len());
         };
@@ -529,7 +529,7 @@ mod tests {
         // Send a query without a question, which should fail with an error code
         {
             let query_packet = DnsPacket::new();
-            let res = execute_query(context.clone(), &query_packet);
+            let res = execute_query(Arc::clone(&context), &query_packet);
             assert_eq!(ResultCode::FORMERR, res.header.rescode);
             assert_eq!(0, res.answers.len());
         };

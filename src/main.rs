@@ -105,11 +105,11 @@ fn main() {
     let context: Arc<Mutex<Context>> = Arc::new(Mutex::new(Context::new(env!("CARGO_PKG_VERSION").to_owned(), settings, keystore, chain)));
     dns_utils::start_dns_server(&context, &settings_copy);
 
-    let mut miner_obj = Miner::new(context.clone());
+    let mut miner_obj = Miner::new(Arc::clone(&context));
     miner_obj.start_mining_thread();
     let miner: Arc<Mutex<Miner>> = Arc::new(Mutex::new(miner_obj));
 
-    let mut network = Network::new(context.clone());
+    let mut network = Network::new(Arc::clone(&context));
     network.start().expect("Error starting network component");
 
     create_genesis_if_needed(&context, &miner);
@@ -120,7 +120,7 @@ fn main() {
         }
     } else {
         #[cfg(feature = "webgui")]
-        web_ui::run_interface(context.clone(), miner.clone());
+        web_ui::run_interface(Arc::clone(&context), miner.clone());
     }
 
     // Without explicitly detaching the console cmd won't redraw it's prompt.

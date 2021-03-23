@@ -9,17 +9,17 @@ use log::{debug, error, info, LevelFilter, trace, warn};
 
 /// Starts UDP and TCP DNS-servers
 pub fn start_dns_server(context: &Arc<Mutex<Context>>, settings: &Settings) {
-    let server_context = create_server_context(context.clone(), &settings);
+    let server_context = create_server_context(Arc::clone(&context), &settings);
 
     if server_context.enable_udp {
-        let udp_server = DnsUdpServer::new(server_context.clone(), settings.dns.threads);
+        let udp_server = DnsUdpServer::new(Arc::clone(&server_context), settings.dns.threads);
         if let Err(e) = udp_server.run_server() {
             error!("Failed to bind UDP listener: {:?}", e);
         }
     }
 
     if server_context.enable_tcp {
-        let tcp_server = DnsTcpServer::new(server_context.clone(), settings.dns.threads);
+        let tcp_server = DnsTcpServer::new(Arc::clone(&server_context), settings.dns.threads);
         if let Err(e) = tcp_server.run_server() {
             error!("Failed to bind TCP listener: {:?}", e);
         }
