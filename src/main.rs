@@ -80,13 +80,7 @@ fn main() {
 
     let settings = Settings::load(&config_name);
     info!(target: LOG_TARGET_MAIN, "Loaded settings: {:?}", &settings);
-    let keystore: Keystore = match Keystore::from_file(&settings.key_file, "") {
-        None => {
-            warn!(target: LOG_TARGET_MAIN, "Generated temporary keystore. Please, generate full-privileged keys.");
-            Keystore::new()
-        }
-        Some(keystore) => { keystore }
-    };
+    let keystore = Keystore::from_file(&settings.key_file, "");
     let chain: Chain = Chain::new(&settings);
     if opt_matches.opt_present("l") {
         for i in 1..(chain.height() + 1) {
@@ -102,7 +96,8 @@ fn main() {
         Some(block) => { trace!(target: LOG_TARGET_MAIN, "Loaded DB with origin {:?}", &block.hash); }
     }
     let settings_copy = settings.clone();
-    let context: Arc<Mutex<Context>> = Arc::new(Mutex::new(Context::new(env!("CARGO_PKG_VERSION").to_owned(), settings, keystore, chain)));
+    let context = Context::new(env!("CARGO_PKG_VERSION").to_owned(), settings, keystore, chain);
+    let context: Arc<Mutex<Context>> = Arc::new(Mutex::new(context));
     dns_utils::start_dns_server(&context, &settings_copy);
 
     let mut miner_obj = Miner::new(Arc::clone(&context));
@@ -136,9 +131,11 @@ fn create_genesis_if_needed(context: &Arc<Mutex<Context>>, miner: &Arc<Mutex<Min
     let last_block = context.get_chain().last_block();
     let origin = context.settings.origin.clone();
     if origin.eq("") && last_block.is_none() {
-        // If blockchain is empty, we are going to mine a Genesis block
-        let block = Block::new(None, context.get_keystore().get_public(), Bytes::default(), BLOCK_DIFFICULTY);
-        miner.lock().unwrap().add_block(block);
+        if let Some(keystore) = &context.keystore {
+            // If blockchain is empty, we are going to mine a Genesis block
+            let block = Block::new(None, context.get_keystore().unwrap().get_public(), Bytes::default(), BLOCK_DIFFICULTY);
+            miner.lock().unwrap().add_block(block, keystore.clone());
+        }
     }
 }
 

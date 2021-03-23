@@ -1,4 +1,4 @@
-use crate::Bytes;
+use crate::{Bytes, Keystore};
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum Event {
@@ -12,7 +12,8 @@ pub enum Event {
     NewBlockReceived,
     BlockchainChanged { index: u64 },
     ActionStopMining,
-    ActionMineLocker { index: u64, hash: Bytes },
+    ActionMineLocker { index: u64, hash: Bytes, keystore: Box<Keystore> },
+    ActionQuit,
     NetworkStatus { nodes: usize, blocks: u64 },
     Syncing { have: u64, height: u64 },
     SyncFinished,

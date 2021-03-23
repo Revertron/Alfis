@@ -18,6 +18,7 @@ use std::collections::HashSet;
 use crate::{Context, Block, p2p::Message, p2p::State, p2p::Peer, p2p::Peers, Bytes};
 use crate::blockchain::enums::BlockQuality;
 use crate::commons::CHAIN_VERSION;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 const SERVER: Token = Token(0);
 const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(3000));
@@ -39,6 +40,9 @@ impl Network {
             let c = self.context.lock().unwrap();
             (c.settings.listen.clone(), c.settings.peers.clone())
         };
+
+        let running = Arc::new(AtomicBool::new(true));
+        subscribe_to_bus(&mut self.context, Arc::clone(&running));
 
         // Starting server socket
         let addr = listen_addr.parse().expect("Error parsing listen address");
@@ -62,6 +66,9 @@ impl Network {
             loop {
                 // Poll Mio for events, blocking until we get an event.
                 poll.poll(&mut events, POLL_TIMEOUT).expect("Error polling sockets");
+                if !running.load(Ordering::SeqCst) {
+                    break;
+                }
 
                 // Process each event.
                 for event in events.iter() {
@@ -125,9 +132,24 @@ impl Network {
                 peers.send_pings(poll.registry(), height, hash);
                 peers.connect_new_peers(poll.registry(), &mut unique_token);
             }
+            info!("Network loop finished");
         });
         Ok(())
     }
+}
+
+fn subscribe_to_bus(context: &mut Arc<Mutex<Context>>, running: Arc<AtomicBool>) {
+    use crate::event::Event;
+    context.lock().unwrap().bus.register(move |_uuid, e| {
+        match e {
+            Event::ActionQuit => {
+                running.store(false, Ordering::SeqCst);
+                return false;
+            }
+            _ => {}
+        }
+        true
+    });
 }
 
 fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, registry: &Registry, event: &Event) -> bool {
@@ -415,16 +437,19 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
 fn mine_locker_block(context: Arc<Mutex<Context>>) {
     let mut context = context.lock().unwrap();
     if let Some(block) = context.chain.last_block() {
-        if block.index < context.chain.max_height() {
-            info!("No locker mining while syncing");
-            return;
-        }
-        let lockers: HashSet<Bytes> = context.chain.get_block_lockers(&block).into_iter().collect();
-        if lockers.contains(&context.keystore.get_public()) {
-            info!("We have an honor to mine locker block!");
-            context.bus.post(crate::event::Event::ActionMineLocker { index: block.index + 1, hash: block.hash });
-        } else if !lockers.is_empty() {
-            info!("Locker block must be mined by other nodes");
+        if let Some(keystore) = &context.keystore {
+            if block.index < context.chain.max_height() {
+                info!("No locker mining while syncing");
+                return;
+            }
+            let lockers: HashSet<Bytes> = context.chain.get_block_lockers(&block).into_iter().collect();
+            if lockers.contains(&keystore.get_public()) {
+                info!("We have an honor to mine locker block!");
+                let keystore = Box::new(keystore.clone());
+                context.bus.post(crate::event::Event::ActionMineLocker { index: block.index + 1, hash: block.hash, keystore });
+            } else if !lockers.is_empty() {
+                info!("Locker block must be mined by other nodes");
+            }
         }
     }
 }

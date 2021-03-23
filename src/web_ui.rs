@@ -61,12 +61,13 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
         .build()
         .expect("Error building GUI");
 
-    run_interface_loop(&mut interface);
+    let mut context = Arc::clone(&context);
+    run_interface_loop(&mut context, &mut interface);
     interface.exit();
 }
 
 /// Indefinitely loops through WebView steps
-fn run_interface_loop(interface: &mut WebView<()>) {
+fn run_interface_loop(context: &mut Arc<Mutex<Context>>, interface: &mut WebView<()>) {
     // We use this ugly loop to lower CPU usage a lot.
     // If we use .run() or only .step() in a loop without sleeps it will try
     // to support 60FPS and uses more CPU than it should.
@@ -76,6 +77,8 @@ fn run_interface_loop(interface: &mut WebView<()>) {
         match interface.step() {
             None => {
                 info!("Interface closed, exiting");
+                context.lock().unwrap().bus.post(Event::ActionQuit);
+                thread::sleep(Duration::from_millis(100));
                 break;
             }
             Some(result) => {
@@ -101,8 +104,10 @@ fn action_check_zone(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>, 
         web_view.eval("zoneAvailable(false)").expect("Error evaluating!");
     } else {
         let c = context.lock().unwrap();
-        let available = c.get_chain().is_domain_available(&name, &c.get_keystore());
-        web_view.eval(&format!("zoneAvailable({})", available)).expect("Error evaluating!");
+        if let Some(keystore) = c.get_keystore() {
+            let available = c.get_chain().is_domain_available(&name, &keystore);
+            web_view.eval(&format!("zoneAvailable({})", available)).expect("Error evaluating!");
+        }
     }
 }
 
@@ -114,24 +119,31 @@ fn action_check_record(web_view: &mut WebView<()>, data: String) {
 }
 
 fn action_check_domain(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>, name: String) {
-    let name = name.to_lowercase();
     let c = context.lock().unwrap();
-    let available = c.get_chain().is_domain_available(&name, &c.get_keystore());
-    web_view.eval(&format!("domainAvailable({})", available)).expect("Error evaluating!");
+    if let Some(keystore) = c.get_keystore() {
+        let name = name.to_lowercase();
+        let available = c.get_chain().is_domain_available(&name, &keystore);
+        web_view.eval(&format!("domainAvailable({})", available)).expect("Error evaluating!");
+    }
 }
 
 fn action_save_key(context: &Arc<Mutex<Context>>) {
+    if context.lock().unwrap().get_keystore().is_none() {
+        return;
+    }
     let result = tfd::save_file_dialog_with_filter("Save keys file", "", &["*.key"], "Key files (*.key)");
     match result {
         None => {}
         Some(new_path) => {
             let mut context = context.lock().unwrap();
             let path = new_path.clone();
-            let public = context.keystore.get_public().to_string();
-            let hash = context.keystore.get_hash().to_string();
-            context.keystore.save(&new_path, "");
-            info!("Key file saved to {}", &path);
-            context.bus.post(Event::KeySaved { path, public, hash });
+            if let Some(mut keystore) = context.get_keystore() {
+                let public = keystore.get_public().to_string();
+                let hash = keystore.get_hash().to_string();
+                keystore.save(&new_path, "");
+                info!("Key file saved to {}", &path);
+                context.bus.post(Event::KeySaved { path, public, hash });
+            }
         }
     }
 }
@@ -152,7 +164,7 @@ fn action_load_key(context: &Arc<Mutex<Context>>, _web_view: &mut WebView<()>) {
                     let public = keystore.get_public().to_string();
                     let hash = keystore.get_hash().to_string();
                     c.bus.post(Event::KeyLoaded { path, public, hash });
-                    c.set_keystore(keystore);
+                    c.set_keystore(Some(keystore));
                 }
             }
         }
@@ -213,23 +225,32 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
         };
 
         if !eval.is_empty() {
-            //debug!("Evaluating {}", &eval);
             handle.dispatch(move |web_view| {
                 web_view.eval(&eval.replace("\\", "\\\\"))
             }).expect("Error dispatching!");
         }
         true
     });
-    let eval = format!("keystoreChanged('{}', '{}', '{}');", c.keystore.get_path(), &c.keystore.get_public().to_string(), &c.keystore.get_hash().to_string());
-    debug!("Evaluating {}", &eval);
-    web_view.eval(&eval.replace("\\", "\\\\")).expect("Error evaluating!");
+    if let Some(keystore) = c.get_keystore() {
+        let eval = format!("keystoreChanged('{}', '{}', '{}');",
+                           keystore.get_path(),
+                           &keystore.get_public().to_string(),
+                           &keystore.get_hash().to_string());
+        //debug!("Evaluating {}", &eval);
+        web_view.eval(&eval.replace("\\", "\\\\")).expect("Error evaluating!");
+    }
 }
 
 fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, web_view: &mut WebView<()>, name: String, records: &String) {
     debug!("Creating domain with records: {}", records);
     let c = Arc::clone(&context);
     let context = context.lock().unwrap();
-    let pub_key = context.keystore.get_public();
+    if context.get_keystore().is_none() {
+        show_warning(web_view, "You don't have keys loaded!\nLoad or mine the keys and try again.");
+        return;
+    }
+    let keystore = context.get_keystore().unwrap();
+    let pub_key = keystore.get_public();
     match context.chain.can_mine_domain(&name, &records, &pub_key) {
         MineResult::Fine => {
             let zone = get_domain_zone(&name);
@@ -237,7 +258,6 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
             if let Ok(records) = serde_json::from_str::<Vec<DnsRecord>>(&records) {
                 let data = DomainData::new(zone.clone(), records);
                 let data = serde_json::to_string(&data).unwrap();
-                let keystore = context.keystore.clone();
                 std::mem::drop(context);
                 create_domain(c, miner, &name, &data, difficulty, &keystore);
                 let _ = web_view.eval("domainMiningStarted()");
@@ -271,18 +291,23 @@ fn action_create_zone(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, we
         let context = context.lock().unwrap();
         (context.get_keystore(), context.chain.get_domain_transaction(&name))
     };
-    match transaction {
-        None => {
-            create_domain(Arc::clone(&context), miner.clone(), &name, &data, ZONE_DIFFICULTY, &keystore);
-        }
-        Some(transaction) => {
-            if transaction.pub_key == keystore.get_public() {
+    if let Some(keystore) = keystore {
+        match transaction {
+            None => {
                 create_domain(Arc::clone(&context), miner.clone(), &name, &data, ZONE_DIFFICULTY, &keystore);
-            } else {
-                warn!("Tried to mine not owned domain!");
-                show_warning(web_view, "You cannot change domain that you don't own!");
+            }
+            Some(transaction) => {
+                if transaction.pub_key == keystore.get_public() {
+                    create_domain(Arc::clone(&context), miner.clone(), &name, &data, ZONE_DIFFICULTY, &keystore);
+                } else {
+                    warn!("Tried to mine not owned domain!");
+                    show_warning(web_view, "You cannot change domain that you don't own!");
+                }
             }
         }
+    } else {
+        warn!("Can not mine without keys!");
+        show_warning(web_view, "You don't have keys loaded!\nLoad or mine the keys and try again.");
     }
 }
 
@@ -303,7 +328,7 @@ fn create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, name: &
     //let tags_vector: Vec<String> = tags.into().trim().split(",").map(|s| s.trim()).map(String::from).collect();
     let transaction = Transaction::from_str(name, "dns".to_owned(), data.to_owned(), keystore.get_public().clone());
     let block = Block::new(Some(transaction), keystore.get_public(), Bytes::default(), difficulty);
-    miner.lock().unwrap().add_block(block);
+    miner.lock().unwrap().add_block(block, keystore.clone());
 }
 
 #[derive(Deserialize)]

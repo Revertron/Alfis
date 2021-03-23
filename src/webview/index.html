@@ -154,7 +154,7 @@
             <div class="content is-hidden" id="key_load">
                 <div class="field">
                     <label class="label">Key path</label>
-                    <p id="key_file_name">Key not saved</p>
+                    <p id="key_file_name">Not loaded</p>
                 </div>
 
                 <div class="field">
@@ -170,15 +170,15 @@
                 <br>
                 <div class="field is-grouped">
                     <div class="control">
-                        <button class="button is-success" onclick="loadKey();">Load key</button>
-                    </div>
-
-                    <div class="control">
                         <button class="button is-warning" onclick="createKey();">Mine new key</button>
                     </div>
 
                     <div class="control">
-                        <button class="button is-primary" onclick="saveKey();">Save key</button>
+                        <button class="button is-light" onclick="loadKey();">Load key</button>
+                    </div>
+
+                    <div class="control">
+                        <button id="save_key" class="button is-light" onclick="saveKey();" disabled>Save key</button>
                     </div>
                 </div>
             </div>
@@ -190,7 +190,7 @@
                         <div class="field">
                             <label class="label">Domain name</label>
                             <div class="control">
-                                <input class="input" type="text" placeholder="example.ygg" id="new_domain" oninput="onDomainChange(this)">
+                                <input class="input" type="text" placeholder="example.ygg" id="new_domain" oninput="onDomainChange(this)" disabled>
                             </div>
                         </div>
                     </div>
@@ -198,7 +198,7 @@
                         <div class="field">
                             <label class="label">Domain tags (will be used for search)</label>
                             <div class="control">
-                                <input class="input" type="text" placeholder="blog, community, friendship" id="new_domain_tags">
+                                <input class="input" type="text" placeholder="blog, community, friendship" id="new_domain_tags" disabled>
                             </div>
                         </div>
                     </div>
@@ -210,10 +210,10 @@
 
                 <div class="field is-grouped">
                     <div class="control">
-                        <button class="button is-success" id="add_record_button" onclick="showNewRecordDialog();">Add record</button>
+                        <button id="new_domain_button" class="button is-warning" onclick="createDomain();" disabled>Mine domain</button>
                     </div>
                     <div class="control">
-                        <button class="button is-link" id="new_domain_button" onclick="createDomain();" disabled>Mine domain</button>
+                        <button id="add_record_button" class="button is-light" onclick="showNewRecordDialog();" disabled>Add record</button>
                     </div>
                 </div>
             </div>
@@ -225,7 +225,7 @@
                         <div class="field">
                             <label class="label">Zone name</label>
                             <div class="control">
-                                <input class="input" type="text" placeholder="ygg" id="new_zone" oninput="onZoneChange()">
+                                <input class="input" type="text" placeholder="ygg" id="new_zone" oninput="onZoneChange()" disabled>
                             </div>
                         </div>
                     </div>
@@ -233,7 +233,7 @@
                         <div class="field">
                             <label class="label">Difficulty (for all domains in zone)</label>
                             <div class="control">
-                                <input class="input" type="number" placeholder="20" id="new_zone_difficulty" oninput="onZoneChange()">
+                                <input class="input" type="number" placeholder="20" id="new_zone_difficulty" oninput="onZoneChange()" disabled>
                             </div>
                         </div>
                     </div>
@@ -241,7 +241,7 @@
 
                 <div class="field is-grouped">
                     <div class="control">
-                        <button class="button is-link" id="new_zone_button" onclick="createZone();" disabled>Mine zone</button>
+                        <button class="button is-warning" id="new_zone_button" onclick="createZone();" disabled>Mine zone</button>
                     </div>
                 </div>
             </div>

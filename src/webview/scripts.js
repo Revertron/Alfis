@@ -189,12 +189,15 @@ function onDomainChange(element) {
 function domainAvailable(available) {
     input = document.getElementById("new_domain");
     button = document.getElementById("new_domain_button");
+    button2 = document.getElementById("add_record_button");
     if (available) {
         input.className = "input";
         button.disabled = false
+        button2.disabled = false
     } else {
         input.className = "input is-danger";
         button.disabled = true
+        button2.disabled = true
     }
 }
 
@@ -309,4 +312,15 @@ function keystoreChanged(path, pub_key, hash) {
     key_public_key.innerHTML = pub_key;
     var key_public_hash = document.getElementById("key_public_hash");
     key_public_hash.innerHTML = hash;
+    var save_key = document.getElementById("save_key");
+    save_key.disabled = false;
+
+    var new_domain = document.getElementById("new_domain");
+    new_domain.disabled = false;
+    var new_domain_tags = document.getElementById("new_domain_tags");
+    new_domain_tags.disabled = false;
+    var new_zone = document.getElementById("new_zone");
+    new_zone.disabled = false;
+    var new_zone_difficulty = document.getElementById("new_zone_difficulty");
+    new_zone_difficulty.disabled = false;
 }

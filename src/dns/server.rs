@@ -244,8 +244,14 @@ impl DnsServer for DnsUdpServer {
                     let mut req_buffer = BytePacketBuffer::new();
                     let (_, src) = match socket.recv_from(&mut req_buffer.buf) {
                         Ok(x) => x,
-                        Err(e) => {
-                            debug!("Failed to read from UDP socket: {:?}", e);
+                        Err(err) => {
+                            if let Some(code) = err.raw_os_error() {
+                                if code == 10004 {
+                                    debug!("UDP service loop has finished");
+                                    break;
+                                }
+                            }
+                            debug!("Failed to read from UDP socket: {:?}", err);
                             continue;
                         }
                     };
@@ -347,6 +353,12 @@ impl DnsServer for DnsTcpServer {
                     let stream = match wrap_stream {
                         Ok(stream) => stream,
                         Err(err) => {
+                            if let Some(code) = err.raw_os_error() {
+                                if code == 10004 {
+                                    debug!("TCP service loop has finished");
+                                    break;
+                                }
+                            }
                             warn!("Failed to accept TCP connection: {:?}", err);
                             continue;
                         }

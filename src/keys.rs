@@ -128,6 +128,12 @@ impl Clone for Keystore {
     }
 }
 
+impl PartialEq for Keystore {
+    fn eq(&self, other: &Self) -> bool {
+        self.keypair.to_bytes().eq(&other.keypair.to_bytes())
+    }
+}
+
 /// Checks if some public key is "strong" enough to mine domains
 /// TODO Optimize by caching Blakeout somewhere
 pub fn check_public_key_strength(key: &Bytes, strength: usize) -> bool {
@@ -155,7 +161,7 @@ pub fn create_key(context: Arc<Mutex<Context>>) {
                     let hash = keystore.get_hash().to_string();
                     info!("Key mined successfully: {:?}, hash: {}", &keystore.get_public(), &hash);
                     context.bus.post(Event::KeyCreated { path: keystore.get_path().to_owned(), public: keystore.get_public().to_string(), hash });
-                    context.set_keystore(keystore);
+                    context.set_keystore(Some(keystore));
                 }
             }
             let miners = miners_count.fetch_sub(1, atomic::Ordering::SeqCst) - 1;

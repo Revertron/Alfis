@@ -8,17 +8,18 @@ use chrono::Utc;
 use log::{debug, error, info, trace, warn};
 use num_cpus;
 
-use crate::{Block, Bytes, Context};
+use crate::{Block, Bytes, Context, Keystore};
 use crate::commons::{CHAIN_VERSION, LOCKER_DIFFICULTY, KEYSTORE_DIFFICULTY};
 use crate::blockchain::enums::BlockQuality;
 use crate::blockchain::hash_utils::*;
 use crate::keys::check_public_key_strength;
 use crate::event::Event;
 use blakeout::Blakeout;
+use std::ops::Deref;
 
 pub struct Miner {
     context: Arc<Mutex<Context>>,
-    blocks: Arc<Mutex<Vec<Block>>>,
+    jobs: Arc<Mutex<Vec<MineJob>>>,
     running: Arc<AtomicBool>,
     mining: Arc<AtomicBool>,
     cond_var: Arc<Condvar>
@@ -28,15 +29,15 @@ impl Miner {
     pub fn new(context: Arc<Mutex<Context>>) -> Self {
         Miner {
             context,
-            blocks: Arc::new(Mutex::new(Vec::new())),
+            jobs: Arc::new(Mutex::new(Vec::new())),
             running: Arc::new(AtomicBool::new(false)),
             mining: Arc::new(AtomicBool::new(false)),
             cond_var: Arc::new(Condvar::new())
         }
     }
 
-    pub fn add_block(&mut self, block: Block) {
-        self.blocks.lock().unwrap().push(block);
+    pub fn add_block(&mut self, block: Block, keystore: Keystore) {
+        self.jobs.lock().unwrap().push(MineJob { block, keystore });
         self.cond_var.notify_one();
     }
 
@@ -48,7 +49,7 @@ impl Miner {
 
     pub fn start_mining_thread(&mut self) {
         let context = Arc::clone(&self.context);
-        let blocks = self.blocks.clone();
+        let blocks = self.jobs.clone();
         let running = self.running.clone();
         let mining = self.mining.clone();
         let cond_var = self.cond_var.clone();
@@ -73,7 +74,7 @@ impl Miner {
             }
         });
         let mining = self.mining.clone();
-        let blocks = self.blocks.clone();
+        let blocks = self.jobs.clone();
         let cond_var = self.cond_var.clone();
         self.context.lock().unwrap().bus.register(move |_uuid, e| {
             match e {
@@ -82,11 +83,11 @@ impl Miner {
                 Event::ActionStopMining => {
                     mining.store(false, Ordering::SeqCst);
                 }
-                Event::ActionMineLocker { index, hash } => {
+                Event::ActionMineLocker { index, hash, keystore } => {
                     if !mining.load(Ordering::SeqCst) {
                         let mut block = Block::new(None, Bytes::default(), hash, LOCKER_DIFFICULTY);
                         block.index = index;
-                        blocks.lock().unwrap().push(block);
+                        blocks.lock().unwrap().push(MineJob { block, keystore: keystore.deref().clone() });
                         cond_var.notify_all();
                         info!("Added a locker block to mine");
                     }
@@ -101,16 +102,16 @@ impl Miner {
         self.running.load(Ordering::Relaxed)
     }
 
-    fn mine_internal(context: Arc<Mutex<Context>>, mut block: Block, mining: Arc<AtomicBool>) {
+    fn mine_internal(context: Arc<Mutex<Context>>, mut job: MineJob, mining: Arc<AtomicBool>) {
         // Clear signature and hash just in case
-        block.signature = Bytes::default();
-        block.hash = Bytes::default();
-        block.version = CHAIN_VERSION;
+        job.block.signature = Bytes::default();
+        job.block.hash = Bytes::default();
+        job.block.version = CHAIN_VERSION;
         // If this block needs to be a locker
-        if block.index > 0 && !block.prev_block_hash.is_empty() {
+        if job.block.index > 0 && !job.block.prev_block_hash.is_empty() {
             info!("Mining locker block");
-            block.pub_key = context.lock().unwrap().keystore.get_public();
-            if !check_public_key_strength(&block.pub_key, KEYSTORE_DIFFICULTY) {
+            job.block.pub_key = job.keystore.get_public();
+            if !check_public_key_strength(&job.block.pub_key, KEYSTORE_DIFFICULTY) {
                 warn!("Can not mine block with weak public key!");
                 context.lock().unwrap().bus.post(Event::MinerStopped);
                 mining.store(false, Ordering::SeqCst);
@@ -121,7 +122,7 @@ impl Miner {
                 Some(last_block) => {
                     info!("Last block found");
                     // If we were doing something else and got new block before we could mine this block
-                    if last_block.index > block.index || last_block.hash != block.prev_block_hash {
+                    if last_block.index > job.block.index || last_block.hash != job.block.prev_block_hash {
                         warn!("We missed block to lock");
                         context.lock().unwrap().bus.post(Event::MinerStopped);
                         mining.store(false, Ordering::SeqCst);
@@ -130,8 +131,8 @@ impl Miner {
                 }
             }
         } else {
-            block.index = context.lock().unwrap().chain.height() + 1;
-            block.prev_block_hash = match context.lock().unwrap().chain.last_block() {
+            job.block.index = context.lock().unwrap().chain.height() + 1;
+            job.block.prev_block_hash = match context.lock().unwrap().chain.last_block() {
                 None => { Bytes::default() }
                 Some(block) => { block.hash }
             };
@@ -144,12 +145,12 @@ impl Miner {
         debug!("Starting {} threads for mining", cpus);
         for _cpu in 0..cpus {
             let context = Arc::clone(&context);
-            let block = block.clone();
+            let job = job.clone();
             let mining = Arc::clone(&mining);
             let live_threads = Arc::clone(&live_threads);
             thread::spawn(move || {
                 live_threads.fetch_add(1, Ordering::SeqCst);
-                match find_hash(Arc::clone(&context), block, Arc::clone(&mining)) {
+                match find_hash(Arc::clone(&context), job.block, Arc::clone(&mining)) {
                     None => {
                         debug!("Mining was cancelled");
                         let count = live_threads.fetch_sub(1, Ordering::SeqCst);
@@ -162,7 +163,7 @@ impl Miner {
                     Some(mut block) => {
                         let index = block.index;
                         let mut context = context.lock().unwrap();
-                        block.signature = Bytes::from_bytes(&context.keystore.sign(&block.as_bytes()));
+                        block.signature = Bytes::from_bytes(&job.keystore.sign(&block.as_bytes()));
                         if context.chain.check_new_block(&block) != BlockQuality::Good {
                             warn!("Error adding mined block!");
                             if index == 0 {
@@ -182,6 +183,12 @@ impl Miner {
             thread::sleep(thread_spawn_interval);
         }
     }
+}
+
+#[derive(Clone)]
+pub struct MineJob {
+    block: Block,
+    keystore: Keystore
 }
 
 fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<AtomicBool>) -> Option<Block> {

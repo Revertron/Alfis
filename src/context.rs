@@ -6,7 +6,7 @@ use log::{trace, debug, info, warn, error};
 pub struct Context {
     pub app_version: String,
     pub settings: Settings,
-    pub keystore: Keystore,
+    pub keystore: Option<Keystore>,
     pub chain: Chain,
     pub x_zones: ExternalZones,
     pub bus: Bus<Event>,
@@ -14,7 +14,7 @@ pub struct Context {
 
 impl Context {
     /// Creating an essential context to work with
-    pub fn new(app_version: String, settings: Settings, keystore: Keystore, chain: Chain) -> Context {
+    pub fn new(app_version: String, settings: Settings, keystore: Option<Keystore>, chain: Chain) -> Context {
         Context { app_version, settings, keystore, chain, x_zones: ExternalZones::new(), bus: Bus::new() }
     }
 
@@ -26,17 +26,17 @@ impl Context {
                 warn!("Error loading keystore '{}'!", filename);
             },
             Some(keystore) => {
-                self.keystore = keystore;
+                self.keystore = Some(keystore);
             },
         }
         self
     }
 
-    pub fn get_keystore(&self) -> Keystore {
+    pub fn get_keystore(&self) -> Option<Keystore> {
         self.keystore.clone()
     }
 
-    pub fn set_keystore(&mut self, keystore: Keystore) {
+    pub fn set_keystore(&mut self, keystore: Option<Keystore>) {
         self.keystore = keystore;
     }
 
