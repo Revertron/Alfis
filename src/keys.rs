@@ -64,11 +64,23 @@ impl Keystore {
         match fs::read(&path) {
             Ok(key) => {
                 if key.len() == 32 {
-                    return Some(Keystore::from_random_bytes(key.as_slice()));
+                    let mut keystore = Keystore::from_random_bytes(key.as_slice());
+                    keystore.path = path.to_str().unwrap().to_owned();
+                    let bytes = Bytes::from_bytes(&keystore.keypair.public.to_bytes());
+                    return if check_public_key_strength(&bytes, KEYSTORE_DIFFICULTY) {
+                        Some(keystore)
+                    } else {
+                        None
+                    };
                 }
                 let mut keystore = Self::from_bytes(key.as_slice());
                 keystore.path = path.to_str().unwrap().to_owned();
-                Some(keystore)
+                let bytes = Bytes::from_bytes(&keystore.keypair.public.to_bytes());
+                return if check_public_key_strength(&bytes, KEYSTORE_DIFFICULTY) {
+                    Some(keystore)
+                } else {
+                    None
+                };
             }
             Err(_) => {
                 None

@@ -148,7 +148,7 @@ fn action_save_key(context: &Arc<Mutex<Context>>) {
     }
 }
 
-fn action_load_key(context: &Arc<Mutex<Context>>, _web_view: &mut WebView<()>) {
+fn action_load_key(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
     let result = tfd::open_file_dialog("Open keys file", "", Some((&["*.key"], "*.key")));
     match result {
         None => {}
@@ -156,6 +156,7 @@ fn action_load_key(context: &Arc<Mutex<Context>>, _web_view: &mut WebView<()>) {
             match Keystore::from_file(&file_name, "") {
                 None => {
                     error!("Error loading keystore '{}'!", &file_name);
+                    show_warning(web_view, "Error loading key!<br>Key cannot be loaded or its difficulty is not enough.");
                 }
                 Some(keystore) => {
                     info!("Loaded keystore with key: {:?}", &keystore.get_public());
@@ -246,7 +247,7 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
     let c = Arc::clone(&context);
     let context = context.lock().unwrap();
     if context.get_keystore().is_none() {
-        show_warning(web_view, "You don't have keys loaded!\nLoad or mine the keys and try again.");
+        show_warning(web_view, "You don't have keys loaded!<br>Load or mine the keys and try again.");
         return;
     }
     let keystore = context.get_keystore().unwrap();
@@ -307,7 +308,7 @@ fn action_create_zone(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, we
         }
     } else {
         warn!("Can not mine without keys!");
-        show_warning(web_view, "You don't have keys loaded!\nLoad or mine the keys and try again.");
+        show_warning(web_view, "You don't have keys loaded!<br>Load or mine the keys and try again.");
     }
 }
 
