@@ -26,6 +26,7 @@ use alfis::blockchain::enums::MineResult;
 pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let file_content = include_str!("webview/index.html");
     let mut styles = inline_style(include_str!("webview/bulma.css"));
+    styles.push_str(&inline_style(include_str!("webview/styles.css")));
     styles.push_str(&inline_style(include_str!("webview/busy_indicator.css")));
     let scripts = inline_script(include_str!("webview/scripts.js"));
 
@@ -35,7 +36,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
         .title(&title)
         .content(html)
         .size(1023, 720)
-        .min_size(895, 350)
+        .min_size(773, 350)
         .resizable(true)
         .debug(false)
         .user_data(())
@@ -48,7 +49,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                 SaveKey => { action_save_key(&context); }
                 CheckRecord { data } => { action_check_record(web_view, data); }
                 CheckDomain { name } => { action_check_domain(&context, web_view, name); }
-                MineDomain { name, records, .. } => {
+                MineDomain { name, records } => {
                     action_create_domain(Arc::clone(&context), Arc::clone(&miner), web_view, name, &records);
                 }
                 TransferDomain { .. } => {}
@@ -252,7 +253,7 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
     }
     let keystore = context.get_keystore().unwrap();
     let pub_key = keystore.get_public();
-    match context.chain.can_mine_domain(&name, &records, &pub_key) {
+    match dbg!(context.chain.can_mine_domain(&name, &records, &pub_key)) {
         MineResult::Fine => {
             let zone = get_domain_zone(&name);
             let difficulty = context.chain.get_zone_difficulty(&zone);
@@ -261,7 +262,7 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
                 let data = serde_json::to_string(&data).unwrap();
                 std::mem::drop(context);
                 create_domain(c, miner, &name, &data, difficulty, &keystore);
-                let _ = web_view.eval("domainMiningStarted()");
+                let _ = web_view.eval("domainMiningStarted();");
             }
         }
         MineResult::WrongName => { show_warning(web_view, "You can't mine this domain!"); }
@@ -313,7 +314,8 @@ fn action_create_zone(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, we
 }
 
 fn show_warning(web_view: &mut WebView<()>, text: &str) {
-    match web_view.eval(&format!("showWarning('{}');", text)) {
+    let str = text.replace('\'', "\\'");
+    match web_view.eval(&format!("showWarning('{}');", &str)) {
         Ok(_) => {}
         Err(_) => { warn!("Error showing warning!"); }
     }
@@ -326,7 +328,6 @@ fn create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, name: &
         error!("Unable to mine IANA/OpenNIC/etc zone {}!", &name);
         return;
     }
-    //let tags_vector: Vec<String> = tags.into().trim().split(",").map(|s| s.trim()).map(String::from).collect();
     let transaction = Transaction::from_str(name, "dns".to_owned(), data.to_owned(), keystore.get_public().clone());
     let block = Block::new(Some(transaction), keystore.get_public(), Bytes::default(), difficulty);
     miner.lock().unwrap().add_block(block, keystore.clone());
@@ -343,7 +344,7 @@ pub enum Cmd {
     MineZone { name: String, data: String },
     CheckRecord { data: String },
     CheckDomain { name: String },
-    MineDomain { name: String, records: String, tags: String },
+    MineDomain { name: String, records: String },
     TransferDomain { name: String, owner: String },
     StopMining,
 }

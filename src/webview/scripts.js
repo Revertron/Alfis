@@ -34,14 +34,20 @@ function refresh_records_list() {
             data = value.priority + " " + value.weight + " " + value.port + " " + value.host;
         }
 
-        buf += "<div class=\"columns\">\n";
-        buf += "<div class=\"column\">" + getInput(value.domain) + "</div>\n";
-        buf += "<div class=\"column is-2\">" + getInput(value.type) + "</div>\n";
-        buf += "<div class=\"column is-2\">" + getInput(value.ttl) + "</div>\n";
-        buf += "<div class=\"column\">" + getInput(data) + "</div>\n";
-        buf += "<div class=\"column is-1 align-right\">\n<button class=\"button is-danger is-outlined\" id=\"record_delete\" onclick=\"delRecord(" + index + ");\">";
-        buf += "<span class=\"icon is-small\"><i class=\"fas fa-times\"></i></span></button></div>\n";
-        buf += "</div>";
+        var text = "<div class=\"field is-grouped\">" +
+               "<input class=\"input\" type=\"text\" value=\"{1}\" readonly>" +
+               "<input class=\"input ml-3 has-text-centered\" type=\"text\" size=\"6\" style=\"width: 15%;\" value=\"{2}\" readonly>" +
+               "<input class=\"input ml-3 has-text-centered\" type=\"text\" size=\"6\" style=\"width: 15%;\" value=\"{3}\" readonly>" +
+               "<input class=\"input ml-3\" type=\"text\" value=\"{4}\" readonly>" +
+               "<button class=\"button is-danger is-outlined ml-3\" id=\"record_delete\" onclick=\"delRecord({5});\">" +
+               "  <span class=\"icon is-small\"><i class=\"fas fa-times\"></i></span>" +
+               "</button>" +
+               "</div>";
+        buf += text.replace("{1}", value.domain)
+                   .replace("{2}", value.type)
+                   .replace("{3}", value.ttl)
+                   .replace("{4}", data)
+                   .replace("{5}", index);
     }
 
     recordsBuffer.forEach(makeRecord);
@@ -90,28 +96,6 @@ function onLoad() {
     external.invoke(JSON.stringify({cmd: 'loaded'}));
 }
 
-function openTab(element, tabName) {
-    // Declare all variables
-    var i, tabContent, tabLinks;
-
-    // Get all elements with class="content" and hide them
-    tabContent = document.getElementsByClassName("content");
-    for (i = 0; i < tabContent.length; i++) {
-        tabContent[i].className = "content is-hidden";
-    }
-
-    // Get all elements with class="tablinks" and remove the class "active"
-    tabLinks = document.getElementsByClassName("is-active");
-    for (i = 0; i < tabLinks.length; i++) {
-        tabLinks[i].className = "";
-    }
-
-    // Show the current tab, and add an "active" class to the button that opened the tab
-    document.getElementById(tabName).className = "content";
-    element.className = "is-active";
-    refresh_records_list();
-}
-
 function loadKey() {
     external.invoke(JSON.stringify({cmd: 'loadKey'}));
 }
@@ -141,8 +125,7 @@ function recordOkay(okay) {
 function createDomain() {
     new_domain = document.getElementById("new_domain").value.toLowerCase();
     new_dom_records = JSON.stringify(recordsBuffer);
-    new_dom_tags = document.getElementById("new_domain_tags").value;
-    external.invoke(JSON.stringify({cmd: 'mineDomain', name: new_domain, records: new_dom_records, tags: new_dom_tags}));
+    external.invoke(JSON.stringify({cmd: 'mineDomain', name: new_domain, records: new_dom_records}));
 }
 
 function domainMiningStarted() {
@@ -158,25 +141,6 @@ function createZone() {
     data = JSON.stringify(obj);
     external.invoke(JSON.stringify({cmd: 'mineZone', name: new_zone, data: data}));
 }
-
-/*function changeDomain() {
-    domain = document.getElementById("change_domain").value;
-    dom_records = document.getElementById("change_domain_records").value;
-    dom_tags = document.getElementById("change_domain_records").value;
-    external.invoke(JSON.stringify({cmd: 'changeDomain', name: domain, records: dom_records, tags: dom_tags}));
-}
-
-function renewDomain() {
-    domain = document.getElementById("renew_domain").value;
-    days = document.getElementById("renew_domain_extend_days").value;
-    external.invoke(JSON.stringify({cmd: 'renewDomain', name: domain, days: days}));
-}
-
-function transferDomain() {
-    domain = document.getElementById("transfer_domain").value;
-    new_owner = document.getElementById("transfer_domain_transfer_owner").value;
-    external.invoke(JSON.stringify({cmd: 'transferDomain', name: domain, owner: new_owner}));
-}*/
 
 function sendAction(param) {
     external.invoke(JSON.stringify(param));
@@ -306,19 +270,15 @@ function keystoreChanged(path, pub_key, hash) {
     if (path == '') {
         path = "In memory";
     }
-    var key_file_name = document.getElementById("key_file_name");
-    key_file_name.innerHTML = path;
-    var key_public_key = document.getElementById("key_public_key");
-    key_public_key.innerHTML = pub_key;
-    var key_public_hash = document.getElementById("key_public_hash");
-    key_public_hash.innerHTML = hash;
+    var public_key_hash = document.getElementById("public_key_hash");
+    public_key_hash.value = hash;
+
     var save_key = document.getElementById("save_key");
     save_key.disabled = false;
 
     var new_domain = document.getElementById("new_domain");
     new_domain.disabled = false;
-    var new_domain_tags = document.getElementById("new_domain_tags");
-    new_domain_tags.disabled = false;
+
     var new_zone = document.getElementById("new_zone");
     new_zone.disabled = false;
     var new_zone_difficulty = document.getElementById("new_zone_difficulty");

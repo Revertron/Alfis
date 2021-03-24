@@ -1,0 +1,20 @@
+.container {
+  margin: 10pt;
+}
+
+.notification {
+  position: absolute;
+  z-index: 100;
+  width: 50%;
+  top: 10pt;
+  right: 10pt;
+}
+
+.footer {
+  background-color: #f4f4f4;
+  padding: 0.2rem 0.5rem 0.2rem 0.5rem;
+  width: 100%;
+  position: absolute;
+  bottom: 0px;
+  z-index: 9;
+}
