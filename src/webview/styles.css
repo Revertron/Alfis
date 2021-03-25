@@ -6,7 +6,17 @@
   position: absolute;
   z-index: 100;
   width: 50%;
+}
+
+.notification.is-warning {
+  position: absolute;
   top: 10pt;
+  right: 10pt;
+}
+
+.notification.is-success {
+  position: absolute;
+  bottom: 10pt;
   right: 10pt;
 }
 

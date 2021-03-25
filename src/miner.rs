@@ -113,7 +113,7 @@ impl Miner {
             job.block.pub_key = job.keystore.get_public();
             if !check_public_key_strength(&job.block.pub_key, KEYSTORE_DIFFICULTY) {
                 warn!("Can not mine block with weak public key!");
-                context.lock().unwrap().bus.post(Event::MinerStopped);
+                context.lock().unwrap().bus.post(Event::MinerStopped { success: false, full: false });
                 mining.store(false, Ordering::SeqCst);
                 return;
             }
@@ -124,7 +124,7 @@ impl Miner {
                     // If we were doing something else and got new block before we could mine this block
                     if last_block.index > job.block.index || last_block.hash != job.block.prev_block_hash {
                         warn!("We missed block to lock");
-                        context.lock().unwrap().bus.post(Event::MinerStopped);
+                        context.lock().unwrap().bus.post(Event::MinerStopped { success: false, full: false });
                         mining.store(false, Ordering::SeqCst);
                         return;
                     }
@@ -150,6 +150,7 @@ impl Miner {
             let live_threads = Arc::clone(&live_threads);
             thread::spawn(move || {
                 live_threads.fetch_add(1, Ordering::SeqCst);
+                let full = job.block.transaction.is_some();
                 match find_hash(Arc::clone(&context), job.block, Arc::clone(&mining)) {
                     None => {
                         debug!("Mining was cancelled");
@@ -157,13 +158,14 @@ impl Miner {
                         // If this is the last thread, but mining was not stopped by another thread
                         if count == 1 {
                             let mut context = context.lock().unwrap();
-                            context.bus.post(Event::MinerStopped);
+                            context.bus.post(Event::MinerStopped { success: false, full });
                         }
                     },
                     Some(mut block) => {
                         let index = block.index;
                         let mut context = context.lock().unwrap();
                         block.signature = Bytes::from_bytes(&job.keystore.sign(&block.as_bytes()));
+                        let mut success = false;
                         if context.chain.check_new_block(&block) != BlockQuality::Good {
                             warn!("Error adding mined block!");
                             if index == 0 {
@@ -174,8 +176,9 @@ impl Miner {
                                 context.settings.origin = block.hash.to_string();
                             }
                             context.chain.add_block(block);
+                            success = true;
                         }
-                        context.bus.post(Event::MinerStopped);
+                        context.bus.post(Event::MinerStopped { success, full });
                         mining.store(false, Ordering::SeqCst);
                     },
                 }

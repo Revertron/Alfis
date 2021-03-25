@@ -190,13 +190,33 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                 status.mining = true;
                 String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
             }
-            Event::MinerStopped | Event::KeyGeneratorStopped => {
+            Event::MinerStopped {success, full} => {
                 status.mining = false;
-                if status.syncing {
+                let mut s = if status.syncing {
                     String::from("setLeftStatusBarText('Syncing...'); showMiningIndicator(true, true);")
                 } else {
                     String::from("setLeftStatusBarText('Idle'); showMiningIndicator(false, false);")
+                };
+                if full {
+                    match success {
+                        true => { s.push_str(" showSuccess('Block successfully mined!')"); }
+                        false => { s.push_str(" showSuccess('Mining unsuccessful, sorry.')"); }
+                    }
                 }
+                s
+            }
+            Event::KeyGeneratorStopped {success} => {
+                status.mining = false;
+                let mut s = if status.syncing {
+                    String::from("setLeftStatusBarText('Syncing...'); showMiningIndicator(true, true);")
+                } else {
+                    String::from("setLeftStatusBarText('Idle'); showMiningIndicator(false, false);")
+                };
+                match success {
+                    true => { s.push_str(" showSuccess('Key pair successfully mined!<br>Don`t forget to save!')"); }
+                    false => { s.push_str(" showSuccess('Key mining got nothing, sorry.')"); }
+                }
+                s
             }
             Event::Syncing { have, height } => {
                 status.syncing = true;
@@ -318,6 +338,14 @@ fn show_warning(web_view: &mut WebView<()>, text: &str) {
     match web_view.eval(&format!("showWarning('{}');", &str)) {
         Ok(_) => {}
         Err(_) => { warn!("Error showing warning!"); }
+    }
+}
+
+fn show_success(web_view: &mut WebView<()>, text: &str) {
+    let str = text.replace('\'', "\\'");
+    match web_view.eval(&format!("showSuccess('{}');", &str)) {
+        Ok(_) => {}
+        Err(_) => { warn!("Error showing success!"); }
     }
 }
 

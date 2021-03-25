@@ -3,9 +3,9 @@ use crate::{Bytes, Keystore};
 #[derive(Clone, PartialEq, Debug)]
 pub enum Event {
     MinerStarted,
-    MinerStopped,
+    MinerStopped { success: bool, full: bool },
     KeyGeneratorStarted,
-    KeyGeneratorStopped,
+    KeyGeneratorStopped { success: bool },
     KeyCreated { path: String, public: String, hash: String },
     KeyLoaded { path: String, public: String, hash: String },
     KeySaved { path: String, public: String, hash: String },

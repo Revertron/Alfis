@@ -36,8 +36,8 @@ function refresh_records_list() {
 
         var text = "<div class=\"field is-grouped\">" +
                "<input class=\"input\" type=\"text\" value=\"{1}\" readonly>" +
-               "<input class=\"input ml-3 has-text-centered\" type=\"text\" size=\"6\" style=\"width: 15%;\" value=\"{2}\" readonly>" +
-               "<input class=\"input ml-3 has-text-centered\" type=\"text\" size=\"6\" style=\"width: 15%;\" value=\"{3}\" readonly>" +
+               "<input class=\"input ml-3 has-text-centered\" type=\"text\" size=\"6\" style=\"width: 20%;\" value=\"{2}\" readonly>" +
+               "<input class=\"input ml-3 has-text-centered\" type=\"text\" size=\"6\" style=\"width: 20%;\" value=\"{3}\" readonly>" +
                "<input class=\"input ml-3\" type=\"text\" value=\"{4}\" readonly>" +
                "<button class=\"button is-danger is-outlined ml-3\" id=\"record_delete\" onclick=\"delRecord({5});\">" +
                "  <span class=\"icon is-small\"><i class=\"fas fa-times\"></i></span>" +
@@ -55,38 +55,38 @@ function refresh_records_list() {
 }
 
 function showNewRecordDialog() {
-    button_positive = document.getElementById("new_record_positive_button");
+    var button_positive = document.getElementById("new_record_positive_button");
     button_positive.onclick = function() {
         checkRecord(get_record_from_dialog());
     };
 
-    button_negative = document.getElementById("new_record_negative_button");
+    var button_negative = document.getElementById("new_record_negative_button");
     button_negative.onclick = function() {
-        dialog = document.getElementById("new_record_dialog");
+        var dialog = document.getElementById("new_record_dialog");
         dialog.className = "modal";
         refresh_records_list();
     }
 
-    dialog = document.getElementById("new_record_dialog");
+    var dialog = document.getElementById("new_record_dialog");
     dialog.className = "modal is-active";
 }
 
 function get_record_from_dialog() {
-    record_name = document.getElementById("record_name").value.toLowerCase();
-    record_type = document.getElementById("record_type").value;
-    record_ttl = parseInt(document.getElementById("record_ttl").value);
-    record_data = document.getElementById("record_data").value;
+    var record_name = document.getElementById("record_name").value.toLowerCase();
+    var record_type = document.getElementById("record_type").value;
+    var record_ttl = parseInt(document.getElementById("record_ttl").value);
+    var record_data = document.getElementById("record_data").value;
     if (record_type == "CNAME" || record_type == "NS") {
         return { type: record_type, domain: record_name, ttl: record_ttl, host: record_data }
     } else if (record_type == "MX") {
-        record_priority = parseInt(document.getElementById("record_priority").value);
+        var record_priority = parseInt(document.getElementById("record_priority").value);
         return { type: record_type, domain: record_name, ttl: record_ttl, priority: record_priority, host: record_data }
     }  else if (record_type == "TXT") {
         return { type: record_type, domain: record_name, ttl: record_ttl, data: record_data }
     } else if (record_type == "SRV") {
-        record_priority = parseInt(document.getElementById("record_priority").value);
-        record_weight = parseInt(document.getElementById("record_weight").value);
-        record_port = parseInt(document.getElementById("record_port").value);
+        var record_priority = parseInt(document.getElementById("record_priority").value);
+        var record_weight = parseInt(document.getElementById("record_weight").value);
+        var record_port = parseInt(document.getElementById("record_port").value);
         return { type: record_type, domain: record_name, ttl: record_ttl, priority: record_priority, weight: record_weight, port: record_port, host: record_data }
     }
     return { type: record_type, domain: record_name, ttl: record_ttl, addr: record_data }
@@ -115,7 +115,7 @@ function checkRecord(data) {
 function recordOkay(okay) {
     if (okay) {
         addRecord(get_record_from_dialog()); // It will refresh list
-        dialog = document.getElementById("new_record_dialog");
+        var dialog = document.getElementById("new_record_dialog");
         dialog.className = "modal";
     } else {
         showWarning('Record is not valid!');
@@ -123,8 +123,8 @@ function recordOkay(okay) {
 }
 
 function createDomain() {
-    new_domain = document.getElementById("new_domain").value.toLowerCase();
-    new_dom_records = JSON.stringify(recordsBuffer);
+    var new_domain = document.getElementById("new_domain").value.toLowerCase();
+    var new_dom_records = JSON.stringify(recordsBuffer);
     external.invoke(JSON.stringify({cmd: 'mineDomain', name: new_domain, records: new_dom_records}));
 }
 
@@ -133,8 +133,8 @@ function domainMiningStarted() {
 }
 
 function createZone() {
-    new_zone = document.getElementById("new_zone").value;
-    difficulty = document.getElementById("new_zone_difficulty").value;
+    var new_zone = document.getElementById("new_zone").value;
+    var difficulty = document.getElementById("new_zone_difficulty").value;
     obj = {};
     obj.name = new_zone;
     obj.difficulty = parseInt(difficulty);
@@ -151,9 +151,9 @@ function onDomainChange(element) {
 }
 
 function domainAvailable(available) {
-    input = document.getElementById("new_domain");
-    button = document.getElementById("new_domain_button");
-    button2 = document.getElementById("add_record_button");
+    var input = document.getElementById("new_domain");
+    var button = document.getElementById("new_domain_button");
+    var button2 = document.getElementById("add_record_button");
     if (available) {
         input.className = "input";
         button.disabled = false
@@ -166,8 +166,8 @@ function domainAvailable(available) {
 }
 
 function onZoneChange() {
-    button = document.getElementById("new_zone_button");
-    diff = document.getElementById("new_zone_difficulty");
+    var button = document.getElementById("new_zone_button");
+    var diff = document.getElementById("new_zone_difficulty");
     d = parseInt(diff.value);
     // Checking for NaN first
     if (d != d || d < 20 || d > 50) {
@@ -175,18 +175,18 @@ function onZoneChange() {
         diff.className = "input is-danger";
     } else {
         diff.className = "input";
-        input = document.getElementById("new_zone");
+        var input = document.getElementById("new_zone");
         external.invoke(JSON.stringify({cmd: 'checkZone', name: input.value}));
     }
 }
 
 function zoneAvailable(available) {
-    input = document.getElementById("new_zone");
-    button = document.getElementById("new_zone_button");
+    var input = document.getElementById("new_zone");
+    var button = document.getElementById("new_zone_button");
     if (available) {
         input.className = "input";
         button.disabled = false;
-        diff = document.getElementById("new_zone_difficulty");
+        var diff = document.getElementById("new_zone_difficulty");
         d = parseInt(diff.value);
         // Checking for NaN first
         if (d != d || d < 20 || d > 50) {
@@ -200,38 +200,51 @@ function zoneAvailable(available) {
 }
 
 function showModalDialog(text, callback) {
-    message = document.getElementById("modal_text");
+    var message = document.getElementById("modal_text");
     message.textContent = text;
 
-    button_positive = document.getElementById("modal_positive_button");
+    var button_positive = document.getElementById("modal_positive_button");
     button_positive.onclick = function() {
         callback();
         dialog = document.getElementById("modal_dialog");
         dialog.className = "modal";
     };
 
-    button_negative = document.getElementById("modal_negative_button");
+    var button_negative = document.getElementById("modal_negative_button");
     button_negative.onclick = function() {
         dialog = document.getElementById("modal_dialog");
         dialog.className = "modal";
     }
 
-    dialog = document.getElementById("modal_dialog");
+    var dialog = document.getElementById("modal_dialog");
     dialog.className = "modal is-active";
 }
 
 function showWarning(text) {
-    warning = document.getElementById("notification_warning");
-    message = document.getElementById("warning_text");
+    var warning = document.getElementById("notification_warning");
+    var message = document.getElementById("warning_text");
     message.innerHTML = text;
 
     warning.className = "notification is-warning";
-    button = document.getElementById("close");
+    var button = document.getElementById("warning_close");
     button.onclick = function() {
         message.value = "";
         warning.className = "notification is-warning is-hidden";
     }
     setTimeout(button.onclick, 5000);
+}
+
+function showSuccess(text) {
+    var warning = document.getElementById("notification_success");
+    var message = document.getElementById("success_text");
+    message.innerHTML = text;
+
+    warning.className = "notification is-success";
+    var button = document.getElementById("success_close");
+    button.onclick = function() {
+        message.value = "";
+        warning.className = "notification is-success is-hidden";
+    }
 }
 
 function showMiningIndicator(visible, blue) {

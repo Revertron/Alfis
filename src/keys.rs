@@ -163,6 +163,7 @@ pub fn create_key(context: Arc<Mutex<Context>>) {
         let miners_count = miners_count.clone();
         thread::spawn(move || {
             miners_count.fetch_add(1, atomic::Ordering::SeqCst);
+            let mut success = false;
             match generate_key(KEYSTORE_DIFFICULTY, mining.clone()) {
                 None => {
                     debug!("Keystore mining finished");
@@ -174,11 +175,12 @@ pub fn create_key(context: Arc<Mutex<Context>>) {
                     info!("Key mined successfully: {:?}, hash: {}", &keystore.get_public(), &hash);
                     context.bus.post(Event::KeyCreated { path: keystore.get_path().to_owned(), public: keystore.get_public().to_string(), hash });
                     context.set_keystore(Some(keystore));
+                    success = true;
                 }
             }
             let miners = miners_count.fetch_sub(1, atomic::Ordering::SeqCst) - 1;
             if miners == 0 {
-                context.lock().unwrap().bus.post(Event::KeyGeneratorStopped);
+                context.lock().unwrap().bus.post(Event::KeyGeneratorStopped { success });
             }
         });
     }
