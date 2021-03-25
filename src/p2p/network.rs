@@ -347,6 +347,8 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             peer.set_height(height);
             peer.set_active(true);
             if peer.is_higher(my_height) || ( height == my_height && my_hash != hash) {
+                let mut context = context.lock().unwrap();
+                context.chain.update_max_height(height);
                 State::message(Message::GetBlock { index: my_height + 1 })
             } else {
                 State::message(Message::pong(my_height, my_hash))
@@ -363,6 +365,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             context.bus.post(crate::event::Event::NetworkStatus { nodes: peers.get_peers_active_count(), blocks: blocks_count });
 
             if is_higher {
+                context.chain.update_max_height(height);
                 State::message(Message::GetBlock { index: my_height + 1 })
             } else if my_hash != hash {
                 State::message(Message::GetBlock { index: my_height })
