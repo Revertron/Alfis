@@ -40,7 +40,9 @@ function refresh_records_list() {
                "<input class=\"input ml-3 has-text-centered\" type=\"text\" size=\"6\" style=\"width: 20%;\" value=\"{3}\" readonly>" +
                "<input class=\"input ml-3\" type=\"text\" value=\"{4}\" readonly>" +
                "<button class=\"button is-danger is-outlined ml-3\" id=\"record_delete\" onclick=\"delRecord({5});\">" +
-               "  <span class=\"icon is-small\"><i class=\"fas fa-times\"></i></span>" +
+               "  <span class=\"icon is-small\">" +
+               "    <svg viewBox=\"0 0 24 24\" style=\"width: 20px; height: 20px;\"><path d=\"M22.54 16.88L20.41 19L22.54 21.12L21.12 22.54L19 20.41L16.88 22.54L15.47 21.12L17.59 19L15.47 16.88L16.88 15.47L19 17.59L21.12 15.46L22.54 16.88M12 13C10.9 13 10 13.9 10 15S10.9 17 12 17 14 16.1 14 15 13.1 13 12 13M13.35 21H5.5C4.58 21 3.81 20.38 3.58 19.54L1.04 10.27C1 10.18 1 10.09 1 10C1 9.45 1.45 9 2 9H6.79L11.17 2.45C11.36 2.16 11.68 2 12 2S12.64 2.16 12.83 2.44L17.21 9H22C22.55 9 23 9.45 23 10L22.97 10.27L22 13.81C21.43 13.5 20.79 13.24 20.12 13.11L20.7 11H3.31L5.5 19H13C13 19.7 13.13 20.37 13.35 21M9.2 9H14.8L12 4.8L9.2 9Z\"></path></svg>" +
+               "  </span>" +
                "</button>" +
                "</div>";
         buf += text.replace("{1}", value.domain)
@@ -94,6 +96,28 @@ function get_record_from_dialog() {
 
 function onLoad() {
     external.invoke(JSON.stringify({cmd: 'loaded'}));
+}
+
+function openTab(element, tabName) {
+    // Declare all variables
+    var i, tabContent, tabLinks;
+
+    // Get all elements with class="content" and hide them
+    tabContent = document.getElementsByClassName("tab content");
+    for (i = 0; i < tabContent.length; i++) {
+        tabContent[i].className = "tab content is-hidden";
+    }
+
+    // Get all elements with class="tab" and remove the class "is-active"
+    tabLinks = document.getElementsByClassName("tab is-active");
+    for (i = 0; i < tabLinks.length; i++) {
+        tabLinks[i].className = "tab";
+    }
+
+    // Show the current tab, and add an "is-active" class to the button that opened the tab
+    document.getElementById(tabName).className = "tab content";
+    element.parentElement.className = "tab is-active";
+    refresh_records_list();
 }
 
 function loadKey() {

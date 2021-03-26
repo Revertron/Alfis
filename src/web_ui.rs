@@ -341,6 +341,7 @@ fn show_warning(web_view: &mut WebView<()>, text: &str) {
     }
 }
 
+#[allow(dead_code)]
 fn show_success(web_view: &mut WebView<()>, text: &str) {
     let str = text.replace('\'', "\\'");
     match web_view.eval(&format!("showSuccess('{}');", &str)) {

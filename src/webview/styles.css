@@ -28,3 +28,19 @@
   bottom: 0px;
   z-index: 9;
 }
+
+path {
+  fill: #4a4a4a;
+}
+
+.tabs > ul > li.is-active > a > span.icon > svg > path {
+  fill: #3273dc;
+}
+
+.control > span.icon > svg > path {
+  fill: #dbdbdb;
+}
+
+.is-danger > span.icon > svg > path {
+  fill: #f14668;
+}
