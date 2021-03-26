@@ -1,16 +1,18 @@
 var recordsBuffer = [];
+var availableZones = [];
+var currentZone = "";
 
 function addRecord(record) {
     recordsBuffer.push(record);
-    refresh_records_list();
+    refreshRecordsList();
 }
 
 function delRecord(index) {
     recordsBuffer.splice(index, 1);
-    refresh_records_list();
+    refreshRecordsList();
 }
 
-function refresh_records_list() {
+function refreshRecordsList() {
     var buf = "";
     if (recordsBuffer.length > 0) {
         buf = "<label class=\"label\">Records:</label>\n";
@@ -66,7 +68,7 @@ function showNewRecordDialog() {
     button_negative.onclick = function() {
         var dialog = document.getElementById("new_record_dialog");
         dialog.className = "modal";
-        refresh_records_list();
+        refreshRecordsList();
     }
 
     var dialog = document.getElementById("new_record_dialog");
@@ -117,7 +119,12 @@ function openTab(element, tabName) {
     // Show the current tab, and add an "is-active" class to the button that opened the tab
     document.getElementById(tabName).className = "tab content";
     element.parentElement.className = "tab is-active";
-    refresh_records_list();
+    refreshRecordsList();
+}
+
+function toggle(element, event) {
+  event.stopPropagation();
+  element.classList.toggle('is-active');
 }
 
 function loadKey() {
@@ -149,11 +156,13 @@ function recordOkay(okay) {
 function createDomain() {
     var new_domain = document.getElementById("new_domain").value.toLowerCase();
     var new_dom_records = JSON.stringify(recordsBuffer);
-    external.invoke(JSON.stringify({cmd: 'mineDomain', name: new_domain, records: new_dom_records}));
+    var domain = new_domain + "." + currentZone.name;
+    external.invoke(JSON.stringify({cmd: 'mineDomain', name: domain, records: new_dom_records}));
 }
 
 function domainMiningStarted() {
     recordsBuffer = [];
+    refreshRecordsList();
 }
 
 function createZone() {
@@ -171,7 +180,8 @@ function sendAction(param) {
 }
 
 function onDomainChange(element) {
-    external.invoke(JSON.stringify({cmd: 'checkDomain', name: element.value}));
+    var domain = element.value + "." + currentZone.name;
+    external.invoke(JSON.stringify({cmd: 'checkDomain', name: domain}));
 }
 
 function domainAvailable(available) {
@@ -320,4 +330,39 @@ function keystoreChanged(path, pub_key, hash) {
     new_zone.disabled = false;
     var new_zone_difficulty = document.getElementById("new_zone_difficulty");
     new_zone_difficulty.disabled = false;
+}
+
+function refreshZonesList() {
+    var buf = "";
+    availableZones.forEach(function(value, index, array) {
+        var zone = value.name + " (" + value.difficulty + "🔥)";
+        var add_class = "";
+        if (currentZone.name == value.name) {
+            add_class = "is-active";
+        }
+        buf += "<a id=\"zone-{1}\" class=\"dropdown-item {2}\" onclick=\"changeZone('{3}');\">.{4}</a>"
+            .replace("{1}", value.name)
+            .replace("{2}", add_class)
+            .replace("{3}", value.name)
+            .replace("{4}", zone);
+    });
+    var links = document.getElementById("zones-links");
+    links.innerHTML = buf;
+    var cur_name = document.getElementById("zones-current-name");
+    cur_name.innerHTML = "." + currentZone.name + " (" + currentZone.difficulty + "🔥)";
+}
+
+function zonesChanged(text) {
+    availableZones = JSON.parse(text);
+    currentZone = availableZones[0];
+    refreshZonesList();
+}
+
+function changeZone(zone) {
+    availableZones.forEach(function(value, index, array) {
+        if (value.name == zone) {
+            currentZone = value;
+        }
+    });
+    refreshZonesList();
 }

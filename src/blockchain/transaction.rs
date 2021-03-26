@@ -6,6 +6,7 @@ use serde::ser::SerializeStruct;
 use crate::blockchain::hash_utils::*;
 use crate::bytes::Bytes;
 use crate::dns::protocol::DnsRecord;
+use std::fmt::{Display, Formatter};
 
 extern crate serde;
 extern crate serde_json;
@@ -90,8 +91,14 @@ impl DomainData {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ZoneData {
     pub name: String,
     pub difficulty: u32
+}
+
+impl Display for ZoneData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.write_str(&format!("{} ({})", self.name, self.difficulty))
+    }
 }

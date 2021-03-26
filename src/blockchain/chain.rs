@@ -45,6 +45,7 @@ const SQL_GET_LAST_FULL_BLOCK_FOR_KEY: &str = "SELECT * FROM blocks WHERE `trans
 const SQL_GET_PUBLIC_KEY_BY_ID: &str = "SELECT pub_key FROM transactions WHERE identity = ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_ID_BY_ID: &str = "SELECT identity FROM transactions WHERE identity = ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_TRANSACTION_BY_ID: &str = "SELECT * FROM transactions WHERE identity = ? ORDER BY id DESC LIMIT 1;";
+const SQL_GET_TRANSACTIONS_WITH_ZONE: &str = "SELECT data FROM transactions WHERE data LIKE '%difficulty%';";
 
 pub struct Chain {
     origin: Bytes,
@@ -269,6 +270,25 @@ impl Chain {
             }
         }
         true
+    }
+
+    pub fn get_zones(&self) -> Vec<ZoneData> {
+        let mut result = Vec::new();
+        match self.db.prepare(SQL_GET_TRANSACTIONS_WITH_ZONE) {
+            Ok(mut statement) => {
+                while statement.next().unwrap() == State::Row {
+                    let data = statement.read::<String>(0).unwrap();
+                    info!("Got zone data {}", &data);
+                    if let Ok(zone_data) = serde_json::from_str(&data) {
+                        result.push(zone_data);
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("Can't get zones from DB {}", e);
+            }
+        }
+        result
     }
 
     /// Checks if some zone exists in our blockchain

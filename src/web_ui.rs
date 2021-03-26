@@ -20,7 +20,7 @@ use alfis::dns::protocol::DnsRecord;
 use alfis::commons::{ZONE_MAX_LENGTH, ZONE_DIFFICULTY};
 use Cmd::*;
 use alfis::blockchain::transaction::{DomainData, ZoneData};
-use self::web_view::WebView;
+use self::web_view::{WebView, Handle};
 use alfis::blockchain::enums::MineResult;
 
 pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
@@ -175,92 +175,110 @@ fn action_load_key(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
 
 fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
     web_view.eval("showMiningIndicator(false, false);").expect("Error evaluating!");
-    let handle = web_view.handle();
-    let mut status = Status::new();
+    let handle: Handle<()> = web_view.handle();
+    let status = Arc::new(Mutex::new(Status::new()));
+    let context_copy = Arc::clone(&context);
     let mut c = context.lock().unwrap();
     c.bus.register(move |_uuid, e| {
         //debug!("Got event from bus {:?}", &e);
-        let eval = match e {
-            Event::KeyCreated { path, public, hash } |
-            Event::KeyLoaded { path, public, hash } |
-            Event::KeySaved { path, public, hash } => {
-                format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash)
-            }
-            Event::MinerStarted | Event::KeyGeneratorStarted => {
-                status.mining = true;
-                String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
-            }
-            Event::MinerStopped {success, full} => {
-                status.mining = false;
-                let mut s = if status.syncing {
-                    String::from("setLeftStatusBarText('Syncing...'); showMiningIndicator(true, true);")
-                } else {
-                    String::from("setLeftStatusBarText('Idle'); showMiningIndicator(false, false);")
-                };
-                if full {
+        let status = Arc::clone(&status);
+        let handle = handle.clone();
+        let context_copy = Arc::clone(&context_copy);
+        thread::spawn(move || {
+            let mut status = status.lock().unwrap();
+            let context = context_copy.lock().unwrap();
+            let eval = match e {
+                Event::KeyCreated { path, public, hash } |
+                Event::KeyLoaded { path, public, hash } |
+                Event::KeySaved { path, public, hash } => {
+                    format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash)
+                }
+                Event::MinerStarted | Event::KeyGeneratorStarted => {
+                    status.mining = true;
+                    String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
+                }
+                Event::MinerStopped {success, full} => {
+                    status.mining = false;
+                    let mut s = if status.syncing {
+                        String::from("setLeftStatusBarText('Syncing...'); showMiningIndicator(true, true);")
+                    } else {
+                        String::from("setLeftStatusBarText('Idle'); showMiningIndicator(false, false);")
+                    };
+                    if full {
+                        match success {
+                            true => { s.push_str(" showSuccess('Block successfully mined!')"); }
+                            false => { s.push_str(" showSuccess('Mining unsuccessful, sorry.')"); }
+                        }
+                    }
+                    s
+                }
+                Event::KeyGeneratorStopped {success} => {
+                    status.mining = false;
+                    let mut s = if status.syncing {
+                        String::from("setLeftStatusBarText('Syncing...'); showMiningIndicator(true, true);")
+                    } else {
+                        String::from("setLeftStatusBarText('Idle'); showMiningIndicator(false, false);")
+                    };
                     match success {
-                        true => { s.push_str(" showSuccess('Block successfully mined!')"); }
-                        false => { s.push_str(" showSuccess('Mining unsuccessful, sorry.')"); }
+                        true => { s.push_str(" showSuccess('Key pair successfully mined!<br>Don`t forget to save!')"); }
+                        false => { s.push_str(" showSuccess('Key mining got nothing, sorry.')"); }
+                    }
+                    s
+                }
+                Event::Syncing { have, height } => {
+                    status.syncing = true;
+                    status.synced_blocks = have;
+                    status.sync_height = height;
+                    if status.mining {
+                        String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
+                    } else {
+                        format!("setLeftStatusBarText('Synchronizing {}/{}'); showMiningIndicator(true, true);", have, height)
                     }
                 }
-                s
-            }
-            Event::KeyGeneratorStopped {success} => {
-                status.mining = false;
-                let mut s = if status.syncing {
-                    String::from("setLeftStatusBarText('Syncing...'); showMiningIndicator(true, true);")
-                } else {
-                    String::from("setLeftStatusBarText('Idle'); showMiningIndicator(false, false);")
-                };
-                match success {
-                    true => { s.push_str(" showSuccess('Key pair successfully mined!<br>Don`t forget to save!')"); }
-                    false => { s.push_str(" showSuccess('Key mining got nothing, sorry.')"); }
+                Event::SyncFinished => {
+                    status.syncing = false;
+                    if status.mining {
+                        String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
+                    } else {
+                        format!("setLeftStatusBarText('Idle'); showMiningIndicator(false, false);")
+                    }
                 }
-                s
-            }
-            Event::Syncing { have, height } => {
-                status.syncing = true;
-                status.synced_blocks = have;
-                status.sync_height = height;
-                if status.mining {
-                    String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
-                } else {
-                    format!("setLeftStatusBarText('Synchronizing {}/{}'); showMiningIndicator(true, true);", have, height)
+                Event::NetworkStatus { nodes, blocks } => {
+                    if status.mining || status.syncing || nodes < 3 {
+                        format!("setRightStatusBarText('Nodes: {}, Blocks: {}')", nodes, blocks)
+                    } else {
+                        format!("setLeftStatusBarText('Idle'); setRightStatusBarText('Nodes: {}, Blocks: {}')", nodes, blocks)
+                    }
                 }
-            }
-            Event::SyncFinished => {
-                status.syncing = false;
-                if status.mining {
-                    String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
-                } else {
-                    format!("setLeftStatusBarText('Idle'); showMiningIndicator(false, false);")
+                Event::BlockchainChanged {index} => {
+                    info!("Current blockchain height is {}", index);
+                    if let Ok(zones) = serde_json::to_string(&context.chain.get_zones()) {
+                        let _ = handle.dispatch(move |web_view|{
+                            web_view.eval(&format!("zonesChanged('{}');", &zones))
+                        });
+                    }
+                    String::new() // Nothing
                 }
-            }
-            Event::NetworkStatus { nodes, blocks } => {
-                if status.mining || status.syncing || nodes < 3 {
-                    format!("setRightStatusBarText('Nodes: {}, Blocks: {}')", nodes, blocks)
-                } else {
-                    format!("setLeftStatusBarText('Idle'); setRightStatusBarText('Nodes: {}, Blocks: {}')", nodes, blocks)
-                }
-            }
-            _ => { String::new() }
-        };
+                _ => { String::new() }
+            };
 
-        if !eval.is_empty() {
-            handle.dispatch(move |web_view| {
-                web_view.eval(&eval.replace("\\", "\\\\"))
-            }).expect("Error dispatching!");
-        }
+            if !eval.is_empty() {
+                handle.dispatch(move |web_view| {
+                    web_view.eval(&eval.replace("\\", "\\\\"))
+                }).expect("Error dispatching!");
+            }
+        });
         true
     });
+
     if let Some(keystore) = c.get_keystore() {
-        let eval = format!("keystoreChanged('{}', '{}', '{}');",
-                           keystore.get_path(),
-                           &keystore.get_public().to_string(),
-                           &keystore.get_hash().to_string());
-        //debug!("Evaluating {}", &eval);
-        web_view.eval(&eval.replace("\\", "\\\\")).expect("Error evaluating!");
+        let path = keystore.get_path().to_owned();
+        let public = keystore.get_public().to_string();
+        let hash = keystore.get_hash().to_string();
+        c.bus.post(Event::KeyLoaded { path, public, hash });
     }
+    let index = c.chain.height();
+    c.bus.post(Event::BlockchainChanged { index });
 }
 
 fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, web_view: &mut WebView<()>, name: String, records: &String) {
