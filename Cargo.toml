@@ -29,7 +29,7 @@ num-traits = "0.2.14"
 chrono = { version = "0.4.13", features = ["serde"] }
 rand = "0.8.3"
 rand-old = { package = "rand", version = "0.7.0" } # For ed25519-dalek
-sqlite = "0.25.3"
+sqlite = "0.26.0"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 mio = { version = "0.7.10", features = ["os-poll", "net"] }
 derive_more = "0.99.9" # for DNS from hermes
