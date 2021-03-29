@@ -157,7 +157,12 @@ pub fn create_key(context: Arc<Mutex<Context>>) {
     let mining = Arc::new(AtomicBool::new(true));
     let miners_count = Arc::new(AtomicUsize::new(0));
     { context.lock().unwrap().bus.post(Event::KeyGeneratorStarted); }
-    for _cpu in 0..num_cpus::get() {
+    let threads = context.lock().unwrap().settings.mining.threads;
+    let threads = match threads {
+        0 => num_cpus::get(),
+        _ => threads
+    };
+    for _cpu in 0..threads {
         let context = Arc::clone(&context);
         let mining = mining.clone();
         let miners_count = miners_count.clone();

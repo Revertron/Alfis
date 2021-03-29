@@ -69,7 +69,7 @@ impl fmt::Debug for Transaction {
 
 impl Serialize for Transaction {
     fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> where S: Serializer {
-        let mut structure = serializer.serialize_struct("Transaction", 4).unwrap();
+        let mut structure = serializer.serialize_struct("Transaction", 5).unwrap();
         structure.serialize_field("identity", &self.identity)?;
         structure.serialize_field("confirmation", &self.confirmation)?;
         structure.serialize_field("method", &self.method)?;

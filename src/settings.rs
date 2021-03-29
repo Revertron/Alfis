@@ -21,6 +21,8 @@ pub struct Settings {
     pub peers: Vec<String>,
     #[serde(default)]
     pub dns: Dns,
+    #[serde(default)]
+    pub mining: Mining,
 }
 
 impl Settings {
@@ -69,7 +71,8 @@ impl Default for Settings {
             listen: String::from("[::]:4244"),
             public: false,
             peers: vec![],
-            dns: Default::default()
+            dns: Default::default(),
+            mining: Mining::default()
         }
     }
 }
@@ -87,6 +90,12 @@ impl Default for Dns {
     fn default() -> Self {
         Dns { listen: String::from("0.0.0.0:53"), threads: 20, forwarders: vec!["94.140.14.14:53".to_owned(), "94.140.15.15:53".to_owned()] }
     }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Mining {
+    #[serde(default)]
+    pub threads: usize
 }
 
 fn default_listen() -> String {

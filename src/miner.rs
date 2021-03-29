@@ -142,8 +142,13 @@ impl Miner {
         let thread_spawn_interval = Duration::from_millis(10);
         let live_threads = Arc::new(AtomicU32::new(0u32));
         let cpus = num_cpus::get();
-        debug!("Starting {} threads for mining", cpus);
-        for _cpu in 0..cpus {
+        let threads = context.lock().unwrap().settings.mining.threads;
+        let threads = match threads {
+            0 => cpus,
+            _ => threads
+        };
+        debug!("Starting {} threads for mining", threads);
+        for _cpu in 0..threads {
             let context = Arc::clone(&context);
             let job = job.clone();
             let mining = Arc::clone(&mining);

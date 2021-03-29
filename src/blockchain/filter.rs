@@ -32,7 +32,7 @@ impl DnsFilter for BlockchainFilter {
                 subdomain = String::from(parts[2]);
             }
         }
-        debug!("Searching domain {} and record {}", &search, &subdomain);
+        debug!("Searching record type '{:?}', name '{}' for domain '{}'", &qtype, &subdomain, &search);
 
         let data = self.context.lock().unwrap().chain.get_domain_info(&search);
         match data {
@@ -129,6 +129,7 @@ impl DnsFilter for BlockchainFilter {
                     }
                 }
 
+                //debug!("Answers: {:?}", &answers);
                 return if !answers.is_empty() {
                     // Create DnsPacket
                     let mut packet = DnsPacket::new();

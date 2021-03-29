@@ -1,3 +1,8 @@
+html {
+  overflow-y: auto;
+  min-width: 768px;
+}
+
 .container {
   margin: 10pt;
 }
