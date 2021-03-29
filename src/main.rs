@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use getopts::Options;
 #[allow(unused_imports)]
-use log::{debug, error, info, LevelFilter, trace, warn};
+use log::{debug, error, info, trace, warn, LevelFilter};
 use simple_logger::SimpleLogger;
 #[cfg(windows)]
 use winapi::um::wincon::{ATTACH_PARENT_PROCESS, AttachConsole, FreeConsole};
@@ -30,6 +30,7 @@ fn main() {
     #[cfg(windows)]
     unsafe {
         AttachConsole(ATTACH_PARENT_PROCESS);
+        #[cfg(feature = "webgui")]
         winapi::um::shellscalingapi::SetProcessDpiAwareness(2);
     }
 
@@ -46,7 +47,7 @@ fn main() {
 
     let opt_matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
-        Err(f) => panic!(f.to_string()),
+        Err(f) => panic!("{}", f.to_string()),
     };
 
     if opt_matches.opt_present("h") {
