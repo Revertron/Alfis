@@ -155,7 +155,7 @@ impl DnsFilter for BlockchainFilter {
                     // Create DnsPacket
                     let mut packet = DnsPacket::new();
                     packet.header.authoritative_answer = true;
-                    packet.header.rescode = ResultCode::NXDOMAIN;
+                    packet.header.rescode = ResultCode::NOERROR;
                     packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
                     packet.authorities.push(DnsRecord::SOA {
                         domain: zone,

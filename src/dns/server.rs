@@ -61,12 +61,7 @@ pub trait DnsServer {
 
 /// Utility function for resolving domains referenced in for example CNAME or SRV
 /// records. This usually spares the client from having to perform additional lookups.
-fn resolve_cnames(
-    lookup_list: &[DnsRecord],
-    results: &mut Vec<DnsPacket>,
-    resolver: &mut Box<dyn DnsResolver>,
-    depth: u16,
-) {
+fn resolve_cnames(lookup_list: &[DnsRecord], results: &mut Vec<DnsPacket>, resolver: &mut Box<dyn DnsResolver>, depth: u16,) {
     if depth > 10 {
         return;
     }
@@ -75,6 +70,12 @@ fn resolve_cnames(
         match **rec {
             DnsRecord::CNAME { ref host, .. } | DnsRecord::SRV { ref host, .. } => {
                 if let Ok(result2) = resolver.resolve(host, QueryType::A, true) {
+                    let new_unmatched = result2.get_unresolved_cnames();
+                    results.push(result2);
+
+                    resolve_cnames(&new_unmatched, results, resolver, depth + 1);
+                }
+                if let Ok(result2) = resolver.resolve(host, QueryType::AAAA, true) {
                     let new_unmatched = result2.get_unresolved_cnames();
                     results.push(result2);
 
@@ -99,6 +100,7 @@ pub fn execute_query(context: Arc<ServerContext>, request: &DnsPacket) -> DnsPac
     let mut packet = DnsPacket::new();
     packet.header.id = request.header.id;
     packet.header.recursion_available = context.allow_recursive;
+    packet.header.recursion_desired = request.header.recursion_desired;
     packet.header.response = true;
 
     if request.header.recursion_desired && !context.allow_recursive {
@@ -115,6 +117,9 @@ pub fn execute_query(context: Arc<ServerContext>, request: &DnsPacket) -> DnsPac
         let rescode = match resolver.resolve(&question.name, question.qtype, request.header.recursion_desired) {
             Ok(result) => {
                 let rescode = result.header.rescode;
+                if result.header.authoritative_answer {
+                    packet.header.authoritative_answer = true;
+                }
 
                 let unmatched = result.get_unresolved_cnames();
                 results.push(result);
