@@ -183,10 +183,10 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                         State::Idle { .. } => {
                             peer.set_state(State::idle());
                         }
-                        State::Error => {
+                        State::Error => {}
+                        State::Banned => {
                             peers.ignore_peer(registry, &event.token());
                         }
-                        State::Banned => {}
                         State::Offline { .. } => {
                             peer.set_state(State::offline());
                         }
@@ -305,7 +305,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             debug!("Hello from v{}", &app_version);
             if peers.is_our_own_connect(&rand) {
                 warn!("Detected loop connect");
-                State::Error
+                State::Banned
             } else {
                 if origin.eq(my_origin) && version == my_version {
                     let peer = peers.get_mut_peer(token).unwrap();
@@ -313,13 +313,13 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                     State::message(Message::shake(&origin, version, true, my_height))
                 } else {
                     warn!("Handshake from unsupported chain or version");
-                    State::Error
+                    State::Banned
                 }
             }
         }
         Message::Shake { origin, version, ok, height } => {
             if origin.ne(my_origin) || version != my_version {
-                return State::Error;
+                return State::Banned;
             }
             if ok {
                 let active_count = peers.get_peers_active_count();
@@ -338,7 +338,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                     State::message(Message::GetPeers)
                 }
             } else {
-                State::Error
+                State::Banned
             }
         }
         Message::Error => { State::Error }
