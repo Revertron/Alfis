@@ -1,10 +1,11 @@
 use crate::Context;
 use std::sync::{Mutex, Arc};
 use crate::dns::filter::DnsFilter;
-use crate::dns::protocol::{DnsPacket, QueryType, DnsRecord, DnsQuestion, ResultCode};
+use crate::dns::protocol::{DnsPacket, QueryType, DnsRecord, DnsQuestion, ResultCode, TransientTtl};
 #[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
 use crate::blockchain::transaction::DomainData;
+use chrono::Utc;
 
 pub struct BlockchainFilter {
     context: Arc<Mutex<Context>>
@@ -15,6 +16,9 @@ impl BlockchainFilter {
         BlockchainFilter { context }
     }
 }
+
+const NAME_SERVER: & str = "ns.alfis.name";
+const SERVER_ADMIN: & str = "admin.alfis.name";
 
 impl DnsFilter for BlockchainFilter {
     fn lookup(&self, qname: &str, qtype: QueryType) -> Option<DnsPacket> {
@@ -35,14 +39,16 @@ impl DnsFilter for BlockchainFilter {
         debug!("Searching record type '{:?}', name '{}' for domain '{}'", &qtype, &subdomain, &search);
 
         let data = self.context.lock().unwrap().chain.get_domain_info(&search);
+        let zone = parts[0].to_owned();
         match data {
             None => {
                 debug!("Not found data for domain {}", &search);
-                if self.context.lock().unwrap().chain.is_zone_in_blockchain(parts[0]) {
+                if self.context.lock().unwrap().chain.is_zone_in_blockchain(&zone) {
                     // Create DnsPacket
                     let mut packet = DnsPacket::new();
                     packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
-                    packet.header.rescode = ResultCode::SERVFAIL;
+                    packet.header.rescode = ResultCode::NXDOMAIN;
+                    packet.header.authoritative_answer = true;
                     //trace!("Returning packet: {:?}", &packet);
                     return Some(packet);
                 }
@@ -133,17 +139,35 @@ impl DnsFilter for BlockchainFilter {
                 return if !answers.is_empty() {
                     // Create DnsPacket
                     let mut packet = DnsPacket::new();
+                    packet.header.authoritative_answer = true;
                     packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
                     for answer in answers {
                         packet.answers.push(answer);
                     }
+                    packet.authorities.push( DnsRecord::NS {
+                        domain: zone,
+                        host: String::from(NAME_SERVER),
+                        ttl: TransientTtl(600)
+                    });
                     //trace!("Returning packet: {:?}", &packet);
                     Some(packet)
                 } else {
                     // Create DnsPacket
                     let mut packet = DnsPacket::new();
+                    packet.header.authoritative_answer = true;
+                    packet.header.rescode = ResultCode::NXDOMAIN;
                     packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
-                    packet.header.rescode = ResultCode::SERVFAIL;
+                    packet.authorities.push(DnsRecord::SOA {
+                        domain: zone,
+                        m_name: String::from(NAME_SERVER),
+                        r_name: String::from(SERVER_ADMIN),
+                        serial: Utc::now().timestamp() as u32,
+                        refresh: 3600,
+                        retry: 300,
+                        expire: 604800,
+                        minimum: 60,
+                        ttl: TransientTtl(600),
+                    });
                     //trace!("Returning packet: {:?}", &packet);
                     Some(packet)
                 }
