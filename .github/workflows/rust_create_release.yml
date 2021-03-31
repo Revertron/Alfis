@@ -1,8 +1,6 @@
 on:
   push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+    tags: v[0-9].[0-9]+.[0-9]+
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -20,8 +18,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Getting version
-        run: |
-          echo "VERSION=$(cat Cargo.toml | grep version | sed s/version//g | sed s/=//g | sed s/\"//g | sed s/\ //g | sed -n 1p)" >> $GITHUB_ENV
+        run: echo "VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
 
   make_release:
     name: Create Release
@@ -42,8 +39,8 @@ jobs:
           tag_name: v${{ env.VERSION }}
           release_name: Test version v${{ env.VERSION }}
           body: |
-            Changes in this version
-            To be written by maintainer.
+            ## A new version
+            * Various fixes and stability improvements.
           draft: true
           prerelease: true
 
