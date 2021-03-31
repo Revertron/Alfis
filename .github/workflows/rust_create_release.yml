@@ -10,7 +10,7 @@ name: Releases
 
 jobs:
   get_version:
-    name: Get version from Cargo.toml
+    name: Get version from Git tag
     runs-on: ubuntu-latest
     outputs:
       project_version: ${{ env.VERSION }}
@@ -36,8 +36,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.get_version.outputs.project_version }}
         with:
-          tag_name: v${{ env.VERSION }}
-          release_name: Test version v${{ env.VERSION }}
+          tag_name: ${{ env.VERSION }}
+          release_name: ${{ env.VERSION }}
           body: |
             ## A new version
             * Various fixes and stability improvements.
@@ -93,20 +93,20 @@ jobs:
       - name: Fill variables
         run: |
           echo "BIN_PATH=./target/release/alfis" >> $GITHUB_ENV
-          echo "ZIP_NAME=alfis-${{env.BIN_ARCH}}-v${{ needs.get_version.outputs.project_version }}.zip" >> $GITHUB_ENV
+          echo "ZIP_NAME=alfis-${{env.BIN_ARCH}}-${{ needs.get_version.outputs.project_version }}.zip" >> $GITHUB_ENV
           echo "BIN_PATH_NOGUI=./nogui/release/alfis" >> $GITHUB_ENV
-          echo "ZIP_NAME_NOGUI=alfis-${{env.BIN_ARCH}}-v${{ needs.get_version.outputs.project_version }}-nogui.zip" >> $GITHUB_ENV
+          echo "ZIP_NAME_NOGUI=alfis-${{env.BIN_ARCH}}-${{ needs.get_version.outputs.project_version }}-nogui.zip" >> $GITHUB_ENV
           echo "BIN_ARM_PATH=./target/armv7-unknown-linux-gnueabihf/release/alfis" >> $GITHUB_ENV
-          echo "ZIP_ARM_NAME=alfis-armv7-v${{ needs.get_version.outputs.project_version }}-nogui.zip" >> $GITHUB_ENV
+          echo "ZIP_ARM_NAME=alfis-armv7-${{ needs.get_version.outputs.project_version }}-nogui.zip" >> $GITHUB_ENV
       - name: Windows variables
         if: contains(matrix.os, 'windows')
         run: |
           echo "BIN_PATH=target/release/alfis.exe" >> $GITHUB_ENV
-          echo "ZIP_NAME=alfis-${{env.BIN_ARCH}}-v${{ needs.get_version.outputs.project_version }}.zip" >> $GITHUB_ENV
+          echo "ZIP_NAME=alfis-${{env.BIN_ARCH}}-${{ needs.get_version.outputs.project_version }}.zip" >> $GITHUB_ENV
           echo "BIN_PATH_NOGUI=nogui/release/alfis.exe" >> $GITHUB_ENV
-          echo "ZIP_NAME_NOGUI=alfis-${{env.BIN_ARCH}}-v${{ needs.get_version.outputs.project_version }}-nogui.zip" >> $GITHUB_ENV
+          echo "ZIP_NAME_NOGUI=alfis-${{env.BIN_ARCH}}-${{ needs.get_version.outputs.project_version }}-nogui.zip" >> $GITHUB_ENV
           echo "BIN_PATH_EDGE=edge/release/alfis.exe" >> $GITHUB_ENV
-          echo "ZIP_NAME_EDGE=alfis-${{env.BIN_ARCH}}-v${{ needs.get_version.outputs.project_version }}-edge.zip" >> $GITHUB_ENV
+          echo "ZIP_NAME_EDGE=alfis-${{env.BIN_ARCH}}-${{ needs.get_version.outputs.project_version }}-edge.zip" >> $GITHUB_ENV
       - name: Packaging
         uses: papeloto/action-zip@v1
         with:
