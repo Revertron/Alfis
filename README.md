@@ -1,15 +1,14 @@
 # Alfis
 
 ![Builds](https://github.com/Revertron/Alfis/actions/workflows/rust_build_and_test.yml/badge.svg)
-![Releases](https://github.com/Revertron/Alfis/actions/workflows/rust_create_release.yml/badge.svg)
 
 Alternative Free Identity System
 
-This project represents a minimal blockchain with no coin, capable of sustaining any number of domain name zones and domains.
+This project represents a minimal blockchain without cryptocurrency, capable of sustaining any number of domain name zones and domains.
 
-![Screenshot](img/PiSwDe.png)
+![Screenshot](img/keys.png)
 
-![Screenshot](img/0WzaeA.png)
+![Screenshot](img/domains.png)
 
 
 ## Building and running
