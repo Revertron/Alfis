@@ -14,7 +14,7 @@ public = true
 # Allow connections to/from Yggdrasil only (https://yggdrasil-network.github.io)
 yggdrasil_only = false
 
-# DNS server options
+# DNS resolver options
 [dns]
 # Your DNS resolver will be listening on this address and port (Usual port is 53)
 listen = "127.0.0.1:53"
