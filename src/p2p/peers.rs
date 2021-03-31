@@ -9,7 +9,7 @@ use rand::random;
 use rand::seq::IteratorRandom;
 #[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
-use crate::Bytes;
+use crate::{Bytes, is_yggdrasil};
 use crate::commons::MAX_RECONNECTS;
 
 pub struct Peers {
@@ -252,12 +252,16 @@ impl Peers {
         }
     }
 
-    pub fn connect_new_peers(&mut self, registry: &Registry, unique_token: &mut Token) {
+    pub fn connect_new_peers(&mut self, registry: &Registry, unique_token: &mut Token, yggdrasil_only: bool) {
         if self.new_peers.is_empty() {
             return;
         }
         for addr in self.new_peers.iter() {
             if self.ignored.contains(&addr.ip()) {
+                continue;
+            }
+            if yggdrasil_only && !is_yggdrasil(&addr.ip()) {
+                info!("Ignoring not Yggdrasil address '{}'", &addr.ip());
                 continue;
             }
             match TcpStream::connect(addr.clone()) {
@@ -278,7 +282,7 @@ impl Peers {
     }
 
     /// Connecting to configured (bootstrap) peers
-    pub fn connect_peers(&mut self, peers_addrs: Vec<String>, registry: &Registry, unique_token: &mut Token) {
+    pub fn connect_peers(&mut self, peers_addrs: Vec<String>, registry: &Registry, unique_token: &mut Token, yggdrasil_only: bool) {
         for peer in peers_addrs.iter() {
             let addresses: Vec<SocketAddr> = match peer.to_socket_addrs() {
                 Ok(peers) => { peers.collect() }
@@ -286,6 +290,10 @@ impl Peers {
             };
 
             for addr in addresses {
+                if yggdrasil_only && !is_yggdrasil(&addr.ip()) {
+                    info!("Ignoring not Yggdrasil address '{}'", &addr.ip());
+                    continue;
+                }
                 match TcpStream::connect(addr.clone()) {
                     Ok(mut stream) => {
                         info!("Created connection to peer {}", &addr);

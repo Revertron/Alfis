@@ -3,6 +3,7 @@ use rand::Rng;
 
 pub mod constants;
 pub use constants::*;
+use std::net::IpAddr;
 
 /// Convert bytes array to HEX format
 pub fn to_hex(buf: &[u8]) -> String {
@@ -80,9 +81,20 @@ pub fn random_string(length: usize) -> String {
     result
 }
 
+/// Checks if this IP is from Yggdrasil network
+/// https://yggdrasil-network.github.io
+pub fn is_yggdrasil(addr: &IpAddr) -> bool {
+    if let IpAddr::V6(ipv6) = addr {
+        let first_byte = ipv6.octets()[0];
+        return first_byte == 2 || first_byte == 3;
+    }
+    false
+}
+
 #[cfg(test)]
 mod test {
-    use crate::check_domain;
+    use crate::{check_domain, is_yggdrasil};
+    use std::net::IpAddr;
 
     #[test]
     fn test_check_domain() {
@@ -97,5 +109,21 @@ mod test {
         assert!(!check_domain("ab.c-", true));
         assert!(!check_domain(".ab.c", true));
         assert!(!check_domain("ab.c-", true));
+    }
+
+    #[test]
+    fn test_is_yggdrasil() {
+        let addr: IpAddr = "200::1".parse().unwrap();
+        assert!(is_yggdrasil(&addr));
+        let addr: IpAddr = "226::1".parse().unwrap();
+        assert!(is_yggdrasil(&addr));
+        let addr: IpAddr = "300::1".parse().unwrap();
+        assert!(is_yggdrasil(&addr));
+        let addr: IpAddr = "326::1".parse().unwrap();
+        assert!(is_yggdrasil(&addr));
+        let addr: IpAddr = "2001::1".parse().unwrap();
+        assert!(!is_yggdrasil(&addr));
+        let addr: IpAddr = "2201::1".parse().unwrap();
+        assert!(!is_yggdrasil(&addr));
     }
 }

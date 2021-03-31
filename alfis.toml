@@ -1,35 +1,33 @@
-# Main settings
-
 # The hash of first block in a chain to know with which nodes to work
 origin = "00000102C2F9BFD2803284D93327F089D60FC72A06F19AF2384567F2646B8348"
 # A path to your key file to load autamatically
 key_file = "default.key"
+
+# Network settings
+[net]
+# All bootstap nodes
+peers = ["test-ip4.alfis.name:4244", "test-ip6.alfis.name:4244"]
 # Your node will listen on that address for other nodes to connect
 listen = "[::]:4244"
 # Set true if you want your IP to participate in peer-exchange, or false otherwise
 public = true
-
-# Bootstrap nodes
-
-# All bootstap nodes
-#peers = ["test-ip4.alfis.name:4244", "test-ip6.alfis.name:4244"]
-# Yggdrasil nodes only
-peers = ["test-ip6.alfis.name:4244"]
+# Allow connections to/from Yggdrasil only (https://yggdrasil-network.github.io)
+yggdrasil_only = false
 
 # DNS server options
 [dns]
 # Your DNS resolver will be listening on this address and port (Usual port is 53)
-listen = "127.0.0.1:5300"
+listen = "127.0.0.1:53"
 # How many threads to spawn by DNS server
 threads = 20
 # AdGuard DNS servers to filter ads and trackers
-#forwarders = ["94.140.14.14:53", "94.140.15.15:53"]
+forwarders = ["94.140.14.14:53", "94.140.15.15:53"]
 # Wyrd servers
-forwarders = ["[301:2522::53]:53", "[303:8b1a::53]:53"]
+#forwarders = ["[301:2522::53]:53", "[303:8b1a::53]:53"]
 # Cloudflare servers
 #forwarders = ["1.1.1.1:53", "1.0.0.1:53"]
 
 #Mining options
 [mining]
-# How many CPU threads to spawn for mining
+# How many CPU threads to spawn for mining, zero = number of cores
 threads = 0

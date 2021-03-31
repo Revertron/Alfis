@@ -15,7 +15,7 @@ use log::{trace, debug, info, warn, error};
 
 use std::net::{SocketAddr, IpAddr, SocketAddrV4, Shutdown};
 use std::collections::HashSet;
-use crate::{Context, Block, p2p::Message, p2p::State, p2p::Peer, p2p::Peers, Bytes};
+use crate::{Context, Block, p2p::Message, p2p::State, p2p::Peer, p2p::Peers, Bytes, is_yggdrasil};
 use crate::blockchain::enums::BlockQuality;
 use crate::commons::CHAIN_VERSION;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -36,9 +36,9 @@ impl Network {
     }
 
     pub fn start(&mut self) -> Result<(), String> {
-        let (listen_addr, peers_addrs) = {
+        let (listen_addr, peers_addrs, yggdrasil_only) = {
             let c = self.context.lock().unwrap();
-            (c.settings.listen.clone(), c.settings.peers.clone())
+            (c.settings.net.listen.clone(), c.settings.net.peers.clone(), c.settings.net.yggdrasil_only)
         };
 
         let running = Arc::new(AtomicBool::new(true));
@@ -61,7 +61,7 @@ impl Network {
             // States of peer connections, and some data to send when sockets become writable
             let mut peers = Peers::new();
             // Starting peer connections to bootstrap nodes
-            peers.connect_peers(peers_addrs, &poll.registry(), &mut unique_token);
+            peers.connect_peers(peers_addrs, &poll.registry(), &mut unique_token, yggdrasil_only);
 
             loop {
                 // Poll Mio for events, blocking until we get an event.
@@ -89,6 +89,13 @@ impl Network {
                                         }
                                     }
 
+                                    if yggdrasil_only && !is_yggdrasil(&address.ip()) {
+                                        info!("Dropping connection from Internet");
+                                        stream.shutdown(Shutdown::Both).unwrap_or_else(|e|{ warn!("Error in shutdown, {}", e); });
+                                        let _ = poll.registry().reregister(&mut server, SERVER, Interest::READABLE);
+                                        continue;
+                                    }
+
                                     // If connection is from the same IP and not from loopback we ignore it to avoid connection loops
                                     let local_ip = stream.local_addr().unwrap_or("0.0.0.0:0".parse().unwrap());
                                     if !local_ip.ip().is_loopback() && local_ip.ip() == address.ip() {
@@ -104,7 +111,7 @@ impl Network {
                                 }
                                 Err(_) => {}
                             }
-                            poll.registry().reregister(&mut server, SERVER, Interest::READABLE).expect("Error reregistering server");
+                            let _ = poll.registry().reregister(&mut server, SERVER, Interest::READABLE);
                         }
                         token => {
                             if !handle_connection_event(Arc::clone(&context), &mut peers, &poll.registry(), &event) {
@@ -130,7 +137,7 @@ impl Network {
                 };
                 mine_locker_block(Arc::clone(&context));
                 peers.send_pings(poll.registry(), height, hash);
-                peers.connect_new_peers(poll.registry(), &mut unique_token);
+                peers.connect_new_peers(poll.registry(), &mut unique_token, yggdrasil_only);
             }
             info!("Network loop finished");
         });
@@ -209,7 +216,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                         debug!("Sending hello to {}", &peer.get_addr());
                         let data: String = {
                             let c = context.lock().unwrap();
-                            let message = Message::hand(&c.app_version, &c.settings.origin, CHAIN_VERSION, c.settings.public, peer.get_rand());
+                            let message = Message::hand(&c.app_version, &c.settings.origin, CHAIN_VERSION, c.settings.net.public, peer.get_rand());
                             serde_json::to_string(&message).unwrap()
                         };
                         send_message(peer.get_stream(), &data.into_bytes()).unwrap_or_else(|e| warn!("Error sending hello {}", e));

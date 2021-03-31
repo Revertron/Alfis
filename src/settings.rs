@@ -13,12 +13,8 @@ pub struct Settings {
     pub origin: String,
     #[serde(default)]
     pub key_file: String,
-    #[serde(default = "default_listen")]
-    pub listen: String,
     #[serde(default)]
-    pub public: bool,
-    #[serde(default)]
-    pub peers: Vec<String>,
+    pub net: Net,
     #[serde(default)]
     pub dns: Dns,
     #[serde(default)]
@@ -66,11 +62,9 @@ impl Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            origin: "".to_string(),
-            key_file: "".to_string(),
-            listen: String::from("[::]:4244"),
-            public: false,
-            peers: vec![],
+            origin: String::from("00000102C2F9BFD2803284D93327F089D60FC72A06F19AF2384567F2646B8348"),
+            key_file: String::from("default.key"),
+            net: Net::default(),
             dns: Default::default(),
             mining: Mining::default()
         }
@@ -88,7 +82,11 @@ pub struct Dns {
 
 impl Default for Dns {
     fn default() -> Self {
-        Dns { listen: String::from("0.0.0.0:53"), threads: 20, forwarders: vec!["94.140.14.14:53".to_owned(), "94.140.15.15:53".to_owned()] }
+        Dns {
+            listen: String::from("127.0.0.1:53"),
+            threads: 20,
+            forwarders: vec![String::from("94.140.14.14:53"), String::from("94.140.15.15:53")]
+        }
     }
 }
 
@@ -96,6 +94,29 @@ impl Default for Dns {
 pub struct Mining {
     #[serde(default)]
     pub threads: usize
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Net {
+    #[serde(default)]
+    pub peers: Vec<String>,
+    #[serde(default = "default_listen")]
+    pub listen: String,
+    #[serde(default)]
+    pub public: bool,
+    #[serde(default)]
+    pub yggdrasil_only: bool,
+}
+
+impl Default for Net {
+    fn default() -> Self {
+        Net {
+            peers: vec![String::from("test-ip4.alfis.name:4244"), String::from("test-ip6.alfis.name:4244")],
+            listen: String::from("[::]:4244"),
+            public: true,
+            yggdrasil_only: false
+        }
+    }
 }
 
 fn default_listen() -> String {
