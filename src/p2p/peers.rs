@@ -44,7 +44,7 @@ impl Peers {
                 let stream = peer.get_stream();
                 let _ = stream.shutdown(Shutdown::Both);
                 let _ = registry.deregister(stream);
-                info!("Peer connection {:?} has shut down", &peer.get_addr());
+                info!("Peer connection {} to {:?} has shut down", &token.0, &peer.get_addr());
 
                 if !peer.disabled() && !peer.is_inbound() {
                     peer.set_state(State::offline());
@@ -121,6 +121,9 @@ impl Peers {
     pub fn get_peers_for_exchange(&self, peer_address: &SocketAddr) -> Vec<String> {
         let mut result: Vec<String> = Vec::new();
         for (_, peer) in self.peers.iter() {
+            if peer.disabled() {
+                continue;
+            }
             if peer.equals(peer_address) {
                 continue;
             }
@@ -236,18 +239,15 @@ impl Peers {
         for (token, peer) in self.peers.iter_mut() {
             if peer.get_state().need_reconnect() {
                 let addr = peer.get_addr();
-                match TcpStream::connect(addr.clone()) {
-                    Ok(mut stream) => {
-                        info!("Created connection to peer {}", &addr);
-                        registry.register(&mut stream, token.clone(), Interest::WRITABLE).unwrap();
-                        peer.set_state(State::Connecting);
-                        peer.inc_reconnects();
-                        peer.set_stream(stream);
-                    }
-                    Err(e) => {
-                        error!("Error connecting to peer {}: {}", &addr, e);
-                    }
+                if let Ok(mut stream) = TcpStream::connect(addr.clone()) {
+                    info!("Created connection to peer {}", &addr);
+                    registry.register(&mut stream, token.clone(), Interest::WRITABLE).unwrap();
+                    peer.set_state(State::Connecting);
+                    peer.inc_reconnects();
+                    peer.set_stream(stream);
                 }
+                // We make reconnects only to one at a time
+                break;
             }
         }
     }
@@ -256,27 +256,8 @@ impl Peers {
         if self.new_peers.is_empty() {
             return;
         }
-        for addr in self.new_peers.iter() {
-            if self.ignored.contains(&addr.ip()) {
-                continue;
-            }
-            if yggdrasil_only && !is_yggdrasil(&addr.ip()) {
-                info!("Ignoring not Yggdrasil address '{}'", &addr.ip());
-                continue;
-            }
-            match TcpStream::connect(addr.clone()) {
-                Ok(mut stream) => {
-                    info!("Created connection to peer {}", &addr);
-                    let token = next(unique_token);
-                    registry.register(&mut stream, token, Interest::WRITABLE).unwrap();
-                    let mut peer = Peer::new(addr.clone(), stream, State::Connecting, false);
-                    peer.set_public(true);
-                    self.peers.insert(token, peer);
-                }
-                Err(e) => {
-                    error!("Error connecting to peer {}: {}", &addr, e);
-                }
-            }
+        for addr in &self.new_peers.clone() {
+            self.connect_peer(&addr, registry, unique_token, yggdrasil_only);
         }
         self.new_peers.clear();
     }
@@ -290,24 +271,26 @@ impl Peers {
             };
 
             for addr in addresses {
-                if yggdrasil_only && !is_yggdrasil(&addr.ip()) {
-                    info!("Ignoring not Yggdrasil address '{}'", &addr.ip());
-                    continue;
-                }
-                match TcpStream::connect(addr.clone()) {
-                    Ok(mut stream) => {
-                        info!("Created connection to peer {}", &addr);
-                        let token = next(unique_token);
-                        registry.register(&mut stream, token, Interest::WRITABLE).unwrap();
-                        let mut peer = Peer::new(addr, stream, State::Connecting, false);
-                        peer.set_public(true);
-                        self.add_peer(token, peer);
-                    }
-                    Err(e) => {
-                        error!("Error connecting to peer {}: {}", &addr, e);
-                    }
-                }
+                self.connect_peer(&addr, registry, unique_token, yggdrasil_only);
             }
+        }
+    }
+
+    fn connect_peer(&mut self, addr: &SocketAddr, registry: &Registry, unique_token: &mut Token, yggdrasil_only: bool) {
+        if self.ignored.contains(&addr.ip()) {
+            return;
+        }
+        if yggdrasil_only && !is_yggdrasil(&addr.ip()) {
+            info!("Ignoring not Yggdrasil address '{}'", &addr.ip());
+            return;
+        }
+        if let Ok(mut stream) = TcpStream::connect(addr.clone()) {
+            let token = next(unique_token);
+            info!("Created connection {} to peer {}", &token.0, &addr);
+            registry.register(&mut stream, token, Interest::WRITABLE).unwrap();
+            let mut peer = Peer::new(addr.clone(), stream, State::Connecting, false);
+            peer.set_public(true);
+            self.peers.insert(token, peer);
         }
     }
 }

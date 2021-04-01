@@ -2,7 +2,7 @@ extern crate serde;
 extern crate serde_json;
 
 use std::{io, thread};
-use std::io::{Read, Write};
+use std::io::{Read, Write, Error};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -111,7 +111,12 @@ impl Network {
                                 }
                                 Err(_) => {}
                             }
-                            let _ = poll.registry().reregister(&mut server, SERVER, Interest::READABLE);
+                            match poll.registry().reregister(&mut server, SERVER, Interest::READABLE) {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    panic!("Error reregistering server token!\n{}", e);
+                                }
+                            }
                         }
                         token => {
                             if !handle_connection_event(Arc::clone(&context), &mut peers, &poll.registry(), &event) {
@@ -449,7 +454,7 @@ fn mine_locker_block(context: Arc<Mutex<Context>>) {
     if let Some(block) = context.chain.last_block() {
         if let Some(keystore) = &context.keystore {
             if block.index < context.chain.max_height() {
-                info!("No locker mining while syncing");
+                trace!("No locker mining while syncing");
                 return;
             }
             let lockers: HashSet<Bytes> = context.chain.get_block_lockers(&block).into_iter().collect();

@@ -109,7 +109,7 @@ impl Peer {
     }
 
     pub fn disabled(&self) -> bool {
-        self.state.disabled()
+        self.state.disabled() || self.reconnects > 2
     }
 
     pub fn is_inbound(&self) -> bool {
