@@ -78,6 +78,8 @@ pub struct Dns {
     #[serde(default = "default_threads")]
     pub threads: usize,
     pub forwarders: Vec<String>,
+    #[serde(default)]
+    pub hosts: Vec<String>,
 }
 
 impl Default for Dns {
@@ -85,7 +87,8 @@ impl Default for Dns {
         Dns {
             listen: String::from("127.0.0.1:53"),
             threads: 20,
-            forwarders: vec![String::from("94.140.14.14:53"), String::from("94.140.15.15:53")]
+            forwarders: vec![String::from("94.140.14.14:53"), String::from("94.140.15.15:53")],
+            hosts: Vec::new()
         }
     }
 }

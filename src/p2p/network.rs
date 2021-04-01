@@ -350,10 +350,14 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 let mut context = context.lock().unwrap();
                 let blocks_count = context.chain.height();
                 context.bus.post(crate::event::Event::NetworkStatus { nodes: active_count + 1, blocks: blocks_count });
-                if active_count > 3 && peer.is_higher(my_height) {
+                if peer.is_higher(my_height) {
                     context.chain.update_max_height(height);
                     context.bus.post(crate::event::Event::Syncing { have: my_height, height});
-                    State::message(Message::GetBlock { index: my_height + 1 })
+                    if active_count > 3 {
+                        State::message(Message::GetBlock { index: my_height + 1 })
+                    } else {
+                        State::message(Message::GetPeers)
+                    }
                 } else {
                     State::message(Message::GetPeers)
                 }

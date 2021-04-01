@@ -23,5 +23,6 @@ pub mod protocol;
 pub mod resolve;
 pub mod server;
 pub mod filter;
+pub mod hosts;
 
 mod netutil;
