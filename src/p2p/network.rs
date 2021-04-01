@@ -2,7 +2,7 @@ extern crate serde;
 extern crate serde_json;
 
 use std::{io, thread};
-use std::io::{Read, Write, Error};
+use std::io::{Read, Write};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
