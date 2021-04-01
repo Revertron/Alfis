@@ -1,6 +1,6 @@
 var recordsBuffer = [];
 var availableZones = [];
-var currentZone = "";
+var currentZone;
 
 function addRecord(record) {
     recordsBuffer.push(record);
@@ -180,8 +180,10 @@ function sendAction(param) {
 }
 
 function onDomainChange(element) {
-    var domain = element.value + "." + currentZone.name;
-    external.invoke(JSON.stringify({cmd: 'checkDomain', name: domain}));
+    if (typeof currentZone !== 'undefined') {
+        var domain = element.value + "." + currentZone.name;
+        external.invoke(JSON.stringify({cmd: 'checkDomain', name: domain}));
+    }
 }
 
 function domainAvailable(available) {
@@ -337,7 +339,7 @@ function refreshZonesList() {
     availableZones.forEach(function(value, index, array) {
         var zone = value.name + " (" + value.difficulty + "🔥)";
         var add_class = "";
-        if (currentZone.name == value.name) {
+        if (typeof currentZone !== 'undefined' && currentZone.name == value.name) {
             add_class = "is-active";
         }
         buf += "<a id=\"zone-{1}\" class=\"dropdown-item {2}\" onclick=\"changeZone('{3}');\">.{4}</a>"
@@ -348,8 +350,10 @@ function refreshZonesList() {
     });
     var links = document.getElementById("zones-links");
     links.innerHTML = buf;
-    var cur_name = document.getElementById("zones-current-name");
-    cur_name.innerHTML = "." + currentZone.name + " (" + currentZone.difficulty + "🔥)";
+    if (typeof currentZone !== 'undefined') {
+        var cur_name = document.getElementById("zones-current-name");
+        cur_name.innerHTML = "." + currentZone.name + " (" + currentZone.difficulty + "🔥)";
+    }
 }
 
 function zonesChanged(text) {
