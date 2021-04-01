@@ -110,23 +110,23 @@ jobs:
       - name: Packaging
         uses: papeloto/action-zip@v1
         with:
-          files: ${{ env.BIN_PATH }} alfis.toml README.md LICENSE
+          files: ${{ env.BIN_PATH }} alfis.toml README.md LICENSE adblock.txt
           dest: ${{ env.ZIP_NAME }}
       - name: Packaging no GUI
         uses: papeloto/action-zip@v1
         with:
-          files: ${{ env.BIN_PATH_NOGUI }} alfis.toml README.md LICENSE
+          files: ${{ env.BIN_PATH_NOGUI }} alfis.toml README.md LICENSE adblock.txt
           dest: ${{ env.ZIP_NAME_NOGUI }}
       - name: Packaging Edge binary
         if: contains(matrix.os, 'windows')
         uses: papeloto/action-zip@v1
         with:
-          files: ${{ env.BIN_PATH_EDGE }} alfis.toml README.md LICENSE
+          files: ${{ env.BIN_PATH_EDGE }} alfis.toml README.md LICENSE adblock.txt
           dest: ${{ env.ZIP_NAME_EDGE }}
       - name: Packaging ARM
         uses: papeloto/action-zip@v1
         with:
-          files: ${{ env.BIN_ARM_PATH }} alfis.toml README.md LICENSE
+          files: ${{ env.BIN_ARM_PATH }} alfis.toml README.md LICENSE adblock.txt
           dest: ${{ env.ZIP_ARM_NAME }}
         if: contains(matrix.os, 'ubuntu')
       - name: Upload binary
