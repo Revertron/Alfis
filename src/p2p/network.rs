@@ -171,9 +171,17 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
 
     if event.is_readable() {
         let data = {
-            let peer = peers.get_mut_peer(&event.token()).expect("Error getting peer for connection");
-            let mut stream = peer.get_stream();
-            read_message(&mut stream)
+            let token = event.token();
+            match peers.get_mut_peer(&token) {
+                None => {
+                    error!("Error getting peer for connection {}", token.0);
+                    return false;
+                }
+                Some(peer) => {
+                    let mut stream = peer.get_stream();
+                    read_message(&mut stream)
+                }
+            }
         };
 
         if data.is_ok() {
