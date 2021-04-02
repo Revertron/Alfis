@@ -60,8 +60,9 @@ impl DnsFilter for BlockchainFilter {
                     Ok(data) => { data }
                 };
                 let mut answers: Vec<DnsRecord> = Vec::new();
+                let a_record = qtype == QueryType::A || qtype == QueryType::AAAA;
                 for mut record in data.records.iter_mut() {
-                    if record.get_querytype() == qtype {
+                    if record.get_querytype() == qtype || (a_record && record.get_querytype() == QueryType::CNAME) {
                         match &mut record {
                             DnsRecord::A { domain, .. }
                             | DnsRecord::AAAA { domain, .. }
