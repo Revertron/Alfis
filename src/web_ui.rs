@@ -184,7 +184,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
         let status = Arc::clone(&status);
         let handle = handle.clone();
         let context_copy = Arc::clone(&context_copy);
-        thread::spawn(move || {
+        let _ = thread::Builder::new().name(String::from("webui")).spawn(move || {
             let mut status = status.lock().unwrap();
             let context = context_copy.lock().unwrap();
             let eval = match e {

@@ -338,7 +338,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
         // TODO cache it somewhere
         (context.chain.height(), context.chain.last_hash(), &context.settings.origin.clone(), CHAIN_VERSION)
     };
-    match message {
+    let answer = match message {
         Message::Hand { app_version, origin, version, public, rand} => {
             debug!("Hello from v{}", &app_version);
             if peers.is_our_own_connect(&rand) {
@@ -446,7 +446,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             }
             let context = Arc::clone(&context);
             let peers_count = peers.get_peers_active_count();
-            thread::spawn(move || {
+            let _ = thread::Builder::new().name(String::from("Message::Block")).spawn(move || {
                 let mut context = context.lock().unwrap();
                 let max_height = context.chain.max_height();
                 match context.chain.check_new_block(&block) {
@@ -475,7 +475,8 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             });
             State::idle()
         }
-    }
+    };
+    answer
 }
 
 /// Sends an Event to miner to start mining locker block if "locker" is our public key
