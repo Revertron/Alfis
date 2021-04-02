@@ -168,6 +168,10 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
     if event.is_error() || (event.is_read_closed() && event.is_write_closed()) {
         return false;
     }
+    if event.is_readable() && event.is_read_closed() {
+        info!("Spurious wakeup for connection {}, ignoring", event.token().0);
+        return true;
+    }
 
     if event.is_readable() {
         let data = {
