@@ -76,6 +76,7 @@ impl Network {
                     // We can use the token we previously provided to `register` to determine for which socket the event is.
                     match event.token() {
                         SERVER => {
+                            debug!("Event for server socket {} is {:?}", event.token().0, &event);
                             // If this is an event for the server, it means a connection is ready to be accepted.
                             let connection = server.accept();
                             match connection {
