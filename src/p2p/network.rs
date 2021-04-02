@@ -72,7 +72,7 @@ impl Network {
 
                 // Process each event.
                 for event in events.iter() {
-                    //trace!("Event for socket {} is {:?}", event.token().0, &event);
+                    trace!("Event for socket {} is {:?}", event.token().0, &event);
                     // We can use the token we previously provided to `register` to determine for which socket the event is.
                     match event.token() {
                         SERVER => {
@@ -169,10 +169,6 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
     if event.is_error() || (event.is_read_closed() && event.is_write_closed()) {
         return false;
     }
-    if event.is_readable() && event.is_read_closed() {
-        info!("Spurious wakeup for connection {}, ignoring", event.token().0);
-        return true;
-    }
 
     if event.is_readable() {
         let data = {
@@ -184,6 +180,11 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                 }
                 Some(peer) => {
                     let mut stream = peer.get_stream();
+                    if event.is_read_closed() {
+                        info!("Spurious wakeup for connection {}, ignoring", token.0);
+                        registry.reregister(stream, token, Interest::READABLE).unwrap();
+                        return true;
+                    }
                     read_message(&mut stream)
                 }
             }
