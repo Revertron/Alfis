@@ -206,7 +206,7 @@ function onZoneChange() {
     var diff = document.getElementById("new_zone_difficulty");
     d = parseInt(diff.value);
     // Checking for NaN first
-    if (d != d || d < 20 || d > 50) {
+    if (d != d || d < 15 || d > 30) {
         button.disabled = true;
         diff.className = "input is-danger";
     } else {
@@ -225,7 +225,7 @@ function zoneAvailable(available) {
         var diff = document.getElementById("new_zone_difficulty");
         d = parseInt(diff.value);
         // Checking for NaN first
-        if (d != d || d < 20 || d > 50) {
+        if (d != d || d < 15 || d > 30) {
             button.disabled = true;
             diff.className = "input is-danger";
         }
