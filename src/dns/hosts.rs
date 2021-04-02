@@ -68,12 +68,10 @@ impl DnsFilter for HostsFilter {
                 }
             }
 
-            if !packet.answers.is_empty() {
-                packet.header.authoritative_answer = true;
-                packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
-                packet.authorities.push(DnsRecord::NS { domain: String::from("hosts"), host: String::from(NAME_SERVER), ttl: TransientTtl(600) });
-                return Some(packet);
-            }
+            packet.header.authoritative_answer = true;
+            packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
+            packet.authorities.push(DnsRecord::NS { domain: String::from("hosts"), host: String::from(NAME_SERVER), ttl: TransientTtl(600) });
+            return Some(packet);
         }
 
         None
