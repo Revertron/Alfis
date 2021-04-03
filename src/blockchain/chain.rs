@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 use chrono::Utc;
 #[allow(unused_imports)]
@@ -273,14 +273,14 @@ impl Chain {
     }
 
     pub fn get_zones(&self) -> Vec<ZoneData> {
-        let mut result = Vec::new();
+        let mut map = HashMap::new();
         match self.db.prepare(SQL_GET_TRANSACTIONS_WITH_ZONE) {
             Ok(mut statement) => {
                 while statement.next().unwrap() == State::Row {
                     let data = statement.read::<String>(0).unwrap();
                     info!("Got zone data {}", &data);
-                    if let Ok(zone_data) = serde_json::from_str(&data) {
-                        result.push(zone_data);
+                    if let Ok(zone_data) = serde_json::from_str::<ZoneData>(&data) {
+                        map.insert(zone_data.name.clone(), zone_data);
                     }
                 }
             }
@@ -288,6 +288,7 @@ impl Chain {
                 warn!("Can't get zones from DB {}", e);
             }
         }
+        let result: Vec<ZoneData> = map.drain().map(|(_, value)| value).collect();
         result
     }
 
