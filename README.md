@@ -38,3 +38,16 @@ cargo build
 ### On Linux
 If you are building on Linux you must ensure that you have `libwebkitgtk` library installed.
 You can do it by issuing this command: `sudo apt install libwebkit2gtk-4.0-dev` (on Debian/Ubuntu and derivatives).
+
+#### On Arch Linux
+
+Create and install package with this commands:
+
+```sh
+# make package
+curl -L -O https://raw.githubusercontent.com/Revertron/Alfis/master/contrib/PKGBUILD
+makepkg
+
+# install package (from root)
+pacman -U alfis-0.3.12-1-x86_64.pkg.tar.xz
+```
