@@ -69,11 +69,10 @@ fn main() {
             if let Some(settings) = Settings::load(&path) {
                 let string = toml::to_string(&settings).unwrap();
                 println!("{}", &string);
-                return;
             } else {
                 println!("Error loading config for upgrade!");
-                return;
             }
+            return;
         }
     };
 
