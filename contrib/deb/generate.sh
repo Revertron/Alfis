@@ -72,6 +72,8 @@ EOF
 cat > /tmp/$PKGNAME/debian/postinst << EOF
 #!/bin/sh
 
+id -u alfis &>/dev/null || useradd --system alfis || echo "Failed to create user 'alfis' - please create it manually and reinstall"
+
 if ! getent group alfis 2>&1 > /dev/null; then
   groupadd --system --force alfis || echo "Failed to create group 'alfis' - please create it manually and reinstall"
 fi
