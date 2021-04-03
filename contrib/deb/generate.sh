@@ -22,7 +22,7 @@ PKGREPLACES=alfis
 #fi
 
 # Building nogui versions only
-if [ $PKGARCH = "amd64" ]; then cargo build --release --no-default-features && cp target/release/alfis ./alfis
+if [ $PKGARCH = "amd64" ]; then cargo build --release --no-default-features --target x86_64-unknown-linux-musl && cp target/x86_64-unknown-linux-musl/release/alfis ./alfis
 elif [ $PKGARCH = "i686" ]; then cross build --target i686-unknown-linux-gnu --release --no-default-features && cp target/i686-unknown-linux-gnu/release/alfis ./alfis
 elif [ $PKGARCH = "mipsel" ]; then cross build --release --no-default-features --target mipsel-unknown-linux-gnu && cp target/mipsel-unknown-linux-gnu/release/alfis ./alfis
 elif [ $PKGARCH = "mips" ]; then cross build --release --no-default-features --target mips-unknown-linux-gnu && cp target/mips-unknown-linux-gnu/release/alfis ./alfis
@@ -70,10 +70,14 @@ usr/bin/alfis usr/bin
 etc/systemd/system/*.service etc/systemd/system
 EOF
 cat > /tmp/$PKGNAME/debian/postinst << EOF
-#!/bin/sh
+#!/bin/sh -e
 
 if ! getent group alfis 2>&1 > /dev/null; then
   groupadd --system --force alfis || echo "Failed to create group 'alfis' - please create it manually and reinstall"
+fi
+
+if ! getent passwd alfis >/dev/null 2>&1; then
+    adduser --system --ingroup alfis --disabled-password --home /var/lib/alfis alfis
 fi
 
 mkdir -p /var/lib/alfis
@@ -110,7 +114,7 @@ if command -v systemctl >/dev/null; then
 fi
 EOF
 
-cp alfis /tmp/$PKGNAME/usr/bin/
+sudo cp alfis /tmp/$PKGNAME/usr/bin/
 cp contrib/systemd/*.service /tmp/$PKGNAME/etc/systemd/system/
 
 tar -czvf /tmp/$PKGNAME/data.tar.gz -C /tmp/$PKGNAME/ \
