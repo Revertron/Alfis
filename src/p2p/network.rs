@@ -91,7 +91,7 @@ impl Network {
                                     }
 
                                     if yggdrasil_only && !is_yggdrasil(&address.ip()) {
-                                        info!("Dropping connection from Internet");
+                                        debug!("Dropping connection from Internet");
                                         stream.shutdown(Shutdown::Both).unwrap_or_else(|e|{ warn!("Error in shutdown, {}", e); });
                                         let _ = poll.registry().reregister(&mut server, SERVER, Interest::READABLE);
                                         continue;
@@ -104,7 +104,7 @@ impl Network {
                                         stream.shutdown(Shutdown::Both).unwrap_or_else(|e|{ warn!("Error in shutdown, {}", e); });
                                         warn!("Detected connection loop, ignoring IP: {}", &address.ip());
                                     } else {
-                                        info!("Accepted connection from: {} to local IP: {}", address, local_ip);
+                                        debug!("Accepted connection from: {} to local IP: {}", address, local_ip);
                                         let token = next(&mut unique_token);
                                         poll.registry().register(&mut stream, token, Interest::READABLE).expect("Error registering poll");
                                         peers.add_peer(token, Peer::new(address, stream, State::Connected, true));
@@ -434,7 +434,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             }
         }
         Message::Block { index, block } => {
-            info!("Received block {}", index);
+            debug!("Received block {}", index);
             let block: Block = match serde_json::from_str(&block) {
                 Ok(block) => block,
                 Err(_) => return State::Error

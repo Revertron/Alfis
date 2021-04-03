@@ -43,16 +43,16 @@ fn create_server_context(context: Arc<Mutex<Context>>, settings: &Settings) -> A
             if cfg!(target_os = "windows") {
                 if let Ok(root) = env::var("SYSTEMROOT") {
                     let filename = format!("{}{}", &root, "\\System32\\drivers\\etc\\hosts");
-                    info!("Loading hosts from '{}'", &filename);
+                    debug!("Loading hosts from '{}'", &filename);
                     server_context.filters.push(Box::new(HostsFilter::new(&filename)));
                 }
             } else {
                 let filename = "/etc/hosts";
-                info!("Loading hosts from '{}'", filename);
+                debug!("Loading hosts from '{}'", filename);
                 server_context.filters.push(Box::new(HostsFilter::new(filename)));
             }
         } else {
-            info!("Loading hosts from '{}'", &host);
+            debug!("Loading hosts from '{}'", &host);
             server_context.filters.push(Box::new(HostsFilter::new(host)));
         }
     }

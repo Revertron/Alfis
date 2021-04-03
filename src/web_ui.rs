@@ -251,7 +251,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                     }
                 }
                 Event::BlockchainChanged {index} => {
-                    info!("Current blockchain height is {}", index);
+                    debug!("Current blockchain height is {}", index);
                     if let Ok(zones) = serde_json::to_string(&context.chain.get_zones()) {
                         let _ = handle.dispatch(move |web_view|{
                             web_view.eval(&format!("zonesChanged('{}');", &zones))

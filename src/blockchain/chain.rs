@@ -128,7 +128,7 @@ impl Chain {
     }
 
     pub fn add_block(&mut self, block: Block) {
-        info!("Adding block:\n{:?}", &block);
+        debug!("Adding block:\n{:?}", &block);
         self.blocks.push(block.clone());
         self.last_block = Some(block.clone());
         if block.transaction.is_some() {
@@ -278,7 +278,7 @@ impl Chain {
             Ok(mut statement) => {
                 while statement.next().unwrap() == State::Row {
                     let data = statement.read::<String>(0).unwrap();
-                    info!("Got zone data {}", &data);
+                    debug!("Got zone data {}", &data);
                     if let Ok(zone_data) = serde_json::from_str::<ZoneData>(&data) {
                         map.insert(zone_data.name.clone(), zone_data);
                     }

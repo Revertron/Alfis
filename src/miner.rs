@@ -120,7 +120,7 @@ impl Miner {
             match context.lock().unwrap().chain.last_block() {
                 None => {}
                 Some(last_block) => {
-                    info!("Last block found");
+                    debug!("Last block found");
                     // If we were doing something else and got new block before we could mine this block
                     if last_block.index > job.block.index || last_block.hash != job.block.prev_block_hash {
                         warn!("We missed block to lock");
