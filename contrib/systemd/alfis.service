@@ -1,0 +1,21 @@
+[Unit]
+Description=alfis
+Wants=network.target
+Wants=alfis-default-config.service
+After=network.target
+After=alfis-default-config.service
+
+[Service]
+Group=alfis
+ProtectHome=true
+ProtectSystem=true
+SyslogIdentifier=alfis
+CapabilityBoundingSet=CAP_NET_ADMIN
+WorkingDirectory=/var/lib/alfis
+ExecStart=/usr/bin/alfis -n -c /etc/alfis.conf
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target

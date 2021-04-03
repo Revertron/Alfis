@@ -1,0 +1,13 @@
+[Unit]
+Description=ALFIS default config generator
+ConditionPathExists=|!/etc/alfis.conf
+ConditionFileNotEmpty=|!/etc/alfis.conf
+Wants=local-fs.target
+After=local-fs.target
+
+[Service]
+Type=oneshot
+Group=alfis
+StandardOutput=file:/etc/alfis.conf
+ExecStart=/usr/bin/alfis -g
+ExecStartPost=/usr/bin/chmod 0640 /etc/alfis.conf
