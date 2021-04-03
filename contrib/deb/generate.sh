@@ -39,6 +39,11 @@ mkdir -p /tmp/$PKGNAME/
 mkdir -p /tmp/$PKGNAME/debian/
 mkdir -p /tmp/$PKGNAME/usr/bin/
 mkdir -p /tmp/$PKGNAME/etc/systemd/system/
+mkdir -p /tmp/$PKGNAME/usr/lib/sysusers.d/
+
+cat > /tmp/$PKGNAME/usr/lib/sysusers.d/alfis.tmpfiles << EOF
+u alfis - "alfis user"
+EOF
 
 cat > /tmp/$PKGNAME/debian/changelog << EOF
 Please see https://github.com/Revertron/Alfis/
