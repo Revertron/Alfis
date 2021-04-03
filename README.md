@@ -45,7 +45,7 @@ Create and install package with this commands:
 
 ```sh
 # make package
-curl -L -O https://raw.githubusercontent.com/Revertron/Alfis/master/PKGBUILD
+curl -L -O https://raw.githubusercontent.com/Revertron/Alfis/master/contrib/PKGBUILD
 makepkg
 
 # install package (from root)
