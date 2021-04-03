@@ -41,7 +41,7 @@ mkdir -p /tmp/$PKGNAME/usr/bin/
 mkdir -p /tmp/$PKGNAME/etc/systemd/system/
 mkdir -p /tmp/$PKGNAME/usr/lib/sysusers.d/
 
-cat > /tmp/$PKGNAME/usr/lib/sysusers.d/alfis.tmpfiles << EOF
+cat > /tmp/$PKGNAME/usr/lib/sysusers.d/alfis.sysusers << EOF
 u alfis - "alfis user"
 EOF
 
