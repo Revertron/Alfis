@@ -244,7 +244,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
             Some(peer) => {
                 match peer.get_state().clone() {
                     State::Connecting => {
-                        debug!("Sending hello to {}", &peer.get_addr());
+                        debug!("Connected to peer {}, sending hello...", &peer.get_addr());
                         let data: String = {
                             let c = context.lock().unwrap();
                             let message = Message::hand(&c.app_version, &c.settings.origin, CHAIN_VERSION, c.settings.net.public, peer.get_rand());

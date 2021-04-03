@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::{Read,};
 
 use serde::{Deserialize, Serialize};
 #[allow(unused_imports)]
@@ -22,30 +22,18 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn new<S: Into<String>>(settings: S) -> serde_json::Result<Settings> {
-        serde_json::from_str(&settings.into())
-    }
-
-    pub fn load(filename: &str) -> Settings {
+    pub fn load(filename: &str) -> Option<Settings> {
         match File::open(filename) {
             Ok(mut file) => {
                 let mut text = String::new();
                 file.read_to_string(&mut text).unwrap();
                 if let Ok(settings) = toml::from_str(&text) {
-                    return settings;
+                    return Some(settings);
                 }
-                Settings::default()
+                None
             }
             Err(..) => {
-                let settings = Settings::default();
-                let string = toml::to_string(&settings).unwrap();
-                match File::create(filename) {
-                    Ok(mut f) => {
-                        f.write_all(string.as_bytes()).expect("Error saving settings!");
-                    }
-                    Err(_) => { error!("Error saving settings file!"); }
-                }
-                settings
+                None
             }
         }
     }

@@ -43,7 +43,9 @@ fn main() {
     opts.optflag("v", "verbose", "Show more debug messages");
     opts.optflag("d", "debug", "Show trace messages, more than debug");
     opts.optflag("l", "list", "List blocks from DB and exit");
-    opts.optopt("c", "config", "Path to config file", "");
+    opts.optflag("g", "generate", "Generate new config file. Generated config will be printed to console.");
+    opts.optopt("c", "config", "Path to config file", "FILE");
+    opts.optopt("u", "upgrade", "Path to config file that you want to upgrade. Upgraded config will be printed to console.", "FILE");
 
     let opt_matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
@@ -52,9 +54,28 @@ fn main() {
 
     if opt_matches.opt_present("h") {
         let brief = format!("Usage: {} [options]", program);
-        print!("{}", opts.usage(&brief));
+        println!("{}", opts.usage(&brief));
         return;
     }
+
+    if opt_matches.opt_present("g") {
+        println!("{}", include_str!("../alfis.toml"));
+        return;
+    }
+
+    match opt_matches.opt_str("u") {
+        None => {}
+        Some(path) => {
+            if let Some(settings) = Settings::load(&path) {
+                let string = toml::to_string(&settings).unwrap();
+                println!("{}", &string);
+                return;
+            } else {
+                println!("Error loading config for upgrade!");
+                return;
+            }
+        }
+    };
 
     #[cfg(feature = "webgui")]
     let no_gui = opt_matches.opt_present("n");
@@ -79,7 +100,7 @@ fn main() {
         .unwrap();
     info!(target: LOG_TARGET_MAIN, "Starting ALFIS {}", env!("CARGO_PKG_VERSION"));
 
-    let settings = Settings::load(&config_name);
+    let settings = Settings::load(&config_name).expect(&format!("Cannot load settings from {}!", &config_name));
     info!(target: LOG_TARGET_MAIN, "Loaded settings: {:?}", &settings);
     let keystore = Keystore::from_file(&settings.key_file, "");
     let chain: Chain = Chain::new(&settings);
