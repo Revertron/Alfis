@@ -532,7 +532,7 @@ impl Chain {
 
                 if block.index <= last_block.index {
                     if last_block.hash == block.hash {
-                        warn!("Ignoring block {}, we already have it", block.index);
+                        debug!("Ignoring block {}, we already have it", block.index);
                         return Twin;
                     }
                     if let Some(my_block) = self.get_block(block.index) {
@@ -540,7 +540,7 @@ impl Chain {
                             warn!("Got forked block {} with hash {:?} instead of {:?}", block.index, block.hash, last_block.hash);
                             Fork
                         } else {
-                            warn!("Ignoring block {}, we already have it", block.index);
+                            debug!("Ignoring block {}, we already have it", block.index);
                             Twin
                         };
                     }
