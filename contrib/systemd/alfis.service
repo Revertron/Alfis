@@ -8,10 +8,15 @@ After=alfis-default-config.service
 [Service]
 User=alfis
 Group=alfis
+
 ProtectHome=true
 ProtectSystem=true
+
+SecureBits=keep-caps
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
 SyslogIdentifier=alfis
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
 WorkingDirectory=/var/lib/alfis
 ExecStart=/usr/bin/alfis -n -c /etc/alfis.conf
 ExecReload=/bin/kill -HUP $MAINPID
