@@ -89,7 +89,7 @@ then
   echo "Backing up configuration file to /var/backups/alfis.conf.`date +%Y%m%d`"
   cp /etc/alfis.conf /var/backups/alfis.conf.`date +%Y%m%d`
   echo "Updating /etc/alfis.conf"
-  /usr/bin/alfis -u /etc/alfis.conf > /etc/alfis.conf
+  /usr/bin/alfis -u /var/backups/alfis.conf.`date +%Y%m%d` > /etc/alfis.conf
   chgrp alfis /etc/alfis.conf
 
   if command -v systemctl >/dev/null; then
