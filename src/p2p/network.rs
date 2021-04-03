@@ -23,7 +23,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 const SERVER: Token = Token(0);
 const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(3000));
 pub const LISTEN_PORT: u16 = 4244;
-const MAX_PACKET_SIZE: usize = 10 * 1024 * 1024; // 10 Mb
+const MAX_PACKET_SIZE: usize = 1 * 1024 * 1024; // 1 Mb
 const MAX_READ_BLOCK_TIME: u128 = 500;
 
 pub struct Network {
@@ -301,6 +301,9 @@ fn read_message(stream: &mut TcpStream) -> Result<Vec<u8>, ()> {
         match stream.read(&mut buf[bytes_read..]) {
             Ok(bytes) => {
                 bytes_read += bytes;
+                if bytes_read == data_size {
+                    break;
+                }
             }
             // Would block "errors" are the OS's way of saying that the connection is not actually ready to perform this I/O operation.
             Err(ref err) if would_block(err) => {
@@ -314,7 +317,7 @@ fn read_message(stream: &mut TcpStream) -> Result<Vec<u8>, ()> {
             Err(ref err) if interrupted(err) => continue,
             // Other errors we'll consider fatal.
             Err(_) => {
-                debug!("Error reading message, only {} bytes read", bytes_read);
+                debug!("Error reading message, only {}/{} bytes read", bytes_read, data_size);
                 return Err(())
             },
         }
