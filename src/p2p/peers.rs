@@ -44,7 +44,7 @@ impl Peers {
                 let stream = peer.get_stream();
                 let _ = stream.shutdown(Shutdown::Both);
                 let _ = registry.deregister(stream);
-                info!("Peer connection {} to {:?} has shut down", &token.0, &peer.get_addr());
+                debug!("Peer connection {} to {:?} has shut down", &token.0, &peer.get_addr());
 
                 if !peer.disabled() && !peer.is_inbound() {
                     peer.set_state(State::offline());
