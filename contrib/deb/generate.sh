@@ -14,7 +14,7 @@ PKGBRANCH=$(basename `git name-rev --name-only HEAD`)
 PKGNAME=$(sh contrib/semver/name.sh)
 PKGVERSION=$(sh contrib/semver/version.sh --bare)
 PKGARCH=${PKGARCH-amd64}
-PKGFILE=$PKGNAME-$PKGVERSION-$PKGARCH.deb
+PKGFILE=$PKGNAME-linux-$PKGARCH-$PKGVERSION-nogui.deb
 PKGREPLACES=alfis
 
 #if [ $PKGBRANCH = "master" ]; then
@@ -23,13 +23,13 @@ PKGREPLACES=alfis
 
 # Building nogui versions only
 if [ $PKGARCH = "amd64" ]; then cargo build --release --no-default-features --target x86_64-unknown-linux-musl && cp target/x86_64-unknown-linux-musl/release/alfis ./alfis
-elif [ $PKGARCH = "i686" ]; then cross build --target i686-unknown-linux-gnu --release --no-default-features && cp target/i686-unknown-linux-gnu/release/alfis ./alfis
-elif [ $PKGARCH = "mipsel" ]; then cross build --release --no-default-features --target mipsel-unknown-linux-gnu && cp target/mipsel-unknown-linux-gnu/release/alfis ./alfis
-elif [ $PKGARCH = "mips" ]; then cross build --release --no-default-features --target mips-unknown-linux-gnu && cp target/mips-unknown-linux-gnu/release/alfis ./alfis
-elif [ $PKGARCH = "armhf" ]; then cross build --release --no-default-features --target armv7-unknown-linux-gnueabihf && cp target/armv7-unknown-linux-gnueabihf/release/alfis ./alfis
-elif [ $PKGARCH = "arm64" ]; then cross build --release --no-default-features --target aarch64-unknown-linux-gnu && cp target/aarch64-unknown-linux-gnu/release/alfis ./alfis
+elif [ $PKGARCH = "i686" ]; then cross build --target i686-unknown-linux-musl --release --no-default-features && cp target/i686-unknown-linux-musl/release/alfis ./alfis
+elif [ $PKGARCH = "mipsel" ]; then cross build --release --no-default-features --target mipsel-unknown-linux-musl && cp target/mipsel-unknown-linux-musl/release/alfis ./alfis
+elif [ $PKGARCH = "mips" ]; then cross build --release --no-default-features --target mips-unknown-linux-musl && cp target/mips-unknown-linux-musl/release/alfis ./alfis
+elif [ $PKGARCH = "armhf" ]; then cross build --release --no-default-features --target armv7-unknown-linux-musleabihf && cp target/armv7-unknown-linux-musleabihf/release/alfis ./alfis
+elif [ $PKGARCH = "arm64" ]; then cross build --release --no-default-features --target aarch64-unknown-linux-musl && cp target/aarch64-unknown-linux-musl/release/alfis ./alfis
 else
-  echo "Specify PKGARCH=amd64,i686,mips,mipsel,armhf,arm64,armel"
+  echo "Specify PKGARCH=amd64,i686,mips,mipsel,armhf,arm64"
   exit 1
 fi
 
