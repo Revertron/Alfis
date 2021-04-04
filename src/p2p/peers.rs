@@ -18,7 +18,7 @@ pub struct Peers {
     ignored: HashSet<IpAddr>
 }
 
-const PING_PERIOD: u64 = 30;
+const PING_PERIOD: u64 = 60;
 
 impl Peers {
     pub fn new() -> Self {
@@ -44,7 +44,26 @@ impl Peers {
                 let stream = peer.get_stream();
                 let _ = stream.shutdown(Shutdown::Both);
                 let _ = registry.deregister(stream);
-                debug!("Peer connection {} to {:?} has shut down", &token.0, &peer.get_addr());
+                match peer.get_state() {
+                    State::Connecting => {
+                        debug!("Peer connection {} to {:?} has timed out", &token.0, &peer.get_addr());
+                    }
+                    State::Connected => {
+                        debug!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
+                    }
+                    State::Idle { .. } | State::Message { .. } => {
+                        debug!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
+                    }
+                    State::Error => {
+                        debug!("Peer connection {} to {:?} has shut down on error", &token.0, &peer.get_addr());
+                    }
+                    State::Banned => {
+                        debug!("Peer connection {} to {:?} has shut down, banned", &token.0, &peer.get_addr());
+                    }
+                    State::Offline { .. } => {
+                        debug!("Peer connection {} to {:?} is offline", &token.0, &peer.get_addr());
+                    }
+                }
 
                 if !peer.disabled() && !peer.is_inbound() {
                     peer.set_state(State::offline());
@@ -91,7 +110,12 @@ impl Peers {
                 continue;
             }
 
-            if skip_addr(&addr) {
+            if self.ignored.contains(&addr.ip()) {
+                trace!("Skipping address from exchange: {}", &addr);
+                continue;
+            }
+
+            if skip_private_addr(&addr) {
                 //debug!("Skipping address from exchange: {}", &addr);
                 continue; // Return error in future
             }
@@ -233,8 +257,18 @@ impl Peers {
             }
         }
 
+        let mut offline_ips = Vec::new();
         // Remove all peers that are offline for a long time
-        self.peers.retain(|_, p| { !(p.get_state().need_reconnect() && p.reconnects() >= MAX_RECONNECTS) });
+        self.peers.retain(|_, p| {
+            let offline = p.get_state().need_reconnect() && p.reconnects() >= MAX_RECONNECTS;
+            if offline {
+                offline_ips.push(p.get_addr().ip());
+            }
+            !offline
+        });
+        for ip in offline_ips {
+            self.ignore_ip(&ip);
+        }
 
         for (token, peer) in self.peers.iter_mut() {
             if peer.get_state().need_reconnect() {
@@ -286,7 +320,7 @@ impl Peers {
         }
         if let Ok(mut stream) = TcpStream::connect(addr.clone()) {
             let token = next(unique_token);
-            debug!("Trying to reconnect connection {}, to peer {}", &token.0, &addr);
+            debug!("Created connection {}, to peer {}", &token.0, &addr);
             registry.register(&mut stream, token, Interest::WRITABLE).unwrap();
             let mut peer = Peer::new(addr.clone(), stream, State::Connecting, false);
             peer.set_public(true);
@@ -295,7 +329,7 @@ impl Peers {
     }
 }
 
-fn skip_addr(addr: &SocketAddr) -> bool {
+fn skip_private_addr(addr: &SocketAddr) -> bool {
     if addr.ip().is_loopback() {
         return true;
     }
