@@ -63,6 +63,7 @@ impl Network {
             // Starting peer connections to bootstrap nodes
             peers.connect_peers(peers_addrs, &poll.registry(), &mut unique_token, yggdrasil_only);
 
+            let mut peers_timer = Instant::now();
             loop {
                 // Poll Mio for events, blocking until we get an event.
                 poll.poll(&mut events, POLL_TIMEOUT).expect("Error polling sockets");
@@ -131,19 +132,22 @@ impl Network {
                 }
                 events.clear();
 
-                // Send pings to idle peers
-                let (height, hash) = {
-                    let mut context = context.lock().unwrap();
-                    let height = context.chain.height();
-                    let nodes = peers.get_peers_active_count();
-                    if nodes > 0 {
-                        context.bus.post(crate::event::Event::NetworkStatus { nodes, blocks: height });
-                    }
-                    (height, context.chain.last_hash())
-                };
-                mine_locker_block(Arc::clone(&context));
-                peers.send_pings(poll.registry(), height, hash);
-                peers.connect_new_peers(poll.registry(), &mut unique_token, yggdrasil_only);
+                if peers_timer.elapsed().as_millis() > 100 {
+                    // Send pings to idle peers
+                    let (height, hash) = {
+                        let mut context = context.lock().unwrap();
+                        let height = context.chain.height();
+                        let nodes = peers.get_peers_active_count();
+                        if nodes > 0 {
+                            context.bus.post(crate::event::Event::NetworkStatus { nodes, blocks: height });
+                        }
+                        (height, context.chain.last_hash())
+                    };
+                    mine_locker_block(Arc::clone(&context));
+                    peers.send_pings(poll.registry(), height, hash);
+                    peers.connect_new_peers(poll.registry(), &mut unique_token, yggdrasil_only);
+                    peers_timer = Instant::now();
+                }
             }
             info!("Network loop finished");
         });
