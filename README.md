@@ -52,3 +52,26 @@ makepkg
 # install package (from root)
 pacman -U alfis-<version>-1-x86_64.pkg.tar.xz
 ```
+
+## Installation
+
+### Debian/Ubuntu
+
+1. Download repository public key and add it to your APT
+```
+wget -O - https://deb.revertron.com/key.txt | sudo apt-key add -
+```
+2. Add repository path to sources list
+```
+echo 'deb http://deb.revertron.com/ debian alfis' | sudo tee /etc/apt/sources.list.d/alfis.list
+```
+3. Update packages
+```
+sudo apt update
+```
+4. Install ALFIS
+```
+sudo apt install alfis
+```
+After that configuration is in file `/etc/alfis.conf` and data is saved to `/var/lib/alfis`.
+If you have some DNS server bound to port 53, it will not properly start. Deal with it on your own.
