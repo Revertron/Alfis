@@ -77,7 +77,15 @@ jobs:
           PKGARCH=mipsel contrib/deb/generate.sh
           PKGARCH=armhf contrib/deb/generate.sh
           PKGARCH=arm64 contrib/deb/generate.sh
-          hub release edit $(find . -type f -name "*.deb" -printf "-a %p ") -m "" "${{ env.VERSION }}"
+
+      - name: Upload debs
+        if: contains(matrix.os, 'ubuntu')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag_name="${{ env.VERSION }}"
+          echo $(find . -type f -name "*.deb" -printf "-a %p ")
+          hub release edit $(find . -type f -name "*.deb" -printf "-a %p ") -m "" "$tag_name"
 
       - name: win_arch
         run: |
