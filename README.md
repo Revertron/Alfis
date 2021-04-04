@@ -1,4 +1,4 @@
-# Alfis
+# ![](/img/logo/32px.png) Alfis
 
 ![Builds](https://github.com/Revertron/Alfis/actions/workflows/rust_build_and_test.yml/badge.svg)
 
