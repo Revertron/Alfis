@@ -1,27 +1,25 @@
 pkgname=alfis
-pkgver=0.3.13
+pkgver=$(sh ./semver/version.sh --bare)
 pkgrel=1
 pkgdesc="Alternative Free Identity System"
 arch=('x86_64' 'aarch64')
 license=('AGPL3')
 url='https://github.com/Revertron/Alfis'
-depends=('webkit2gtk' 'gtk3' 'atk' 'pango')
-makedepends=('cargo' 'rust')
+depends=('webkit2gtk' 'gtk3')
+makedepends=('cargo' 'rust' 'atk' 'pango')
 backup=("etc/$pkgname.conf")
-source=('git+https://github.com/Revertron/Alfis.git')
-sha256sums=('SKIP')
 
 build() {
-	cd "$srcdir/Alfis"
+	cd "$startdir/.."
 
 	cargo build --release --all-features --target-dir=target
 }
 
 package() {
-	cd "$srcdir/Alfis"
+	cd "$startdir/.."
 
 	install -Dm 755 "target/release/$pkgname" "$pkgdir/usr/bin/$pkgname"
-	
+
 	install -Dm 644 "contrib/systemd/$pkgname.service"  "$pkgdir/usr/lib/systemd/system/$pkgname.service"
 	install -Dm 644 "contrib/systemd/$pkgname.sysusers" "$pkgdir/usr/lib/sysusers.d/$pkgname.conf"
 	install -Dm 644 "contrib/systemd/$pkgname.tmpfiles" "$pkgdir/usr/lib/tmpfiles.d/$pkgname.conf"
