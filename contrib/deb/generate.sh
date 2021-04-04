@@ -14,7 +14,7 @@ PKGBRANCH=$(basename `git name-rev --name-only HEAD`)
 PKGNAME=$(sh contrib/semver/name.sh)
 PKGVERSION=$(sh contrib/semver/version.sh --bare)
 PKGARCH=${PKGARCH-amd64}
-PKGFILE=$PKGNAME-linux-$PKGARCH-v$PKGVERSION-nogui.deb
+PKGFILE=$PKGNAME-$PKGARCH-v$PKGVERSION.deb
 PKGREPLACES=alfis
 
 #if [ $PKGBRANCH = "master" ]; then
@@ -56,8 +56,8 @@ Maintainer: Revertron <revertron@users.noreply.github.com>
 Description: ALFIS
  ALFIS (ALternative Free Identity System) is an implementation of a Domain Name System
  based on a small, slowly growing blockchain. It is lightweight, self-contained,
- supported on multiple platforms and contains DNS-resolver on its own to resolve domain records
- contained in blockchain and forward DNS requests of ordinary domain zones to upstream forwarders.
+ supported on multiple platforms. It contains DNS-resolver on its own to resolve domain records
+ contained in blockchain and forward DNS requests of ordinary (IANA) domain zones to upstream forwarders.
 EOF
 cat > /tmp/$PKGNAME/debian/copyright << EOF
 Please see https://github.com/Revertron/Alfis/
@@ -81,7 +81,7 @@ if ! getent passwd alfis >/dev/null 2>&1; then
 fi
 
 mkdir -p /var/lib/alfis
-chgrp alfis /var/lib/alfis
+chown alfis:alfis /var/lib/alfis
 
 if [ -f /etc/alfis.conf ];
 then
