@@ -83,8 +83,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag_name="${{ env.VERSION }}"
-          echo $(find . -type f -name "*.deb" -printf "-a %p ")
+          tag_name="${{ needs.get_version.outputs.project_version }}"
           hub release edit $(find . -type f -name "*.deb" -printf "-a %p ") -m "" "$tag_name"
 
       - name: win_arch
