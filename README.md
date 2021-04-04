@@ -45,9 +45,10 @@ Create and install package with this commands:
 
 ```sh
 # make package
-curl -L -O https://raw.githubusercontent.com/Revertron/Alfis/master/contrib/PKGBUILD
+git clone https://github.com/Revertron/Alfis.git
+cd Alfis/contrib
 makepkg
 
 # install package (from root)
-pacman -U alfis-0.3.12-1-x86_64.pkg.tar.xz
+pacman -U alfis-<version>-1-x86_64.pkg.tar.xz
 ```
