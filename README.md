@@ -19,14 +19,14 @@ You can download and run already built binaries from [releases](https://github.c
 You can build Alfis by issuing `cargo build` and `cargo run` commands in a directory of cloned repository.
 If you want to build release version you need to do `cargo build --release` as usual.
 
-### On Windows
+### ![Windows Logo](/img/windows.svg) On Windows
 You don't need any additional steps to build Alfis, just stick to the MSVC version of Rust.
 
 If you see an error about missing `VCRUNTIME140.dll` when running alfis you will need to install [VC Redistributable](https://www.microsoft.com/en-us/download/details.aspx?id=52685) from Microsoft.
 
 If you want to use modern browser engine from Edge instead of old from IE, you need to build with this command: `cargo build --release --features "edge"` (or use corresponding build from [releases](https://github.com/Revertron/Alfis/releases)).
 
-### On Windows (MINGW64)
+### ![Windows Logo](/img/windows.svg) On Windows (MINGW64)
 If you'd rather use Gnu version of Rust you can build Alfis by these steps:
 ```
 pacman -S git mingw64/mingw-w64-x86_64-rust mingw64/mingw-w64-x86_64-cargo-c
@@ -35,11 +35,11 @@ cd Alfis
 cargo build
 ```
 
-### On Linux
+### ![Linux Logo](/img/linux.svg) On Linux
 If you are building on Linux you must ensure that you have `libwebkitgtk` library installed.
 You can do it by issuing this command: `sudo apt install libwebkit2gtk-4.0-dev` (on Debian/Ubuntu and derivatives).
 
-#### ![Arch Linux Logo](https://www.archlinux.org/favicon.ico) On Arch Linux
+#### ![Arch Linux Logo](/img/archlinux.svg) On Arch Linux
 
 Create and install package with this commands:
 
