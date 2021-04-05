@@ -1,0 +1,13 @@
+[Desktop Entry]
+Categories=Network;P2P;
+Exec=alfis %U
+GenericName=Alfis client
+Comment=Alternative Free Identity System
+Icon=alfis
+MimeType=application/x-alfis;
+Name=Alfis
+Terminal=false
+Type=Application
+StartupNotify=false
+StartupWMClass=alfis
+Keywords=dns;p2p;
