@@ -22,6 +22,7 @@ use Cmd::*;
 use alfis::blockchain::transaction::{DomainData, ZoneData};
 use self::web_view::{WebView, Handle};
 use alfis::blockchain::enums::MineResult;
+use chrono::{DateTime, Local};
 
 pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let file_content = include_str!("webview/index.html");
@@ -158,6 +159,7 @@ fn action_load_key(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                 None => {
                     error!("Error loading keystore '{}'!", &file_name);
                     show_warning(web_view, "Error loading key!<br>Key cannot be loaded or its difficulty is not enough.");
+                    event_fail(web_view, &format!("Error loading key from '{}'!", &file_name));
                 }
                 Some(keystore) => {
                     info!("Loaded keystore with key: {:?}", &keystore.get_public());
@@ -188,13 +190,17 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
             let mut status = status.lock().unwrap();
             let context = context_copy.lock().unwrap();
             let eval = match e {
-                Event::KeyCreated { path, public, hash } |
+                Event::KeyCreated { path, public, hash } => {
+                    event_handle_luck(&handle, "Key successfully created! Don\\'t forget to save it!");
+                    format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash)
+                }
                 Event::KeyLoaded { path, public, hash } |
                 Event::KeySaved { path, public, hash } => {
                     format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash)
                 }
                 Event::MinerStarted | Event::KeyGeneratorStarted => {
                     status.mining = true;
+                    event_handle_info(&handle, "Mining started");
                     String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
                 }
                 Event::MinerStopped {success, full} => {
@@ -206,8 +212,14 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                     };
                     if full {
                         match success {
-                            true => { s.push_str(" showSuccess('Block successfully mined!')"); }
-                            false => { s.push_str(" showSuccess('Mining unsuccessful, sorry.')"); }
+                            true => {
+                                event_handle_luck(&handle, "Mining is successful!");
+                                s.push_str(" showSuccess('Block successfully mined!')");
+                            }
+                            false => {
+                                event_handle_info(&handle, "Mining finished without result.");
+                                s.push_str(" showSuccess('Mining unsuccessful, sorry.')");
+                            }
                         }
                     }
                     s
@@ -226,6 +238,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                     s
                 }
                 Event::Syncing { have, height } => {
+                    event_handle_info(&handle, "Syncing started...");
                     status.syncing = true;
                     status.synced_blocks = have;
                     status.sync_height = height;
@@ -236,6 +249,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                     }
                 }
                 Event::SyncFinished => {
+                    event_handle_info(&handle, "Syncing finished.");
                     status.syncing = false;
                     if status.mining {
                         String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
@@ -252,6 +266,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                 }
                 Event::BlockchainChanged {index} => {
                     debug!("Current blockchain height is {}", index);
+                    event_handle_info(&handle, &format!("Blockchain changed, current block count is {} now.", index));
                     if let Ok(zones) = serde_json::to_string(&context.chain.get_zones()) {
                         let _ = handle.dispatch(move |web_view|{
                             web_view.eval(&format!("zonesChanged('{}');", &zones))
@@ -279,6 +294,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
     }
     let index = c.chain.height();
     c.bus.post(Event::BlockchainChanged { index });
+    event_info(web_view, "Application loaded");
 }
 
 fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, web_view: &mut WebView<()>, name: String, records: &String) {
@@ -291,7 +307,7 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
     }
     let keystore = context.get_keystore().unwrap();
     let pub_key = keystore.get_public();
-    match dbg!(context.chain.can_mine_domain(&name, &records, &pub_key)) {
+    match context.chain.can_mine_domain(&name, &records, &pub_key) {
         MineResult::Fine => {
             let zone = get_domain_zone(&name);
             let difficulty = context.chain.get_zone_difficulty(&zone);
@@ -301,6 +317,7 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
                 std::mem::drop(context);
                 create_domain(c, miner, &name, &data, difficulty, &keystore);
                 let _ = web_view.eval("domainMiningStarted();");
+                event_info(web_view, &format!("Mining of domain \\'{}\\' has started", &name));
             }
         }
         MineResult::WrongName => { show_warning(web_view, "You can't mine this domain!"); }
@@ -309,6 +326,7 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
         MineResult::WrongZone => { show_warning(web_view, "You can't mine domain in this zone!"); }
         MineResult::NotOwned => { show_warning(web_view, "This domain is already taken, and it is not yours!"); }
         MineResult::Cooldown { time } => {
+            event_info(web_view, &format!("You have cooldown, just {} more minutes!", time / 60));
             show_warning(web_view, &format!("You have cooldown, just {} more minutes!", time / 60));
         }
     }
@@ -335,10 +353,12 @@ fn action_create_zone(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, we
         match transaction {
             None => {
                 create_domain(Arc::clone(&context), miner.clone(), &name, &data, ZONE_DIFFICULTY, &keystore);
+                event_info(web_view, &format!("Mining of zone \\'{}\\' has started", &name));
             }
             Some(transaction) => {
                 if transaction.pub_key == keystore.get_public() {
                     create_domain(Arc::clone(&context), miner.clone(), &name, &data, ZONE_DIFFICULTY, &keystore);
+                    event_info(web_view, &format!("Mining of zone \\'{}\\' has started", &name));
                 } else {
                     warn!("Tried to mine not owned domain!");
                     show_warning(web_view, "You cannot change domain that you don't own!");
@@ -366,6 +386,63 @@ fn show_success(web_view: &mut WebView<()>, text: &str) {
         Ok(_) => {}
         Err(_) => { warn!("Error showing success!"); }
     }
+}
+
+#[allow(dead_code)]
+fn event_info(web_view: &mut WebView<()>, message: &str) {
+    let _ = web_view.eval(&format_event_now("info", message));
+}
+
+#[allow(dead_code)]
+fn event_warn(web_view: &mut WebView<()>, message: &str) {
+    let _ = web_view.eval(&format_event_now("warn", message));
+}
+
+#[allow(dead_code)]
+fn event_fail(web_view: &mut WebView<()>, message: &str) {
+    let _ = web_view.eval(&format_event_now("fail", message));
+}
+
+#[allow(dead_code)]
+fn event_handle_info(handle: &Handle<()>, message: &str) {
+    let message = message.to_owned();
+    let _ = handle.dispatch(move |web_view|{
+        web_view.eval(&format_event_now("info", &message))
+    });
+}
+
+#[allow(dead_code)]
+fn event_handle_warn(handle: &Handle<()>, message: &str) {
+    let message = message.to_owned();
+    let _ = handle.dispatch(move |web_view|{
+        web_view.eval(&format_event_now("warn", &message))
+    });
+}
+
+#[allow(dead_code)]
+fn event_handle_fail(handle: &Handle<()>, message: &str) {
+    let message = message.to_owned();
+    let _ = handle.dispatch(move |web_view|{
+        web_view.eval(&format_event_now("fail", &message))
+    });
+}
+
+#[allow(dead_code)]
+fn event_handle_luck(handle: &Handle<()>, message: &str) {
+    let message = message.to_owned();
+    let _ = handle.dispatch(move |web_view|{
+        web_view.eval(&format_event_now("luck", &message))
+    });
+}
+
+#[allow(dead_code)]
+fn format_event(kind: &str, time: DateTime<Local>, message: &str) -> String {
+    format!("addEvent('{}', '{}', '{}');", kind, time.format("%d.%m.%y %X"), message)
+}
+
+fn format_event_now(kind: &str, message: &str) -> String {
+    let time = Local::now();
+    format!("addEvent('{}', '{}', '{}');", kind, time.format("%d.%m.%y %X"), message)
 }
 
 fn create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, name: &str, data: &str, difficulty: u32, keystore: &Keystore) {

@@ -9,9 +9,9 @@
 </head>
 <body onload="onLoad();">
 
-<div class="container">
+<div class="main">
     <!-- Tabs -->
-    <div class="tabs is-centered is-boxed">
+    <div class="row header tabs is-centered is-boxed">
         <ul>
             <li class="tab is-active">
                 <a onclick="openTab(this, 'tab_credentials')">
@@ -57,7 +57,7 @@
     </div>
 
     <!-- Credentials (Key management) -->
-    <div class="tab content" id="tab_credentials">
+    <div class="tab row page" id="tab_credentials">
         <div class="field is-grouped">
             <div class="control is-expanded has-icons-left">
                 <input class="input is-expanded" type="text" id="public_key_hash" placeholder="No key loaded" readonly>
@@ -75,7 +75,7 @@
     </div>
 
     <!-- Domain mining -->
-    <div class="tab content is-hidden" id="tab_domains">
+    <div class="tab row page is-hidden" id="tab_domains">
         <div class="field is-grouped is-fullwidth">
             <div class="control field has-addons is-expanded">
                 <div class="control is-expanded has-icons-left">
@@ -113,13 +113,13 @@
         </div>
         <p class="help">Enter domain name, add some DNS-records, then hit the "Mine domain" button!</p>
 
-        <div id="domain_records">
+        <div class="list pb-3" id="domain_records">
             <!-- Here will be our domain records, added by dialog -->
         </div>
     </div>
 
     <!-- Zone mining -->
-    <div class="tab content is-hidden" id="tab_zones">
+    <div class="tab row page is-hidden" id="tab_zones">
         <div class="field is-grouped">
             <div class="control is-expanded has-icons-left">
                 <input class="input" type="text" placeholder="ygg" id="new_zone" oninput="onZoneChange()">
@@ -141,27 +141,48 @@
     </div>
 
     <!-- Events and notifications -->
-    <div class="tab content is-hidden" id="tab_events">
+    <div class="tab row page is-hidden list" id="tab_events">
         <!-- TODO -->
     </div>
 
     <!-- Help -->
-    <div class="tab content is-hidden" id="tab_help">
-        <h1>Welcome to ALFIS!</h1>
-        <p>ALFIS stands for Alternative Free Identity System.</p>
-        <p>It gives you an opportunity to create your own domains and use them in decentralized networks, store security certificates for browsers to trust without any centralized CA.</p>
-        <h2>How this system works?</h2>
-        <h3>If you just want to be able to resolve our domains</h3>
-        <p>Carefully configure DNS section in <strong>alfis.toml</strong> and start ALFIS with <code>-n</code> command line switch.
-            It will start without GUI, but will work as local DNS-resolver.</p>
-        <h3>If you want to get your own domain</h3>
-        <ul>
-            <li>Generate a keypair in "Manage keys" part (you need just one for any number of domains)</li>
-            <li>Check available zones (for now we have a test zone <code>.yy</code>). In future version a list of available zones will be somewhere here</li>
-            <li>Go to "Mine domain" part and enter desired domain in first field, if it is not red - you can create it</li>
-            <li>Carefully add needed DNS-records (you can add them later, but you will need to mine it again)</li>
-            <li>Just click on "Mine domain" and wait for it, your domain (when properly cooked) will propagate to all blockchain nodes automatically</li>
-        </ul>
+    <div class="tab row page is-hidden" id="tab_help">
+        <div class="content">
+            <h2>Welcome to ALFIS!</h2>
+            <p>ALFIS stands for Alternative Free Identity System.</p>
+            <p>It gives you an opportunity to create your own domains and use them in decentralized networks, store security certificates for browsers to trust without any centralized CA.</p>
+            <h3>How this system works?</h3>
+            <h4>If you just want to be able to resolve our domains</h4>
+            <p>Carefully configure DNS section in <strong>alfis.toml</strong> and start ALFIS with <code>-n</code> command line switch.
+                It will start without GUI, but will work as local DNS-resolver.</p>
+            <h4>If you want to get your own domain</h4>
+            <ul>
+                <li>Generate a keypair in "Manage keys" part (you need just one for any number of domains)</li>
+                <li>Go to "Mine domain" part and enter desired domain in first field, choose appropriate zone from dropdown, if it is not red - you can create it</li>
+                <li>Carefully add needed DNS-records (you can add them later, but you will need to mine it again)</li>
+                <li>Just click on "Mine domain" and wait for it, your domain (when properly cooked) will propagate to all blockchain nodes automatically</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="row status is-family-code">
+        <div class="level">
+            <div class="level-left">
+                <div class="level-item" id="indicator_parent">
+                    <div class="busy_indicator busy_blue" id="busy_indicator" onclick="miningIndicatorClick(this)">
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+                <div class="level-item">
+                    <div id="status_bar_left">Connecting...</div>
+                </div>
+            </div>
+
+            <div class="level-right">
+                <div class="level-item" id="status_bar_right">No data</div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -268,26 +289,6 @@
 <div class="notification is-success is-hidden" id="notification_success">
     <button class="delete" id="success_close"></button>
     <p id="success_text"></p>
-</div>
-
-<div class="footer is-family-code">
-    <div class="level">
-        <div class="level-left">
-            <div class="level-item" id="indicator_parent">
-                <div class="busy_indicator busy_blue" id="busy_indicator" onclick="miningIndicatorClick(this)">
-                    <span></span>
-                    <span></span>
-                </div>
-            </div>
-            <div class="level-item">
-                <div id="status_bar_left">Connecting...</div>
-            </div>
-        </div>
-
-        <div class="level-right">
-            <div class="level-item" id="status_bar_right">No data</div>
-        </div>
-    </div>
 </div>
 
 </body>

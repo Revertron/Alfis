@@ -1,7 +1,44 @@
 html {
-  overflow-y: auto;
-  min-width: 768px;
+  overflow-y: hidden;
 }
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+.main {
+  display: flex;
+  flex-flow: column;
+  height: 100%;
+  padding-top: 10pt;
+}
+
+.main .row {
+  /*border: 1px dotted grey;*/
+}
+
+.main .row.header {
+  flex: 0 1 auto;
+}
+
+.main .row.page {
+  display: flex;
+  flex-flow: column;
+  flex: 1 1 auto;
+  margin-left: 10pt;
+  margin-right: 10pt;
+  overflow-y: auto;
+}
+
+.main .row.status {
+  flex: 0 1 auto;
+  background-color: #f4f4f4;
+  padding: 0.2rem 0.5rem 0.2rem 0.5rem;
+}
+
+/* ========================================== */
 
 .container {
   margin: 10pt;
@@ -25,13 +62,8 @@ html {
   right: 10pt;
 }
 
-.footer {
-  background-color: #f4f4f4;
-  padding: 0.2rem 0.5rem 0.2rem 0.5rem;
-  width: 100%;
-  position: absolute;
-  bottom: 0px;
-  z-index: 9;
+.list {
+  overflow-y: auto;
 }
 
 path {

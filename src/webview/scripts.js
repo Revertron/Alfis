@@ -105,9 +105,9 @@ function openTab(element, tabName) {
     var i, tabContent, tabLinks;
 
     // Get all elements with class="content" and hide them
-    tabContent = document.getElementsByClassName("tab content");
+    tabContent = document.getElementsByClassName("tab row page");
     for (i = 0; i < tabContent.length; i++) {
-        tabContent[i].className = "tab content is-hidden";
+        tabContent[i].className = "tab row page is-hidden";
     }
 
     // Get all elements with class="tab" and remove the class "is-active"
@@ -117,7 +117,7 @@ function openTab(element, tabName) {
     }
 
     // Show the current tab, and add an "is-active" class to the button that opened the tab
-    document.getElementById(tabName).className = "tab content";
+    document.getElementById(tabName).className = "tab row page";
     element.parentElement.className = "tab is-active";
     refreshRecordsList();
 }
@@ -315,12 +315,28 @@ function setRightStatusBarText(text) {
     bar.innerHTML = text;
 }
 
+function addEvent(type, time, message) {
+    var t = "";
+    if (type == 'warn') {
+        t = "is-warning";
+    } else if (type == 'fail') {
+        t = "is-danger";
+    } else if (type == 'luck') {
+        t = "is-success";
+    }
+
+    var buf = "<article class=\"message mb-1 {1}\"><div class=\"message-body px-2 py-1\"><strong>{2}</strong>&nbsp;&nbsp;{3}</div></article>".replace("{1}", t).replace("{2}", time).replace("{3}", message);
+    var tab_events = document.getElementById("tab_events");
+    tab_events.innerHTML = tab_events.innerHTML + buf;
+}
+
 function keystoreChanged(path, pub_key, hash) {
     if (path == '') {
         path = "In memory";
     }
     var public_key_hash = document.getElementById("public_key_hash");
     public_key_hash.value = hash;
+    public_key_hash.title = path + "\n" + pub_key;
 
     var save_key = document.getElementById("save_key");
     save_key.disabled = false;
