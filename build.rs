@@ -10,7 +10,7 @@ use crypto::sha2::Sha256;
 fn main() {
     if cfg!(target_os = "windows") {
         let mut res = winres::WindowsResource::new();
-        res.set_icon("globe_icon.ico");
+        res.set_icon("img/logo/alfis.ico");
         res.compile().unwrap();
     }
 
