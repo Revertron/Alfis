@@ -36,6 +36,7 @@ derive_more = "0.99" # for DNS from hermes
 # Optional dependencies regulated by features
 web-view = { version = "0.7", features = [], optional = true }
 tinyfiledialogs = { version = "3.3.10", optional = true }
+open = { version = "1.6.0", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.7", features = ["impl-default", "wincon", "shellscalingapi"]}
@@ -60,6 +61,6 @@ ProductName="ALFIS"
 FileDescription="Alternative Free Identity System"
 
 [features]
-webgui = ["web-view", "tinyfiledialogs"]
+webgui = ["web-view", "tinyfiledialogs", "open"]
 edge = ["web-view/edge"]
 default = ["webgui"]

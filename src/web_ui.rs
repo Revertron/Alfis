@@ -2,6 +2,7 @@ extern crate web_view;
 extern crate tinyfiledialogs as tfd;
 extern crate serde;
 extern crate serde_json;
+extern crate open;
 
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -57,6 +58,11 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                 CheckZone { name } => { action_check_zone(&context, web_view, name); }
                 MineZone { name, data } => { action_create_zone(Arc::clone(&context), Arc::clone(&miner), web_view, name, data); }
                 StopMining => { context.lock().unwrap().bus.post(Event::ActionStopMining); }
+                Open { link } => {
+                    if open::that(&link).is_err() {
+                        show_warning(web_view, "Something wrong, I can't open the link 😢");
+                    }
+                }
             }
             Ok(())
         })
@@ -468,6 +474,7 @@ pub enum Cmd {
     MineDomain { name: String, records: String },
     TransferDomain { name: String, owner: String },
     StopMining,
+    Open { link: String },
 }
 
 struct Status {

@@ -123,8 +123,12 @@ function openTab(element, tabName) {
 }
 
 function toggle(element, event) {
-  event.stopPropagation();
-  element.classList.toggle('is-active');
+    event.stopPropagation();
+    element.classList.toggle('is-active');
+}
+
+function open_link(link) {
+    external.invoke(JSON.stringify({cmd: 'open', link: link}));
 }
 
 function loadKey() {
