@@ -192,7 +192,9 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
             let eval = match e {
                 Event::KeyCreated { path, public, hash } => {
                     event_handle_luck(&handle, "Key successfully created! Don\\'t forget to save it!");
-                    format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash)
+                    let mut s = format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash);
+                    s.push_str(" showSuccess('You've got a new key! Don't forget to save it!')");
+                    s
                 }
                 Event::KeyLoaded { path, public, hash } |
                 Event::KeySaved { path, public, hash } => {
@@ -224,18 +226,13 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                     }
                     s
                 }
-                Event::KeyGeneratorStopped {success} => {
+                Event::KeyGeneratorStopped => {
                     status.mining = false;
-                    let mut s = if status.syncing {
+                    if status.syncing {
                         String::from("setLeftStatusBarText('Syncing...'); showMiningIndicator(true, true);")
                     } else {
                         String::from("setLeftStatusBarText('Idle'); showMiningIndicator(false, false);")
-                    };
-                    match success {
-                        true => { s.push_str(" showSuccess('Key pair successfully mined!<br>Don`t forget to save!')"); }
-                        false => { s.push_str(" showSuccess('Key mining got nothing, sorry.')"); }
                     }
-                    s
                 }
                 Event::Syncing { have, height } => {
                     event_handle_info(&handle, "Syncing started...");

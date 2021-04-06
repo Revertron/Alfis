@@ -5,7 +5,7 @@ pub enum Event {
     MinerStarted,
     MinerStopped { success: bool, full: bool },
     KeyGeneratorStarted,
-    KeyGeneratorStopped { success: bool },
+    KeyGeneratorStopped,
     KeyCreated { path: String, public: String, hash: String },
     KeyLoaded { path: String, public: String, hash: String },
     KeySaved { path: String, public: String, hash: String },
