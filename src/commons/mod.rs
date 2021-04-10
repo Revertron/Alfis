@@ -5,6 +5,9 @@ pub mod constants;
 pub use constants::*;
 use std::net::IpAddr;
 
+#[cfg(not(target_os = "macos"))]
+use thread_priority::*;
+
 /// Convert bytes array to HEX format
 pub fn to_hex(buf: &[u8]) -> String {
     let mut result = String::new();
@@ -89,6 +92,25 @@ pub fn is_yggdrasil(addr: &IpAddr) -> bool {
         return first_byte == 2 || first_byte == 3;
     }
     false
+}
+
+#[cfg(target_os = "windows")]
+#[allow(unused_variables)]
+pub fn setup_miner_thread(cpu: u32) {
+    let _ = set_current_thread_priority(ThreadPriority::Min);
+    //let _ = set_current_thread_ideal_processor(IdealProcessor::from(cpu));
+}
+
+#[cfg(target_os = "linux")]
+#[allow(unused_variables)]
+pub fn setup_miner_thread(cpu: u32) {
+    let _ = set_current_thread_priority(ThreadPriority::Min);
+}
+
+#[cfg(target_os = "macos")]
+#[allow(unused_variables)]
+pub fn setup_miner_thread(cpu: u32) {
+    // MacOS is not supported by thread_priority crate
 }
 
 #[cfg(test)]

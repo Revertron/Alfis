@@ -16,9 +16,10 @@ use log::{trace, debug, info, warn, error};
 use std::net::{SocketAddr, IpAddr, SocketAddrV4, Shutdown};
 use std::collections::HashSet;
 use crate::{Context, Block, p2p::Message, p2p::State, p2p::Peer, p2p::Peers, Bytes, is_yggdrasil};
-use crate::blockchain::enums::BlockQuality;
+use crate::blockchain::types::BlockQuality;
 use crate::commons::CHAIN_VERSION;
 use std::sync::atomic::{AtomicBool, Ordering};
+use chrono::Utc;
 
 const SERVER: Token = Token(0);
 const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(3000));
@@ -49,7 +50,7 @@ impl Network {
         let mut server = TcpListener::bind(addr).expect("Can't bind to address");
         debug!("Started node listener on {}", server.local_addr().unwrap());
 
-        let mut events = Events::with_capacity(64);
+        let mut events = Events::with_capacity(1024);
         let mut poll = Poll::new().expect("Unable to create poll");
         poll.registry().register(&mut server, SERVER, Interest::READABLE).expect("Error registering poll");
         let context = Arc::clone(&self.context);
@@ -132,7 +133,7 @@ impl Network {
                 }
                 events.clear();
 
-                if peers_timer.elapsed().as_millis() > 100 {
+                if peers_timer.elapsed().as_millis() > 500 {
                     // Send pings to idle peers
                     let (height, hash) = {
                         let mut context = context.lock().unwrap();
@@ -143,7 +144,7 @@ impl Network {
                         }
                         (height, context.chain.last_hash())
                     };
-                    mine_locker_block(Arc::clone(&context));
+                    mine_signing_block(Arc::clone(&context));
                     peers.send_pings(poll.registry(), height, hash);
                     peers.connect_new_peers(poll.registry(), &mut unique_token, yggdrasil_only);
                     peers_timer = Instant::now();
@@ -243,6 +244,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
 
     if event.is_writable() {
         //trace!("Socket {} is writable", event.token().0);
+        let my_id = peers.get_my_id().to_owned();
         match peers.get_mut_peer(&event.token()) {
             None => {}
             Some(peer) => {
@@ -251,7 +253,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                         debug!("Connected to peer {}, sending hello...", &peer.get_addr());
                         let data: String = {
                             let c = context.lock().unwrap();
-                            let message = Message::hand(&c.app_version, &c.settings.origin, CHAIN_VERSION, c.settings.net.public, peer.get_rand());
+                            let message = Message::hand(&c.app_version, &c.settings.origin, CHAIN_VERSION, c.settings.net.public, &my_id);
                             serde_json::to_string(&message).unwrap()
                         };
                         send_message(peer.get_stream(), &data.into_bytes()).unwrap_or_else(|e| warn!("Error sending hello {}", e));
@@ -471,10 +473,16 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                     }
                     BlockQuality::Twin => { debug!("Ignoring duplicate block {}", block.index); }
                     BlockQuality::Future => { debug!("Ignoring future block {}", block.index); }
-                    BlockQuality::Bad => { debug!("Ignoring bad block {} with hash {:?}", block.index, block.hash); }
-                    // TODO deal with forks
+                    BlockQuality::Bad => {
+                        // TODO save bad public keys to banned table
+                        debug!("Ignoring bad block {} with hash {:?}", block.index, block.hash);
+                    }
                     BlockQuality::Fork => {
-                        debug!("Ignoring forked block {} with hash {:?}", block.index, block.hash);
+                        debug!("Got forked block {} with hash {:?}", block.index, block.hash);
+                        let last_block = context.chain.last_block().unwrap();
+                        if block.is_better_than(&last_block) {
+                            context.chain.replace_block(block.index, block).expect("Error replacing block with fork");
+                        }
                         //let peer = peers.get_mut_peer(token).unwrap();
                         //deal_with_fork(context, peer, block);
                     }
@@ -487,21 +495,24 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
 }
 
 /// Sends an Event to miner to start mining locker block if "locker" is our public key
-fn mine_locker_block(context: Arc<Mutex<Context>>) {
+fn mine_signing_block(context: Arc<Mutex<Context>>) {
     let mut context = context.lock().unwrap();
-    if let Some(block) = context.chain.last_block() {
+    if let Some(block) = context.chain.get_last_full_block(None) {
+        if block.timestamp + 60 > Utc::now().timestamp() {
+            return;
+        }
         if let Some(keystore) = &context.keystore {
             if block.index < context.chain.max_height() {
-                trace!("No locker mining while syncing");
+                trace!("No signing while syncing");
                 return;
             }
-            let lockers: HashSet<Bytes> = context.chain.get_block_lockers(&block).into_iter().collect();
-            if lockers.contains(&keystore.get_public()) {
-                info!("We have an honor to mine locker block!");
+            let signers: HashSet<Bytes> = context.chain.get_block_signers(&block).into_iter().collect();
+            if signers.contains(&keystore.get_public()) {
+                info!("We have an honor to mine signing block!");
                 let keystore = Box::new(keystore.clone());
                 context.bus.post(crate::event::Event::ActionMineLocker { index: block.index + 1, hash: block.hash, keystore });
-            } else if !lockers.is_empty() {
-                info!("Locker block must be mined by other nodes");
+            } else if !signers.is_empty() {
+                info!("Signing block must be mined by other nodes");
             }
         }
     }

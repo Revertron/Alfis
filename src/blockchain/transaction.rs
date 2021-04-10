@@ -15,7 +15,7 @@ extern crate serde_json;
 pub struct Transaction {
     pub identity: Bytes,
     pub confirmation: Bytes,
-    pub method: String,
+    pub class: String,
     pub data: String,
     pub pub_key: Bytes,
 }
@@ -28,7 +28,7 @@ impl Transaction {
     }
 
     pub fn new(identity: Bytes, confirmation: Bytes, method: String, data: String, pub_key: Bytes) -> Self {
-        Transaction { identity, confirmation, method, data, pub_key }
+        Transaction { identity, confirmation, class: method, data, pub_key }
     }
 
     pub fn from_json(json: &str) -> Option<Self> {
@@ -60,9 +60,9 @@ impl fmt::Debug for Transaction {
         fmt.debug_struct("Transaction")
             .field("identity", &self.identity)
             .field("confirmation", &self.confirmation)
-            .field("method", &self.method)
+            .field("class", &self.class)
             .field("data", &self.data)
-            .field("pub", &&self.pub_key)
+            .field("pub_key", &&self.pub_key)
             .finish()
     }
 }
@@ -72,7 +72,7 @@ impl Serialize for Transaction {
         let mut structure = serializer.serialize_struct("Transaction", 5).unwrap();
         structure.serialize_field("identity", &self.identity)?;
         structure.serialize_field("confirmation", &self.confirmation)?;
-        structure.serialize_field("method", &self.method)?;
+        structure.serialize_field("class", &self.class)?;
         structure.serialize_field("data", &self.data)?;
         structure.serialize_field("pub_key", &self.pub_key)?;
         structure.end()
@@ -81,24 +81,43 @@ impl Serialize for Transaction {
 
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct DomainData {
+    pub domain: Bytes,
     pub zone: String,
-    pub records: Vec<DnsRecord>
+    pub records: Vec<DnsRecord>,
+    pub contacts: Vec<ContactsData>,
+    #[serde(default)]
+    pub owners: Vec<Bytes>
 }
 
 impl DomainData {
-    pub fn new(zone: String, records: Vec<DnsRecord>) -> Self {
-        Self { zone, records }
+    pub fn new(domain: Bytes, zone: String, records: Vec<DnsRecord>, contacts: Vec<ContactsData>, owners: Vec<Bytes>) -> Self {
+        Self { domain, zone, records, contacts, owners }
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ZoneData {
     pub name: String,
-    pub difficulty: u32
+    pub difficulty: u32,
+    pub yggdrasil: bool,
+    #[serde(default)]
+    pub owners: Vec<Bytes>
 }
 
 impl Display for ZoneData {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         f.write_str(&format!("{} ({})", self.name, self.difficulty))
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct ContactsData {
+    pub name: String,
+    pub value: String
+}
+
+impl Display for ContactsData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.write_str(&format!("{}: {}", self.name, self.value))
     }
 }

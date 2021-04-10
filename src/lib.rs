@@ -25,4 +25,5 @@ pub mod dns_utils;
 pub mod settings;
 pub mod bytes;
 pub mod x_zones;
+pub mod crypto;
 

@@ -15,8 +15,7 @@ use simple_logger::SimpleLogger;
 #[cfg(windows)]
 use winapi::um::wincon::{ATTACH_PARENT_PROCESS, AttachConsole, FreeConsole};
 
-use alfis::{Block, Bytes, Chain, Miner, Context, Network, Settings, dns_utils, Keystore};
-use alfis::commons::BLOCK_DIFFICULTY;
+use alfis::{Block, Bytes, Chain, Miner, Context, Network, Settings, dns_utils, Keystore, ZONE_DIFFICULTY};
 
 #[cfg(feature = "webgui")]
 mod web_ui;
@@ -151,10 +150,10 @@ fn create_genesis_if_needed(context: &Arc<Mutex<Context>>, miner: &Arc<Mutex<Min
     let context = context.lock().unwrap();
     let last_block = context.get_chain().last_block();
     let origin = context.settings.origin.clone();
-    if origin.eq("") && last_block.is_none() {
+    if origin.is_empty() && last_block.is_none() {
         if let Some(keystore) = &context.keystore {
             // If blockchain is empty, we are going to mine a Genesis block
-            let block = Block::new(None, context.get_keystore().unwrap().get_public(), Bytes::default(), BLOCK_DIFFICULTY);
+            let block = Block::new(None, context.get_keystore().unwrap().get_public(), Bytes::default(), ZONE_DIFFICULTY);
             miner.lock().unwrap().add_block(block, keystore.clone());
         }
     }

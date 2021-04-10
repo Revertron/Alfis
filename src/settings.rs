@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{Read,};
+use std::io::Read;
 
 use serde::{Deserialize, Serialize};
 #[allow(unused_imports)]
@@ -84,7 +84,9 @@ impl Default for Dns {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Mining {
     #[serde(default)]
-    pub threads: usize
+    pub threads: usize,
+    #[serde(default)]
+    pub lower: bool
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

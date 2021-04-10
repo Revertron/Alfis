@@ -16,7 +16,7 @@ use ed25519_dalek::Keypair;
 use log::{debug, error, info, trace, warn};
 
 use crate::blockchain::hash_utils::*;
-use crate::Context;
+use crate::{Context, setup_miner_thread};
 use crate::event::Event;
 use crate::commons::KEYSTORE_DIFFICULTY;
 use crate::bytes::Bytes;
@@ -27,36 +27,42 @@ use self::ed25519_dalek::{Signer, PublicKey, Verifier, SecretKey};
 use self::ed25519_dalek::ed25519::signature::Signature;
 use rand_old::{CryptoRng, RngCore};
 use rand_old::rngs::OsRng;
+use crate::crypto::Chacha;
 
 #[derive(Debug)]
 pub struct Keystore {
     keypair: Keypair,
     hash: RefCell<Bytes>,
     path: String,
+    chacha: Chacha
 }
 
 impl Keystore {
     pub fn new() -> Self {
         let mut csprng = OsRng::default();
         let keypair = ed25519_dalek::Keypair::generate(&mut csprng);
-        Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new() }
+        let chacha = get_chacha(&keypair);
+        Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new(), chacha }
     }
 
     pub fn from_random<R>(csprng: &mut R) -> Self where R: CryptoRng + RngCore {
         let keypair = ed25519_dalek::Keypair::generate(csprng);
-        Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new() }
+        let chacha = get_chacha(&keypair);
+        Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new(), chacha }
     }
 
     pub fn from_bytes(seed: &[u8]) -> Self {
         let keypair = Keypair::from_bytes(seed).expect("Error creating keypair from bytes!");
-        Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new() }
+        let chacha = get_chacha(&keypair);
+        Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new(), chacha }
     }
 
     pub fn from_random_bytes(key: &[u8]) -> Self {
         let secret = SecretKey::from_bytes(&key).unwrap();
         let public = PublicKey::from(&secret);
         let keypair = Keypair { secret, public };
-        Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new() }
+        let chacha = get_chacha(&keypair);
+        Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new(), chacha }
     }
 
     pub fn from_file(filename: &str, _password: &str) -> Option<Self> {
@@ -131,12 +137,22 @@ impl Keystore {
             Err(_) => { false }
         }
     }
+
+    pub fn encrypt(&self, message: &[u8], nonce: &[u8]) -> Bytes {
+        let encrypted = self.chacha.encrypt(message, nonce);
+        Bytes::from_bytes(&encrypted)
+    }
+
+    pub fn decrypt(&self, message: &[u8], nonce: &[u8]) -> Bytes {
+        let decrypted = self.chacha.decrypt(message, nonce);
+        Bytes::from_bytes(&decrypted)
+    }
 }
 
 impl Clone for Keystore {
     fn clone(&self) -> Self {
         let keypair = Keypair::from_bytes(&self.keypair.to_bytes()).unwrap();
-        Self { keypair, hash: RefCell::new(Bytes::default()), path: self.path.clone() }
+        Self { keypair, hash: RefCell::new(Bytes::default()), path: self.path.clone(), chacha: self.chacha.clone() }
     }
 }
 
@@ -148,26 +164,30 @@ impl PartialEq for Keystore {
 
 /// Checks if some public key is "strong" enough to mine domains
 /// TODO Optimize by caching Blakeout somewhere
-pub fn check_public_key_strength(key: &Bytes, strength: usize) -> bool {
+pub fn check_public_key_strength(key: &Bytes, strength: u32) -> bool {
     let bytes = blakeout_data(&key);
-    hash_is_good(&bytes, strength)
+    hash_difficulty_key(&bytes) >= strength
 }
 
 pub fn create_key(context: Arc<Mutex<Context>>) {
     let mining = Arc::new(AtomicBool::new(true));
     let miners_count = Arc::new(AtomicUsize::new(0));
-    { context.lock().unwrap().bus.post(Event::KeyGeneratorStarted); }
+    context.lock().unwrap().bus.post(Event::KeyGeneratorStarted);
+    let lower = context.lock().unwrap().settings.mining.lower;
     let threads = context.lock().unwrap().settings.mining.threads;
     let threads = match threads {
         0 => num_cpus::get(),
         _ => threads
     };
-    for _cpu in 0..threads {
+    for cpu in 0..threads {
         let context = Arc::clone(&context);
         let mining = mining.clone();
         let miners_count = miners_count.clone();
         thread::spawn(move || {
             miners_count.fetch_add(1, atomic::Ordering::SeqCst);
+            if lower {
+                setup_miner_thread(cpu as u32);
+            }
             match generate_key(KEYSTORE_DIFFICULTY, mining.clone()) {
                 None => {
                     debug!("Keystore mining finished");
@@ -198,7 +218,7 @@ pub fn create_key(context: Arc<Mutex<Context>>) {
     });
 }
 
-fn generate_key(difficulty: usize, mining: Arc<AtomicBool>) -> Option<Keystore> {
+fn generate_key(difficulty: u32, mining: Arc<AtomicBool>) -> Option<Keystore> {
     use self::rand::RngCore;
     let mut rng = rand::thread_rng();
     let mut time = Instant::now();
@@ -210,7 +230,7 @@ fn generate_key(difficulty: usize, mining: Arc<AtomicBool>) -> Option<Keystore> 
         let keystore = Keystore::from_random_bytes(&buf);
         digest.reset();
         digest.update(keystore.get_public().as_slice());
-        if hash_is_good(digest.result(), difficulty) {
+        if hash_difficulty_key(digest.result()) >= difficulty {
             info!("Generated keypair with public key: {:?} and hash {:?}", &keystore.get_public(), &keystore.get_hash());
             return Some(keystore);
         }
@@ -225,6 +245,13 @@ fn generate_key(difficulty: usize, mining: Arc<AtomicBool>) -> Option<Keystore> 
         }
         count += 1;
     }
+}
+
+fn get_chacha(keypair: &Keypair) -> Chacha {
+    let mut digest = Blakeout::new();
+    digest.update(&keypair.to_bytes());
+    let seed = digest.result();
+    Chacha::new(seed)
 }
 
 #[cfg(test)]

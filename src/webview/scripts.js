@@ -161,6 +161,12 @@ function createDomain() {
     var new_domain = document.getElementById("new_domain").value.toLowerCase();
     var new_dom_records = JSON.stringify(recordsBuffer);
     var domain = new_domain + "." + currentZone.name;
+    var data = {};
+    data.domain = [];
+    data.zone = currentZone.name;
+    data.records = new_dom_records;
+    data.owners = []; // TODO make a dialog to fill them
+    data.contacts = []; // TODO make a dialog to fill them
     external.invoke(JSON.stringify({cmd: 'mineDomain', name: domain, records: new_dom_records}));
 }
 
@@ -172,9 +178,12 @@ function domainMiningStarted() {
 function createZone() {
     var new_zone = document.getElementById("new_zone").value;
     var difficulty = document.getElementById("new_zone_difficulty").value;
-    obj = {};
+    var yggdrasil = document.getElementById("yggdrasil_only").checked;
+    var obj = {};
     obj.name = new_zone;
     obj.difficulty = parseInt(difficulty);
+    obj.yggdrasil = yggdrasil;
+    obj.owners = []; // TODO make a dialog to fill them
     data = JSON.stringify(obj);
     external.invoke(JSON.stringify({cmd: 'mineZone', name: new_zone, data: data}));
 }
@@ -338,9 +347,9 @@ function keystoreChanged(path, pub_key, hash) {
     if (path == '') {
         path = "In memory";
     }
-    var public_key_hash = document.getElementById("public_key_hash");
-    public_key_hash.value = hash;
-    public_key_hash.title = path + "\n" + pub_key;
+    var public_key_field = document.getElementById("public_key");
+    public_key_field.value = pub_key;
+    public_key_field.title = path + "\n" + hash;
 
     var save_key = document.getElementById("save_key");
     save_key.disabled = false;
