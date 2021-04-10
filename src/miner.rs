@@ -1,7 +1,7 @@
 use std::sync::{Arc, Condvar, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use chrono::Utc;
 #[allow(unused_imports)]
@@ -10,7 +10,7 @@ use num_cpus;
 
 use crate::{Block, Bytes, Context, Keystore};
 use crate::commons::{CHAIN_VERSION, LOCKER_DIFFICULTY, KEYSTORE_DIFFICULTY};
-use crate::blockchain::enums::BlockQuality;
+use crate::blockchain::types::BlockQuality;
 use crate::blockchain::hash_utils::*;
 use crate::keys::check_public_key_strength;
 use crate::event::Event;
@@ -148,7 +148,7 @@ impl Miner {
             _ => threads
         };
         debug!("Starting {} threads for mining", threads);
-        for _cpu in 0..threads {
+        for cpu in 0..threads {
             let context = Arc::clone(&context);
             let job = job.clone();
             let mining = Arc::clone(&mining);
@@ -156,7 +156,7 @@ impl Miner {
             thread::spawn(move || {
                 live_threads.fetch_add(1, Ordering::SeqCst);
                 let full = job.block.transaction.is_some();
-                match find_hash(Arc::clone(&context), job.block, Arc::clone(&mining)) {
+                match find_hash(Arc::clone(&context), job.block, Arc::clone(&mining), cpu) {
                     None => {
                         debug!("Mining was cancelled");
                         let count = live_threads.fetch_sub(1, Ordering::SeqCst);
@@ -199,12 +199,14 @@ pub struct MineJob {
     keystore: Keystore
 }
 
-fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<AtomicBool>) -> Option<Block> {
-    let difficulty = block.difficulty as usize;
+fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<AtomicBool>, thread: usize) -> Option<Block> {
+    let difficulty = block.difficulty;
     let full = block.transaction.is_some();
     let mut digest = Blakeout::new();
+    let mut max_diff = 0;
     loop {
         block.random = rand::random();
+        block.timestamp = Utc::now().timestamp();
         let next_allowed_block = {
             let context = context.lock().unwrap();
             // We use this block to fill some fields of our block as well
@@ -221,24 +223,43 @@ fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<Atomic
             continue;
         }
         debug!("Mining block {}", serde_json::to_string(&block).unwrap());
+        let mut time = Instant::now();
+        let mut prev_nonce = 0;
         for nonce in 0..std::u64::MAX {
             if !running.load(Ordering::Relaxed) {
                 return None;
             }
-            block.timestamp = Utc::now().timestamp();
             block.nonce = nonce;
 
             digest.reset();
             digest.update(&block.as_bytes());
-            if hash_is_good(digest.result(), difficulty) {
+            let diff = hash_difficulty(digest.result());
+            if diff >= difficulty {
                 block.hash = Bytes::from_bytes(digest.result());
                 return Some(block);
             }
+            if diff > max_diff {
+                max_diff = diff;
+            }
 
-            if nonce % 1000 == 0 {
-                if let Ok(context) = context.lock() {
-                    if context.chain.height() >= block.index {
-                        break;
+            let elapsed = time.elapsed().as_millis();
+            if elapsed >= 1000 {
+                block.timestamp = Utc::now().timestamp();
+                if elapsed > 5000 {
+                    let speed = (nonce - prev_nonce) / (elapsed as u64 / 1000);
+                    //debug!("Mining speed {} H/s, max difficulty {}", speed, max_diff);
+                    if let Ok(mut context) = context.lock() {
+                        context.bus.post(Event::MinerStats { thread, speed, max_diff})
+                    }
+                    time = Instant::now();
+                    prev_nonce = nonce;
+                }
+
+                if block.index > 1 {
+                    if let Ok(context) = context.lock() {
+                        if context.chain.height() >= block.index {
+                            break;
+                        }
                     }
                 }
             }

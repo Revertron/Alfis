@@ -1,12 +1,11 @@
 extern crate serde;
 extern crate serde_json;
-extern crate num_bigint;
-extern crate num_traits;
 
 use std::fmt::Debug;
 use serde::{Serialize, Deserialize};
 use crate::bytes::Bytes;
 use crate::Transaction;
+use crate::blockchain::hash_utils::hash_difficulty;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Block {
@@ -67,5 +66,17 @@ impl Block {
 
     pub fn as_bytes(&self) -> Vec<u8> {
         Vec::from(serde_json::to_string(&self).unwrap().as_bytes())
+    }
+
+    pub fn is_better_than(&self, other: &Block) -> bool {
+        if self.transaction.is_none() && other.transaction.is_some() {
+            return false;
+        }
+        if hash_difficulty(self.hash.as_slice()) < hash_difficulty(other.hash.as_slice()) {
+            return false;
+        }
+        // TODO add more checks
+
+        true
     }
 }

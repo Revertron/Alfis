@@ -9,20 +9,21 @@ use rand::random;
 use rand::seq::IteratorRandom;
 #[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
-use crate::{Bytes, is_yggdrasil};
+use crate::{Bytes, is_yggdrasil, commons};
 use crate::commons::MAX_RECONNECTS;
 
 pub struct Peers {
     peers: HashMap<Token, Peer>,
     new_peers: Vec<SocketAddr>,
-    ignored: HashSet<IpAddr>
+    ignored: HashSet<IpAddr>,
+    my_id: String
 }
 
 const PING_PERIOD: u64 = 60;
 
 impl Peers {
     pub fn new() -> Self {
-        Peers { peers: HashMap::new(), new_peers: Vec::new(), ignored: HashSet::new() }
+        Peers { peers: HashMap::new(), new_peers: Vec::new(), ignored: HashSet::new(), my_id: commons::random_string(6) }
     }
 
     pub fn add_peer(&mut self, token: Token, peer: Peer) {
@@ -133,13 +134,12 @@ impl Peers {
         }
     }
 
+    pub fn get_my_id(&self) -> &str {
+        &self.my_id
+    }
+
     pub fn is_our_own_connect(&self, rand: &str) -> bool {
-        match self.peers.values().find(|p| p.get_rand() == rand) {
-            None => { false }
-            Some(p) => {
-                !p.is_inbound()
-            }
-        }
+        self.my_id.eq(rand)
     }
 
     pub fn get_peers_for_exchange(&self, peer_address: &SocketAddr) -> Vec<String> {

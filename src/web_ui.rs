@@ -8,22 +8,23 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use web_view::Content;
+use chrono::{DateTime, Local};
 #[allow(unused_imports)]
 use log::{debug, error, info, LevelFilter, trace, warn};
 use serde::Deserialize;
+use web_view::Content;
 
-use alfis::{Block, Bytes, Context, Keystore, Transaction, get_domain_zone};
-use alfis::miner::Miner;
-use alfis::{keys, check_domain};
-use alfis::event::Event;
-use alfis::dns::protocol::DnsRecord;
-use alfis::commons::{ZONE_MAX_LENGTH, ZONE_DIFFICULTY};
-use Cmd::*;
+use alfis::{Block, Bytes, Context, get_domain_zone, Keystore, Transaction, ZONE_MIN_DIFFICULTY};
+use alfis::{check_domain, keys};
 use alfis::blockchain::transaction::{DomainData, ZoneData};
-use self::web_view::{WebView, Handle};
-use alfis::blockchain::enums::MineResult;
-use chrono::{DateTime, Local};
+use alfis::blockchain::types::MineResult;
+use alfis::commons::{ZONE_DIFFICULTY, ZONE_MAX_LENGTH, CLASS_DOMAIN, CLASS_ZONE};
+use alfis::dns::protocol::DnsRecord;
+use alfis::event::Event;
+use alfis::miner::Miner;
+use Cmd::*;
+
+use self::web_view::{Handle, WebView};
 
 pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let file_content = include_str!("webview/index.html");
@@ -51,12 +52,14 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                 SaveKey => { action_save_key(&context); }
                 CheckRecord { data } => { action_check_record(web_view, data); }
                 CheckDomain { name } => { action_check_domain(&context, web_view, name); }
-                MineDomain { name, records } => {
-                    action_create_domain(Arc::clone(&context), Arc::clone(&miner), web_view, name, &records);
+                MineDomain { name, data } => {
+                    action_create_domain(Arc::clone(&context), Arc::clone(&miner), web_view, name, data);
                 }
                 TransferDomain { .. } => {}
                 CheckZone { name } => { action_check_zone(&context, web_view, name); }
-                MineZone { name, data } => { action_create_zone(Arc::clone(&context), Arc::clone(&miner), web_view, name, data); }
+                MineZone { name, data } => {
+                    action_create_zone(Arc::clone(&context), Arc::clone(&miner), web_view, name, data);
+                }
                 StopMining => { context.lock().unwrap().bus.post(Event::ActionStopMining); }
                 Open { link } => {
                     if open::that(&link).is_err() {
@@ -165,7 +168,7 @@ fn action_load_key(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                 None => {
                     error!("Error loading keystore '{}'!", &file_name);
                     show_warning(web_view, "Error loading key!<br>Key cannot be loaded or its difficulty is not enough.");
-                    event_fail(web_view, &format!("Error loading key from '{}'!", &file_name));
+                    event_fail(web_view, &format!("Error loading key from \\'{}\\'!", &file_name));
                 }
                 Some(keystore) => {
                     info!("Loaded keystore with key: {:?}", &keystore.get_public());
@@ -184,7 +187,12 @@ fn action_load_key(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
 fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
     web_view.eval("showMiningIndicator(false, false);").expect("Error evaluating!");
     let handle: Handle<()> = web_view.handle();
-    let status = Arc::new(Mutex::new(Status::new()));
+    let threads = context.lock().unwrap().settings.mining.threads;
+    let threads = match threads {
+        0 => num_cpus::get(),
+        _ => threads
+    };
+    let status = Arc::new(Mutex::new(Status::new(threads)));
     let context_copy = Arc::clone(&context);
     let mut c = context.lock().unwrap();
     c.bus.register(move |_uuid, e| {
@@ -199,7 +207,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                 Event::KeyCreated { path, public, hash } => {
                     event_handle_luck(&handle, "Key successfully created! Don\\'t forget to save it!");
                     let mut s = format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash);
-                    s.push_str(" showSuccess('You've got a new key! Don't forget to save it!')");
+                    s.push_str(" showSuccess('You\\'ve got a new key! Don\\'t forget to save it!')");
                     s
                 }
                 Event::KeyLoaded { path, public, hash } |
@@ -211,7 +219,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                     event_handle_info(&handle, "Mining started");
                     String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
                 }
-                Event::MinerStopped {success, full} => {
+                Event::MinerStopped { success, full} => {
                     status.mining = false;
                     let mut s = if status.syncing {
                         String::from("setLeftStatusBarText('Syncing...'); showMiningIndicator(true, true);")
@@ -231,6 +239,17 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                         }
                     }
                     s
+                }
+                Event::MinerStats { thread, speed, max_diff } => {
+                    if status.max_diff < max_diff {
+                        status.max_diff = max_diff;
+                    }
+                    status.set_thread_speed(thread, speed);
+                    if thread == threads - 1 {
+                        format!("setLeftStatusBarText('Mining speed {} H/s, max found difficulty {}.'); showMiningIndicator(true, false);", status.get_speed(), status.max_diff)
+                    } else {
+                        String::new()
+                    }
                 }
                 Event::KeyGeneratorStopped => {
                     status.mining = false;
@@ -300,8 +319,8 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
     event_info(web_view, "Application loaded");
 }
 
-fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, web_view: &mut WebView<()>, name: String, records: &String) {
-    debug!("Creating domain with records: {}", records);
+fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, web_view: &mut WebView<()>, name: String, data: String) {
+    debug!("Creating domain with data: {}", &data);
     let c = Arc::clone(&context);
     let context = context.lock().unwrap();
     if context.get_keystore().is_none() {
@@ -310,18 +329,25 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
     }
     let keystore = context.get_keystore().unwrap();
     let pub_key = keystore.get_public();
-    match context.chain.can_mine_domain(&name, &records, &pub_key) {
+    let mut data = match serde_json::from_str::<DomainData>(&data) {
+        Ok(data) => { data }
+        Err(_) => {
+            show_warning(web_view, "Something wrong with domain data. I cannot mine it.");
+            return;
+        }
+    };
+    match context.chain.can_mine_domain(&name, &pub_key) {
         MineResult::Fine => {
             let zone = get_domain_zone(&name);
             let difficulty = context.chain.get_zone_difficulty(&zone);
-            if let Ok(records) = serde_json::from_str::<Vec<DnsRecord>>(&records) {
-                let data = DomainData::new(zone.clone(), records);
-                let data = serde_json::to_string(&data).unwrap();
-                std::mem::drop(context);
-                create_domain(c, miner, &name, &data, difficulty, &keystore);
-                let _ = web_view.eval("domainMiningStarted();");
-                event_info(web_view, &format!("Mining of domain \\'{}\\' has started", &name));
-            }
+            let last_block = context.chain.last_block().unwrap();
+            let encrypted = keystore.encrypt(name.as_bytes(), &last_block.hash.as_slice()[..12]);
+            data.domain = encrypted;
+            let data = serde_json::to_string(&data).unwrap();
+            std::mem::drop(context);
+            create_domain(c, miner, CLASS_DOMAIN, &name, &data, difficulty, &keystore);
+            let _ = web_view.eval("domainMiningStarted();");
+            event_info(web_view, &format!("Mining of domain \\'{}\\' has started", &name));
         }
         MineResult::WrongName => { show_warning(web_view, "You can't mine this domain!"); }
         MineResult::WrongData => { show_warning(web_view, "You have an error in records!"); }
@@ -343,24 +369,45 @@ fn action_create_zone(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, we
         return;
     }
     let data = data.to_lowercase();
-    if serde_json::from_str::<ZoneData>(&data).is_err() {
-        warn!("Something wrong with zone data!");
-        show_warning(web_view, "Something wrong with zone data!");
-        return;
-    }
+    let mut data = match serde_json::from_str::<ZoneData>(&data) {
+        Ok(zone) => {
+            if zone.difficulty < ZONE_MIN_DIFFICULTY {
+                warn!("Zone difficulty cannot be lower than {}!", ZONE_MIN_DIFFICULTY);
+                show_warning(web_view, &format!("Zone difficulty cannot be lower than {}!", ZONE_MIN_DIFFICULTY));
+                return;
+            }
+            if name != zone.name {
+                warn!("Something wrong with zone data!");
+                show_warning(web_view, "Something wrong with zone data!");
+                return;
+            }
+            zone
+        }
+        Err(_) => {
+            warn!("Something wrong with zone data!");
+            show_warning(web_view, "Something wrong with zone data!");
+            return;
+        }
+    };
     let (keystore, transaction) = {
         let context = context.lock().unwrap();
         (context.get_keystore(), context.chain.get_domain_transaction(&name))
     };
     if let Some(keystore) = keystore {
+        data.owners = if data.owners.is_empty() {
+            vec!(keystore.get_public())
+        } else {
+            data.owners
+        };
+        let data = serde_json::to_string(&data).unwrap();
         match transaction {
             None => {
-                create_domain(Arc::clone(&context), miner.clone(), &name, &data, ZONE_DIFFICULTY, &keystore);
+                create_domain(Arc::clone(&context), miner.clone(), CLASS_ZONE, &name, &data, ZONE_DIFFICULTY, &keystore);
                 event_info(web_view, &format!("Mining of zone \\'{}\\' has started", &name));
             }
             Some(transaction) => {
                 if transaction.pub_key == keystore.get_public() {
-                    create_domain(Arc::clone(&context), miner.clone(), &name, &data, ZONE_DIFFICULTY, &keystore);
+                    create_domain(Arc::clone(&context), miner.clone(), CLASS_ZONE, &name, &data, ZONE_DIFFICULTY, &keystore);
                     event_info(web_view, &format!("Mining of zone \\'{}\\' has started", &name));
                 } else {
                     warn!("Tried to mine not owned domain!");
@@ -448,14 +495,14 @@ fn format_event_now(kind: &str, message: &str) -> String {
     format!("addEvent('{}', '{}', '{}');", kind, time.format("%d.%m.%y %X"), message)
 }
 
-fn create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, name: &str, data: &str, difficulty: u32, keystore: &Keystore) {
+fn create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, class: &str, name: &str, data: &str, difficulty: u32, keystore: &Keystore) {
     let name = name.to_owned();
     info!("Generating domain or zone {}", &name);
     if context.lock().unwrap().x_zones.has_zone(&name) {
         error!("Unable to mine IANA/OpenNIC/etc zone {}!", &name);
         return;
     }
-    let transaction = Transaction::from_str(name, "dns".to_owned(), data.to_owned(), keystore.get_public().clone());
+    let transaction = Transaction::from_str(name, class.to_owned(), data.to_owned(), keystore.get_public().clone());
     let block = Block::new(Some(transaction), keystore.get_public(), Bytes::default(), difficulty);
     miner.lock().unwrap().add_block(block, keystore.clone());
 }
@@ -471,7 +518,7 @@ pub enum Cmd {
     MineZone { name: String, data: String },
     CheckRecord { data: String },
     CheckDomain { name: String },
-    MineDomain { name: String, records: String },
+    MineDomain { name: String, data: String },
     TransferDomain { name: String, owner: String },
     StopMining,
     Open { link: String },
@@ -483,12 +530,24 @@ struct Status {
     pub synced_blocks: u64,
     pub sync_height: u64,
     pub nodes_connected: usize,
-    pub chain_height: u64
+    pub chain_height: u64,
+    pub max_diff: u32,
+    pub speed: Vec<u64>
 }
 
 impl Status {
-    fn new() -> Self {
-        Status { mining: false, syncing: false, synced_blocks: 0, sync_height: 0, nodes_connected: 0, chain_height: 0 }
+    fn new(threads: usize) -> Self {
+        let mut speed = Vec::with_capacity(threads);
+        speed.resize(threads, 0u64);
+        Status { mining: false, syncing: false, synced_blocks: 0, sync_height: 0, nodes_connected: 0, chain_height: 0, max_diff: 0, speed }
+    }
+
+    fn set_thread_speed(&mut self, thread: usize, speed: u64) {
+        self.speed[thread] = speed;
+    }
+
+    fn get_speed(&self) -> u64 {
+        self.speed.iter().sum()
     }
 }
 

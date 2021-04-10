@@ -7,5 +7,5 @@ pub mod block;
 pub mod chain;
 pub mod filter;
 pub mod hash_utils;
-pub mod enums;
+pub mod types;
 

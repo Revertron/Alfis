@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{Read,};
+use std::io::Read;
 
 use serde::{Deserialize, Serialize};
 #[allow(unused_imports)]
