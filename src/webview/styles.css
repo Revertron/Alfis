@@ -30,6 +30,7 @@ body {
   margin-left: 10pt;
   margin-right: 10pt;
   overflow-y: auto;
+  padding: 0.2rem;
 }
 
 .main .row.status {
