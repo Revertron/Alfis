@@ -16,7 +16,7 @@ use ed25519_dalek::Keypair;
 use log::{debug, error, info, trace, warn};
 
 use crate::blockchain::hash_utils::*;
-use crate::Context;
+use crate::{Context, setup_miner_thread};
 use crate::event::Event;
 use crate::commons::KEYSTORE_DIFFICULTY;
 use crate::bytes::Bytes;
@@ -172,18 +172,22 @@ pub fn check_public_key_strength(key: &Bytes, strength: u32) -> bool {
 pub fn create_key(context: Arc<Mutex<Context>>) {
     let mining = Arc::new(AtomicBool::new(true));
     let miners_count = Arc::new(AtomicUsize::new(0));
-    { context.lock().unwrap().bus.post(Event::KeyGeneratorStarted); }
+    context.lock().unwrap().bus.post(Event::KeyGeneratorStarted);
+    let lower = context.lock().unwrap().settings.mining.lower;
     let threads = context.lock().unwrap().settings.mining.threads;
     let threads = match threads {
         0 => num_cpus::get(),
         _ => threads
     };
-    for _cpu in 0..threads {
+    for cpu in 0..threads {
         let context = Arc::clone(&context);
         let mining = mining.clone();
         let miners_count = miners_count.clone();
         thread::spawn(move || {
             miners_count.fetch_add(1, atomic::Ordering::SeqCst);
+            if lower {
+                setup_miner_thread(cpu as u32);
+            }
             match generate_key(KEYSTORE_DIFFICULTY, mining.clone()) {
                 None => {
                     debug!("Keystore mining finished");

@@ -65,7 +65,7 @@ impl Chain {
     /// Reads options from DB or initializes and writes them to DB if not found
     fn init_db(&mut self) {
         let options = self.get_options();
-        if !self.origin.is_zero() && !self.origin.is_zero() && self.origin.to_string() != options.origin {
+        if !self.origin.is_zero() && !options.origin.is_empty() && self.origin.to_string() != options.origin {
             self.clear_db();
         }
         if options.version < DB_VERSION {

@@ -1,5 +1,5 @@
 # The hash of first block in a chain to know with which nodes to work
-origin = "00000102C2F9BFD2803284D93327F089D60FC72A06F19AF2384567F2646B8348"
+origin = "0AE588D62D710422A7972EA1E8A659CC8E93DB59489ACE32C499CD279B000000"
 # A path to your key file to load autamatically
 key_file = "default.key"
 
@@ -32,3 +32,5 @@ forwarders = ["94.140.14.14:53", "94.140.15.15:53"]
 [mining]
 # How many CPU threads to spawn for mining, zero = number of CPU cores
 threads = 0
+# Set lower priority for mining threads
+lower = true

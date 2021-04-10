@@ -8,7 +8,7 @@ use chrono::Utc;
 use log::{debug, error, info, trace, warn};
 use num_cpus;
 
-use crate::{Block, Bytes, Context, Keystore};
+use crate::{Block, Bytes, Context, Keystore, setup_miner_thread};
 use crate::commons::{CHAIN_VERSION, LOCKER_DIFFICULTY, KEYSTORE_DIFFICULTY};
 use crate::blockchain::types::BlockQuality;
 use crate::blockchain::hash_utils::*;
@@ -141,6 +141,7 @@ impl Miner {
         context.lock().unwrap().bus.post(Event::MinerStarted);
         let thread_spawn_interval = Duration::from_millis(10);
         let live_threads = Arc::new(AtomicU32::new(0u32));
+        let lower = context.lock().unwrap().settings.mining.lower;
         let cpus = num_cpus::get();
         let threads = context.lock().unwrap().settings.mining.threads;
         let threads = match threads {
@@ -155,6 +156,9 @@ impl Miner {
             let live_threads = Arc::clone(&live_threads);
             thread::spawn(move || {
                 live_threads.fetch_add(1, Ordering::SeqCst);
+                if lower {
+                    setup_miner_thread(cpu as u32);
+                }
                 let full = job.block.transaction.is_some();
                 match find_hash(Arc::clone(&context), job.block, Arc::clone(&mining), cpu) {
                     None => {

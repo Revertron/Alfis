@@ -84,7 +84,9 @@ impl Default for Dns {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Mining {
     #[serde(default)]
-    pub threads: usize
+    pub threads: usize,
+    #[serde(default)]
+    pub lower: bool
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
