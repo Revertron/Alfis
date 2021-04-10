@@ -253,7 +253,7 @@ fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<Atomic
                     let speed = (nonce - prev_nonce) / (elapsed as u64 / 1000);
                     //debug!("Mining speed {} H/s, max difficulty {}", speed, max_diff);
                     if let Ok(mut context) = context.lock() {
-                        context.bus.post(Event::MinerStats { thread, speed, max_diff})
+                        context.bus.post(Event::MinerStats { thread, speed, max_diff, aim_diff: difficulty })
                     }
                     time = Instant::now();
                     prev_nonce = nonce;

@@ -240,13 +240,13 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                     }
                     s
                 }
-                Event::MinerStats { thread, speed, max_diff } => {
+                Event::MinerStats { thread, speed, max_diff, aim_diff } => {
                     if status.max_diff < max_diff {
                         status.max_diff = max_diff;
                     }
                     status.set_thread_speed(thread, speed);
                     if thread == threads - 1 {
-                        format!("setLeftStatusBarText('Mining speed {} H/s, max found difficulty {}.'); showMiningIndicator(true, false);", status.get_speed(), status.max_diff)
+                        format!("setLeftStatusBarText('Mining speed {} H/s, max found difficulty {}/{}.'); showMiningIndicator(true, false);", status.get_speed(), status.max_diff, aim_diff)
                     } else {
                         String::new()
                     }
