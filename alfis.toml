@@ -1,6 +1,6 @@
 # The hash of first block in a chain to know with which nodes to work
 origin = "0AE588D62D710422A7972EA1E8A659CC8E93DB59489ACE32C499CD279B000000"
-# A path to your key file to load autamatically
+# A path to your key file to load automatically
 key_file = "default.key"
 
 # Network settings
