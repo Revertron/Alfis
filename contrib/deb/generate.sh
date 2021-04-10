@@ -10,7 +10,7 @@ then
   exit 1
 fi
 
-PKGBRANCH=$(basename `git name-rev --name-only HEAD`)
+#PKGBRANCH=$(basename `git name-rev --name-only HEAD`)
 PKGNAME=$(sh contrib/semver/name.sh)
 PKGVERSION=$(sh contrib/semver/version.sh --bare)
 PKGARCH=${PKGARCH-amd64}
@@ -23,7 +23,7 @@ PKGREPLACES=alfis
 
 # Building nogui versions only
 if [ $PKGARCH = "amd64" ]; then cargo build --release --no-default-features --target x86_64-unknown-linux-musl && cp target/x86_64-unknown-linux-musl/release/alfis ./alfis
-elif [ $PKGARCH = "i686" ]; then cross build --target i686-unknown-linux-musl --release --no-default-features && cp target/i686-unknown-linux-musl/release/alfis ./alfis
+elif [ $PKGARCH = "i686" ]; then cross build --release --no-default-features --target i686-unknown-linux-musl && cp target/i686-unknown-linux-musl/release/alfis ./alfis
 elif [ $PKGARCH = "mipsel" ]; then cross build --release --no-default-features --target mipsel-unknown-linux-musl && cp target/mipsel-unknown-linux-musl/release/alfis ./alfis
 elif [ $PKGARCH = "mips" ]; then cross build --release --no-default-features --target mips-unknown-linux-musl && cp target/mips-unknown-linux-musl/release/alfis ./alfis
 elif [ $PKGARCH = "armhf" ]; then cross build --release --no-default-features --target armv7-unknown-linux-musleabihf && cp target/armv7-unknown-linux-musleabihf/release/alfis ./alfis
@@ -52,12 +52,12 @@ Priority: extra
 Architecture: $PKGARCH
 Replaces: $PKGREPLACES
 Conflicts: $PKGREPLACES
-Maintainer: Revertron <revertron@users.noreply.github.com>
+Maintainer: Revertron <r@revertron.com>
 Description: ALFIS
  ALFIS (ALternative Free Identity System) is an implementation of a Domain Name System
  based on a small, slowly growing blockchain. It is lightweight, self-contained,
- supported on multiple platforms. It contains DNS-resolver on its own to resolve domain records
- contained in blockchain and forward DNS requests of ordinary (IANA) domain zones to upstream forwarders.
+ supported on multiple platforms and contains DNS-resolver on its own to resolve domain records
+ contained in blockchain and forward DNS requests of ordinary domain zones to upstream forwarders.
 EOF
 cat > /tmp/$PKGNAME/debian/copyright << EOF
 Please see https://github.com/Revertron/Alfis/
