@@ -58,7 +58,8 @@ pub fn same_hash(left: &[u8], right: &[u8]) -> bool {
     result
 }
 
-/// Returns hash difficulty
+/// Returns hash difficulty (sum of zeroes from start and end)
+#[inline]
 pub fn hash_difficulty(hash: &[u8]) -> u32 {
     let bytes: [u8; 8] = hash[..8].try_into().unwrap();
     let int_start = u64::from_be_bytes(bytes);
@@ -67,12 +68,16 @@ pub fn hash_difficulty(hash: &[u8]) -> u32 {
     int_start.leading_zeros() + int_end.trailing_zeros()
 }
 
+/// Returns hash difficulty for keys (only from the start)
+#[inline]
 pub fn hash_difficulty_key(hash: &[u8]) -> u32 {
     let bytes: [u8; 8] = hash[..8].try_into().unwrap();
     let int = u64::from_be_bytes(bytes);
     int.leading_zeros()
 }
 
+/// Hashes data by Sha256 algorithm
+#[inline]
 pub fn hash_sha256(data: &[u8]) -> Vec<u8> {
     let mut digest = Sha256::default();
     digest.update(data.as_ref());

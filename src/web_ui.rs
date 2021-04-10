@@ -14,7 +14,7 @@ use log::{debug, error, info, LevelFilter, trace, warn};
 use serde::Deserialize;
 use web_view::Content;
 
-use alfis::{Block, Bytes, Context, get_domain_zone, Keystore, Transaction, ZONE_MIN_DIFFICULTY};
+use alfis::{Block, Bytes, Context, get_domain_zone, Keystore, Transaction, ZONE_MIN_DIFFICULTY, is_yggdrasil_record};
 use alfis::{check_domain, keys};
 use alfis::blockchain::transaction::{DomainData, ZoneData};
 use alfis::blockchain::types::MineResult;
@@ -336,6 +336,20 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
             return;
         }
     };
+    // Check if yggdrasil only quality of zone is not violated
+    let zones = context.chain.get_zones();
+    for z in &zones {
+        if z.name == data.zone {
+            if z.yggdrasil {
+                for record in &data.records {
+                    if !is_yggdrasil_record(record) {
+                        show_warning(web_view, &format!("Zone {} is Yggdrasil only, you cannot use IPs from clearnet!", &data.zone));
+                        return;
+                    }
+                }
+            }
+        }
+    }
     match context.chain.can_mine_domain(&name, &pub_key) {
         MineResult::Fine => {
             let zone = get_domain_zone(&name);

@@ -7,6 +7,7 @@ use std::net::IpAddr;
 
 #[cfg(not(target_os = "macos"))]
 use thread_priority::*;
+use crate::dns::protocol::DnsRecord;
 
 /// Convert bytes array to HEX format
 pub fn to_hex(buf: &[u8]) -> String {
@@ -92,6 +93,24 @@ pub fn is_yggdrasil(addr: &IpAddr) -> bool {
         return first_byte == 2 || first_byte == 3;
     }
     false
+}
+
+/// Checks if this record has IP from Yggdrasil network
+/// https://yggdrasil-network.github.io
+pub fn is_yggdrasil_record(record: &DnsRecord) -> bool {
+    match record {
+        DnsRecord::UNKNOWN { .. } => {}
+        DnsRecord::A { .. } => { return false }
+        DnsRecord::NS { .. } => {}
+        DnsRecord::CNAME { .. } => {}
+        DnsRecord::SOA { .. } => {}
+        DnsRecord::MX { .. } => {}
+        DnsRecord::TXT { .. } => {}
+        DnsRecord::AAAA { addr, .. } => { return is_yggdrasil(&IpAddr::from(*addr))}
+        DnsRecord::SRV { .. } => {}
+        DnsRecord::OPT { .. } => {}
+    }
+    true
 }
 
 #[cfg(target_os = "windows")]

@@ -53,6 +53,16 @@ impl Transaction {
         let confirmation = hash_identity(&domain, Some(&self.pub_key));
         self.identity.eq(&hash) && self.confirmation.eq(&confirmation)
     }
+
+    /// Returns [DomainData] from this transaction if it has it
+    pub fn get_domain_data(&self) -> Option<DomainData> {
+        if self.class == "domain" {
+            if let Ok(data) = serde_json::from_str::<DomainData>(&self.data) {
+                return Some(data)
+            }
+        }
+        None
+    }
 }
 
 impl fmt::Debug for Transaction {

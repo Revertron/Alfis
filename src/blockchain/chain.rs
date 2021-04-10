@@ -8,7 +8,7 @@ use chrono::Utc;
 use log::{debug, error, info, trace, warn};
 use sqlite::{Connection, State, Statement};
 
-use crate::{Block, Bytes, Keystore, Transaction, check_domain, get_domain_zone};
+use crate::{Block, Bytes, Keystore, Transaction, check_domain, get_domain_zone, is_yggdrasil_record};
 use crate::commons::constants::*;
 use crate::blockchain::types::{BlockQuality, MineResult, Options};
 use crate::blockchain::types::BlockQuality::*;
@@ -558,7 +558,7 @@ impl Chain {
         }
         if let Some(transaction) = &block.transaction {
             // TODO check for zone transaction
-            if !self.is_id_available(&transaction.identity, &block.pub_key, false) {
+            if !self.is_id_available(&transaction.identity, &block.pub_key, false) || !self.is_id_available(&transaction.identity, &block.pub_key, true) {
                 warn!("Block {:?} is trying to spoof an identity!", &block);
                 return Bad;
             }
@@ -567,6 +567,22 @@ impl Chain {
                 if new_id && last.timestamp + NEW_DOMAINS_INTERVAL > block.timestamp {
                     warn!("Block {:?} is mined too early!", &block);
                     return Bad;
+                }
+            }
+            // Check if yggdrasil only quality of zone is not violated
+            if let Some(block_data) = transaction.get_domain_data() {
+                let zones = self.get_zones();
+                for z in &zones {
+                    if z.name == block_data.zone {
+                        if z.yggdrasil {
+                            for record in &block_data.records {
+                                if !is_yggdrasil_record(record) {
+                                    warn!("Someone mined domain with clearnet records for Yggdrasil only zone!");
+                                    return Bad;
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
