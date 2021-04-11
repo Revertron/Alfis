@@ -27,7 +27,6 @@ const SQL_ADD_BLOCK: &str = "INSERT INTO blocks (id, timestamp, version, difficu
                           prev_block_hash, hash, pub_key, signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
 const SQL_REPLACE_BLOCK: &str = "UPDATE blocks SET timestamp = ?, version = ?, difficulty = ?, random = ?, nonce = ?, 'transaction' = ?,\
                           prev_block_hash = ?, hash = ?, pub_key = ?, signature = ? WHERE id = ?;";
-const SQL_DELETE_FAULTY_BLOCKS: &str = "DELETE FROM blocks WHERE id >= ?;";
 const SQL_GET_LAST_BLOCK: &str = "SELECT * FROM blocks ORDER BY id DESC LIMIT 1;";
 const SQL_ADD_DOMAIN: &str = "INSERT INTO domains (id, timestamp, identity, confirmation, data, pub_key) VALUES (?, ?, ?, ?, ?, ?)";
 const SQL_ADD_ZONE: &str = "INSERT INTO zones (id, timestamp, identity, confirmation, data, pub_key) VALUES (?, ?, ?, ?, ?, ?)";
@@ -84,7 +83,6 @@ impl Chain {
                 self.last_full_block = self.get_last_full_block(None);
             }
         }
-        self.check_chain();
     }
 
     fn load_last_block(&mut self) -> Option<Block> {
@@ -133,30 +131,6 @@ impl Chain {
         let _ = fs::remove_file(&file).is_err();
     }
 
-    fn check_chain(&mut self) {
-        let height = self.height();
-        info!("Local blockchain height is {}", height);
-        for id in (1..=height).rev() {
-            info!("Checking block {}", id);
-            match self.get_block(id) {
-                None => {}
-                Some(block) => {
-                    let faulty_block_hash = "0000133B790B61460D757E1F1F2D04480C8340D28CA73AE5AF27DBBF60548D00";
-                    let bytes = Bytes::from_bytes(&from_hex(faulty_block_hash).unwrap());
-                    if block.hash == bytes {
-                        if block.transaction.is_some() {
-                            let _ = self.delete_transaction(block.index);
-                        }
-
-                        let _ = self.delete_faulty_blocks(id);
-                    }
-                }
-            }
-        }
-        self.last_block = self.load_last_block();
-        info!("Last block after chain check: {:?}", &self.last_block);
-    }
-
     fn get_options(&self) -> Options {
         let mut options = Options::empty();
         if let Ok(mut statement) = self.db.prepare(SQL_GET_OPTIONS) {
@@ -171,13 +145,6 @@ impl Chain {
             }
         }
         options
-    }
-
-    fn delete_faulty_blocks(&mut self, from: u64) -> sqlite::Result<State> {
-        warn!("Removing block with error {}", from);
-        let mut statement = self.db.prepare(SQL_DELETE_FAULTY_BLOCKS)?;
-        statement.bind(1, from as i64)?;
-        statement.next()
     }
 
     pub fn add_block(&mut self, block: Block) {
