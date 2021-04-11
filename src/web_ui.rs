@@ -331,8 +331,9 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
     let pub_key = keystore.get_public();
     let mut data = match serde_json::from_str::<DomainData>(&data) {
         Ok(data) => { data }
-        Err(_) => {
+        Err(e) => {
             show_warning(web_view, "Something wrong with domain data. I cannot mine it.");
+            warn!("Error parsing data: {}", e);
             return;
         }
     };

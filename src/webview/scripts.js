@@ -159,20 +159,26 @@ function recordOkay(okay) {
 
 function createDomain() {
     var new_domain = document.getElementById("new_domain").value.toLowerCase();
-    var new_dom_records = JSON.stringify(recordsBuffer);
     var domain = new_domain + "." + currentZone.name;
     var data = {};
-    data.domain = [];
+    data.domain = "";
     data.zone = currentZone.name;
-    data.records = new_dom_records;
+    data.records = recordsBuffer;
     data.owners = []; // TODO make a dialog to fill them
     data.contacts = []; // TODO make a dialog to fill them
-    external.invoke(JSON.stringify({cmd: 'mineDomain', name: domain, records: new_dom_records}));
+    data = JSON.stringify(data);
+    external.invoke(JSON.stringify({cmd: 'mineDomain', name: domain, data: data}));
 }
 
 function domainMiningStarted() {
-    recordsBuffer = [];
-    refreshRecordsList();
+    //recordsBuffer = [];
+    //refreshRecordsList();
+    document.getElementById("tab_domains").disabled = true;
+    document.getElementById("domain_records").disabled = true;
+    document.getElementById("add_record_button").disabled = true;
+    document.getElementById("new_domain_button").disabled = true;
+    document.getElementById("new_zone_button").disabled = true;
+    document.getElementById("new_key_button").disabled = true;
 }
 
 function createZone() {
@@ -309,6 +315,12 @@ function showMiningIndicator(visible, blue) {
     } else {
         indicator.className = 'busy_indicator is-hidden';
         parent.style.display = 'none';
+        document.getElementById("tab_domains").disabled = false;
+        document.getElementById("domain_records").disabled = false;
+        document.getElementById("add_record_button").disabled = false;
+        document.getElementById("new_domain_button").disabled = false;
+        document.getElementById("new_zone_button").disabled = false;
+        document.getElementById("new_key_button").disabled = false;
     }
 }
 

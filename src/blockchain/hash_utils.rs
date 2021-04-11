@@ -36,7 +36,7 @@ pub fn hash_identity(identity: &str, key: Option<&Bytes>) -> Bytes {
         None => { Bytes::from_bytes(&identity) }
         Some(key) => {
             let mut buf = Vec::new();
-            buf.append(&mut identity.clone());
+            buf.append(&mut base.clone());
             buf.append(&mut key.to_vec());
             Bytes::from_bytes(&hash_sha256(&buf))
         }

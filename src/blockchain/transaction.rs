@@ -89,7 +89,7 @@ impl Serialize for Transaction {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct DomainData {
     pub domain: Bytes,
     pub zone: String,

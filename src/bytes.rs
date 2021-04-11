@@ -144,22 +144,24 @@ impl<'de> Visitor<'de> for BytesVisitor {
     type Value = Bytes;
 
     fn expecting(&self, formatter: &mut Formatter) -> Result<(), Error> {
-        formatter.write_str("32 or 64 bytes")
+        formatter.write_str("bytes in HEX format")
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E> where E: DeError, {
-        if value.len() == 64 || value.len() == 128 {
+        if !value.is_empty() && value.len() % 2 == 0 {
             Ok(Bytes::new(crate::from_hex(value).unwrap()))
+        } else if value.is_empty() {
+            Ok(Bytes::default())
         } else {
-            Err(E::custom("Key must be 32 or 64 bytes!"))
+            Err(E::custom("Expected bytes in HEX format!"))
         }
     }
 
     fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E> where E: DeError, {
-        if value.len() == 32 || value.len() == 64 {
+        if !value.is_empty() {
             Ok(Bytes::from_bytes(value))
         } else {
-            Err(E::custom("Key must be 32 or 64 bytes!"))
+            Ok(Bytes::default())
         }
     }
 }

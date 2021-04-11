@@ -59,7 +59,7 @@ body {
 
 .notification.is-success {
   position: absolute;
-  bottom: 10pt;
+  bottom: 30pt;
   right: 10pt;
 }
 
@@ -81,4 +81,8 @@ path {
 
 .is-danger > span.icon > svg > path {
   fill: #f14668;
+}
+
+.is-danger:hover > span.icon > svg > path {
+  fill: #ffffff;
 }
