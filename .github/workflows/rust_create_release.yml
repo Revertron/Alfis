@@ -64,7 +64,9 @@ jobs:
           cargo install cross
         if: contains(matrix.os, 'ubuntu')
       - name: Build release binaries
-        run: cargo build --release
+        run: |
+          cargo build --release
+          cargo build --release --no-default-features --target-dir nogui
       - name: Build Windows release binaries with Edge
         if: contains(matrix.os, 'windows')
         run: cargo build --release --features "edge" --target-dir edge
