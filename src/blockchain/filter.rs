@@ -49,6 +49,7 @@ impl DnsFilter for BlockchainFilter {
                     packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
                     packet.header.rescode = ResultCode::NXDOMAIN;
                     packet.header.authoritative_answer = true;
+                    BlockchainFilter::add_soa_record(zone, &mut packet);
                     //trace!("Returning packet: {:?}", &packet);
                     return Some(packet);
                 }
@@ -158,17 +159,7 @@ impl DnsFilter for BlockchainFilter {
                     packet.header.authoritative_answer = true;
                     packet.header.rescode = ResultCode::NOERROR;
                     packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
-                    packet.authorities.push(DnsRecord::SOA {
-                        domain: zone,
-                        m_name: String::from(NAME_SERVER),
-                        r_name: String::from(SERVER_ADMIN),
-                        serial: Utc::now().timestamp() as u32,
-                        refresh: 3600,
-                        retry: 300,
-                        expire: 604800,
-                        minimum: 60,
-                        ttl: TransientTtl(600),
-                    });
+                    BlockchainFilter::add_soa_record(zone, &mut packet);
                     //trace!("Returning packet: {:?}", &packet);
                     Some(packet)
                 }
@@ -176,5 +167,21 @@ impl DnsFilter for BlockchainFilter {
         }
 
         None
+    }
+}
+
+impl BlockchainFilter {
+    fn add_soa_record(zone: String, packet: &mut DnsPacket) {
+        packet.authorities.push(DnsRecord::SOA {
+            domain: zone,
+            m_name: String::from(NAME_SERVER),
+            r_name: String::from(SERVER_ADMIN),
+            serial: Utc::now().timestamp() as u32,
+            refresh: 3600,
+            retry: 300,
+            expire: 604800,
+            minimum: 60,
+            ttl: TransientTtl(60),
+        });
     }
 }
