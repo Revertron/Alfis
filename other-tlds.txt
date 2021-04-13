@@ -31,4 +31,5 @@ localhost
 onion
 i2p
 meshname
+meship
 test
