@@ -147,7 +147,11 @@ impl Network {
                     peers_timer = Instant::now();
                 }
             }
-            info!("Network loop finished");
+            if !running.load(Ordering::SeqCst) {
+                info!("Network loop finished");
+            } else {
+                panic!("Network loop has broken prematurely!");
+            }
         });
         Ok(())
     }
@@ -182,9 +186,9 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                 }
                 Some(peer) => {
                     if event.is_read_closed() {
-                        debug!("Spurious wakeup for connection {}, ignoring", token.0);
+                        //debug!("Spurious wakeup for connection {}, ignoring", token.0);
                         if peer.spurious() >= 3 {
-                            debug!("Disconnecting socket on 3 spurious wakeups");
+                            //debug!("Disconnecting socket on 3 spurious wakeups");
                             return false;
                         }
                         let interest = if let State::Message{..} = peer.get_state() {
