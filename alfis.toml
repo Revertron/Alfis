@@ -6,7 +6,7 @@ key_file = "default.key"
 # Network settings
 [net]
 # All bootstap nodes
-peers = ["test-ip4.alfis.name:4244", "test-ip6.alfis.name:4244"]
+peers = ["test-ip4.alfis.name:4244", "test-ip6.alfis.name:4244", "[300:1251::1]:4244"]
 # Your node will listen on that address for other nodes to connect
 listen = "[::]:4244"
 # Set true if you want your IP to participate in peer-exchange, or false otherwise

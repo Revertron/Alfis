@@ -308,7 +308,7 @@ impl DnsClient for DnsNetworkClient {
             Builder::new()
                 .name("DnsNetworkClient-timeout-thread".into())
                 .spawn(move || {
-                    let timeout = Duration::seconds(1);
+                    let timeout = Duration::seconds(3);
                     loop {
                         if let Ok(mut pending_queries) = pending_queries_lock.lock() {
                             let mut finished_queries = Vec::new();
