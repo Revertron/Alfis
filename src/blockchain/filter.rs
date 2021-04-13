@@ -36,14 +36,14 @@ impl DnsFilter for BlockchainFilter {
                 subdomain = String::from(parts[2]);
             }
         }
-        debug!("Searching record type '{:?}', name '{}' for domain '{}'", &qtype, &subdomain, &search);
+        trace!("Searching record type '{:?}', name '{}' for domain '{}'", &qtype, &subdomain, &search);
 
         let data = self.context.lock().unwrap().chain.get_domain_info(&search);
         let zone = parts[0].to_owned();
         match data {
             None => {
-                debug!("Not found data for domain {}", &search);
                 if self.context.lock().unwrap().chain.is_zone_in_blockchain(&zone) {
+                    trace!("Not found data for domain {}", &search);
                     // Create DnsPacket
                     let mut packet = DnsPacket::new();
                     packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
@@ -55,7 +55,7 @@ impl DnsFilter for BlockchainFilter {
                 }
             }
             Some(data) => {
-                debug!("Found data for domain {}", &search);
+                trace!("Found data for domain {}", &search);
                 let mut data: DomainData = match serde_json::from_str(&data) {
                     Err(_) => { return None; }
                     Ok(data) => { data }

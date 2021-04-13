@@ -47,22 +47,22 @@ impl Peers {
                 let _ = registry.deregister(stream);
                 match peer.get_state() {
                     State::Connecting => {
-                        debug!("Peer connection {} to {:?} has timed out", &token.0, &peer.get_addr());
+                        trace!("Peer connection {} to {:?} has timed out", &token.0, &peer.get_addr());
                     }
                     State::Connected => {
-                        debug!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
+                        trace!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
                     }
                     State::Idle { .. } | State::Message { .. } => {
-                        debug!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
+                        trace!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
                     }
                     State::Error => {
-                        debug!("Peer connection {} to {:?} has shut down on error", &token.0, &peer.get_addr());
+                        trace!("Peer connection {} to {:?} has shut down on error", &token.0, &peer.get_addr());
                     }
                     State::Banned => {
-                        debug!("Peer connection {} to {:?} has shut down, banned", &token.0, &peer.get_addr());
+                        trace!("Peer connection {} to {:?} has shut down, banned", &token.0, &peer.get_addr());
                     }
                     State::Offline { .. } => {
-                        debug!("Peer connection {} to {:?} is offline", &token.0, &peer.get_addr());
+                        trace!("Peer connection {} to {:?} is offline", &token.0, &peer.get_addr());
                     }
                 }
 
@@ -84,7 +84,7 @@ impl Peers {
                 peers.insert(peer.to_owned());
                 peers
             });
-        debug!("Got {} peers: {:?}", peers.len(), &peers);
+        //debug!("Got {} peers: {:?}", peers.len(), &peers);
         // TODO make it return error if these peers are wrong and seem like an attack
         for peer in peers.iter() {
             let addr: SocketAddr = match peer.parse() {
@@ -274,7 +274,7 @@ impl Peers {
             if peer.get_state().need_reconnect() {
                 let addr = peer.get_addr();
                 if let Ok(mut stream) = TcpStream::connect(addr.clone()) {
-                    debug!("Trying to connect to peer {}", &addr);
+                    trace!("Trying to connect to peer {}", &addr);
                     registry.register(&mut stream, token.clone(), Interest::WRITABLE).unwrap();
                     peer.set_state(State::Connecting);
                     peer.inc_reconnects();
@@ -320,7 +320,7 @@ impl Peers {
         }
         if let Ok(mut stream) = TcpStream::connect(addr.clone()) {
             let token = next(unique_token);
-            debug!("Created connection {}, to peer {}", &token.0, &addr);
+            trace!("Created connection {}, to peer {}", &token.0, &addr);
             registry.register(&mut stream, token, Interest::WRITABLE).unwrap();
             let mut peer = Peer::new(addr.clone(), stream, State::Connecting, false);
             peer.set_public(true);

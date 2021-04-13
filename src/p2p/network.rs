@@ -72,11 +72,11 @@ impl Network {
 
                 // Process each event.
                 for event in events.iter() {
-                    trace!("Event for socket {} is {:?}", event.token().0, &event);
+                    //trace!("Event for socket {} is {:?}", event.token().0, &event);
                     // We can use the token we previously provided to `register` to determine for which socket the event is.
                     match event.token() {
                         SERVER => {
-                            debug!("Event for server socket {} is {:?}", event.token().0, &event);
+                            //debug!("Event for server socket {} is {:?}", event.token().0, &event);
                             // If this is an event for the server, it means a connection is ready to be accepted.
                             let connection = server.accept();
                             match connection {
@@ -104,7 +104,7 @@ impl Network {
                                         stream.shutdown(Shutdown::Both).unwrap_or_else(|e|{ warn!("Error in shutdown, {}", e); });
                                         warn!("Detected connection loop, ignoring IP: {}", &address.ip());
                                     } else {
-                                        debug!("Accepted connection from: {} to local IP: {}", address, local_ip);
+                                        //debug!("Accepted connection from: {} to local IP: {}", address, local_ip);
                                         let token = next(&mut unique_token);
                                         poll.registry().register(&mut stream, token, Interest::READABLE).expect("Error registering poll");
                                         peers.add_peer(token, Peer::new(address, stream, State::Connected, true));
@@ -208,10 +208,10 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
             let data = data.unwrap();
             match Message::from_bytes(data) {
                 Ok(message) => {
-                    let m = format!("{:?}", &message);
+                    //let m = format!("{:?}", &message);
                     let new_state = handle_message(Arc::clone(&context), message, peers, &event.token());
                     let peer = peers.get_mut_peer(&event.token()).unwrap();
-                    debug!("Got message from {}: {:?}", &peer.get_addr(), &m);
+                    //debug!("Got message from {}: {:?}", &peer.get_addr(), &m);
                     let stream = peer.get_stream();
                     match new_state {
                         State::Message { data } => {
@@ -247,7 +247,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
             Some(peer) => {
                 match peer.get_state().clone() {
                     State::Connecting => {
-                        debug!("Connected to peer {}, sending hello...", &peer.get_addr());
+                        //debug!("Connected to peer {}, sending hello...", &peer.get_addr());
                         let data: String = {
                             let c = context.lock().unwrap();
                             let message = Message::hand(&c.app_version, &c.settings.origin, CHAIN_VERSION, c.settings.net.public, &my_id);
@@ -257,7 +257,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                         //debug!("Sent hello to {}", &peer.get_addr());
                     }
                     State::Message { data } => {
-                        debug!("Sending data to {}: {}", &peer.get_addr(), &String::from_utf8(data.clone()).unwrap());
+                        //debug!("Sending data to {}: {}", &peer.get_addr(), &String::from_utf8(data.clone()).unwrap());
                         send_message(peer.get_stream(), &data).unwrap_or_else(|e| warn!("Error sending message {}", e));
                     }
                     State::Connected => {}
