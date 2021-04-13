@@ -211,8 +211,7 @@ impl DnsClient for DnsNetworkClient {
                             }
                         }
 
-                        // Construct a DnsPacket from buffer, skipping the packet if parsing
-                        // failed
+                        // Construct a DnsPacket from buffer, skipping the packet if parsing failed
                         let packet = match DnsPacket::from_buffer(&mut res_buffer) {
                             Ok(packet) => packet,
                             Err(err) => {
@@ -265,8 +264,7 @@ impl DnsClient for DnsNetworkClient {
                             }
                         }
 
-                        // Construct a DnsPacket from buffer, skipping the packet if parsing
-                        // failed
+                        // Construct a DnsPacket from buffer, skipping the packet if parsing failed
                         let packet = match DnsPacket::from_buffer(&mut res_buffer) {
                             Ok(packet) => packet,
                             Err(err) => {
@@ -308,7 +306,7 @@ impl DnsClient for DnsNetworkClient {
             Builder::new()
                 .name("DnsNetworkClient-timeout-thread".into())
                 .spawn(move || {
-                    let timeout = Duration::seconds(3);
+                    let timeout = Duration::seconds(10);
                     loop {
                         if let Ok(mut pending_queries) = pending_queries_lock.lock() {
                             let mut finished_queries = Vec::new();

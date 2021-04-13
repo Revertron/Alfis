@@ -52,7 +52,7 @@ pub trait DnsResolver {
             }
         }
 
-        for filter in self.get_context().filters.iter() {
+        for filter in context.filters.iter() {
             if let Some(packet) = filter.lookup(qname, qtype) {
                 return Ok(packet);
             }
