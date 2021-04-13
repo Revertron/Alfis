@@ -19,6 +19,7 @@ use std::cmp::{min, max};
 use crate::blockchain::transaction::{ZoneData, DomainData};
 use std::ops::Deref;
 use crate::blockchain::types::MineResult::*;
+use crate::event::Event;
 
 const DB_NAME: &str = "blockchain.db";
 const TEMP_DB_NAME: &str = "temp.db";
@@ -28,6 +29,7 @@ const SQL_ADD_BLOCK: &str = "INSERT INTO blocks (id, timestamp, version, difficu
 const SQL_REPLACE_BLOCK: &str = "UPDATE blocks SET timestamp = ?, version = ?, difficulty = ?, random = ?, nonce = ?, 'transaction' = ?,\
                           prev_block_hash = ?, hash = ?, pub_key = ?, signature = ? WHERE id = ?;";
 const SQL_GET_LAST_BLOCK: &str = "SELECT * FROM blocks ORDER BY id DESC LIMIT 1;";
+const SQL_GET_FIRST_BLOCK_FOR_KEY: &str = "SELECT id FROM blocks WHERE pub_key = ? LIMIT 1;";
 const SQL_ADD_DOMAIN: &str = "INSERT INTO domains (id, timestamp, identity, confirmation, data, pub_key) VALUES (?, ?, ?, ?, ?, ?)";
 const SQL_ADD_ZONE: &str = "INSERT INTO zones (id, timestamp, identity, confirmation, data, pub_key) VALUES (?, ?, ?, ?, ?, ?)";
 const SQL_DELETE_DOMAIN: &str = "DELETE FROM domains WHERE id = ?";
@@ -183,6 +185,51 @@ impl Chain {
             }
         }
         Ok(())
+    }
+
+    pub fn update(&mut self, keystore: &Option<Keystore>) -> Option<Event> {
+        if self.height() < BLOCK_SIGNERS_START {
+            trace!("Too early to start block signings");
+            return None;
+        }
+        if keystore.is_none() {
+            trace!("We can't sign blocks without keys");
+            return None;
+        }
+        if self.height() < self.max_height() {
+            trace!("No signing while syncing");
+            return None;
+        }
+
+        let block = self.last_block().unwrap();
+        if block.transaction.is_none() {
+            trace!("No need to sign signing block");
+            return None;
+        }
+        let keystore = keystore.clone().unwrap().clone();
+        let signers: HashSet<Bytes> = self.get_block_signers(&block).into_iter().collect();
+        if signers.contains(&keystore.get_public()) {
+            info!("We have an honor to mine signing block!");
+            let keystore = Box::new(keystore);
+            // We start mining sign block after some time, not everyone in the same time
+            let start = Utc::now().timestamp() + (rand::random::<i64>() % BLOCK_SIGNERS_START_RANDOM);
+            return Some(Event::ActionMineLocker { start, index: block.index + 1, hash: block.hash, keystore });
+        } else if !signers.is_empty() {
+            info!("Signing block must be mined by other nodes");
+        }
+        None
+    }
+
+    pub fn update_sign_block_for_mining(&self, mut block: Block) -> Option<Block> {
+        if let Some(full_block) = &self.last_full_block {
+            let sign_count = self.height() - full_block.index;
+            if sign_count >= BLOCK_SIGNERS_MIN {
+                return None;
+            }
+            block.index = self.height() + 1;
+            block.prev_block_hash = self.last_block.clone().unwrap().hash;
+        }
+        None
     }
 
     fn delete_transaction(&mut self, index: u64) -> sqlite::Result<()> {
@@ -508,10 +555,10 @@ impl Chain {
         match self.last_full_block {
             None => { self.height() + 1 }
             Some(ref block) => {
-                if block.index < LOCKER_BLOCK_START {
+                if block.index < BLOCK_SIGNERS_START {
                     self.height() + 1
                 } else {
-                    max(block.index, self.height()) + LOCKER_BLOCK_SIGNS
+                    max(block.index, self.height()) + BLOCK_SIGNERS_MIN
                 }
             }
         }
@@ -622,25 +669,10 @@ impl Chain {
                     warn!("Block {} arrived too early.", block.index);
                     return Future;
                 }
-                if block.index >= LOCKER_BLOCK_START {
-                    // If this block is locked part of blockchain
-                    if let Some(full_block) = &self.last_full_block {
-                        let locker_blocks = self.height() - full_block.index;
-                        if locker_blocks < LOCKER_BLOCK_SIGNS {
-                            // Last full block is not locked enough
-                            if block.transaction.is_some() {
-                                warn!("Not enough signing blocks over full {} block!", full_block.index);
-                                return Bad;
-                            } else {
-                                if self.check_block_for_signing(&block, full_block) == Bad {
-                                    return Bad;
-                                }
-                            }
-                        } else if locker_blocks < LOCKER_BLOCK_LOCKERS && block.transaction.is_none() {
-                            if self.check_block_for_signing(&block, full_block) == Bad {
-                                return Bad;
-                            }
-                        }
+                if block.index >= BLOCK_SIGNERS_START {
+                    // If this block is main, signed part of blockchain
+                    if !self.is_good_sign_block(&block) {
+                        return Bad;
                     }
                 }
 
@@ -666,6 +698,79 @@ impl Chain {
         Good
     }
 
+    /// Checks if this block is a good signature block
+    fn is_good_sign_block(&self, block: &Block) -> bool {
+        if let Some(full_block) = &self.last_full_block {
+            let sign_count = self.height() - full_block.index;
+            if sign_count < BLOCK_SIGNERS_MIN {
+                // Last full block is not locked enough
+                if block.transaction.is_some() {
+                    warn!("Not enough signing blocks over full {} block!", full_block.index);
+                    return false;
+                } else {
+                    if !self.is_good_signer_for_block(&block, full_block, sign_count) {
+                        return false;
+                    }
+                }
+            } else if sign_count < BLOCK_SIGNERS_ALL && block.transaction.is_none() {
+                if !self.is_good_signer_for_block(&block, full_block, sign_count) {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    /// Check if this block's owner is a good candidate to sign last full block
+    fn is_good_signer_for_block(&self, block: &Block, full_block: &Block, sign_count: u64) -> bool {
+        // If the time for chosen signers is up
+        if self.can_sign_by_pos(sign_count, full_block.timestamp, block.timestamp, &block.pub_key) {
+            return true;
+        }
+        // If we got a locker/signing block
+        let signers: HashSet<Bytes> = self.get_block_signers(full_block).into_iter().collect();
+        if !signers.contains(&block.pub_key) {
+            warn!("Ignoring block {} from '{:?}', as wrong signer!", block.index, &block.pub_key);
+            return false;
+        }
+        // If this signers' public key has already locked/signed that block we return error
+        for i in (full_block.index + 1)..block.index {
+            let signer = self.get_block(i).expect("Error in DB!");
+            if signer.pub_key == block.pub_key {
+                warn!("Ignoring block {} from '{:?}', already signed by this key", block.index, &block.pub_key);
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Gets an id of first block of this public key
+    fn get_first_block_id_for_key(&self, key: &Bytes) -> u64 {
+        match self.db.prepare(SQL_GET_FIRST_BLOCK_FOR_KEY) {
+            Ok(mut statement) => {
+                statement.bind(1, &***key).expect("Error in bind");
+                while statement.next().unwrap() == State::Row {
+                    return statement.read::<i64>(0).unwrap() as u64;
+                }
+                0
+            }
+            Err(_) => {
+                0
+            }
+        }
+    }
+
+    /// Check if an owner of this public key can sign full block by PoS scheme (be in first 1000 users)
+    fn can_sign_by_pos(&self, sign_count: u64, block_time: i64, now: i64, pub_key: &Bytes) -> bool {
+        if sign_count < BLOCK_SIGNERS_MIN && block_time - now > BLOCK_SIGNERS_TIME {
+            let index = self.get_first_block_id_for_key(&pub_key);
+            if index > 0 && index <= BLOCK_POS_SIGNERS {
+                return true;
+            }
+        }
+        false
+    }
+
     fn get_difficulty_for_transaction(&self, transaction: &Transaction) -> u32 {
         match transaction.class.as_ref() {
             "domain" => {
@@ -689,38 +794,20 @@ impl Chain {
         }
     }
 
-    fn check_block_for_signing(&self, block: &Block, full_block: &Block) -> BlockQuality {
-        // If we got a locker/signing block
-        let signers: HashSet<Bytes> = self.get_block_signers(full_block).into_iter().collect();
-        if !signers.contains(&block.pub_key) {
-            warn!("Ignoring block {} from '{:?}', as wrong signer!", block.index, &block.pub_key);
-            return Bad;
-        }
-        // If this signers' public key has already locked/signed that block we return error
-        for i in (full_block.index + 1)..block.index {
-            let signer = self.get_block(i).expect("Error in DB!");
-            if signer.pub_key == block.pub_key {
-                warn!("Ignoring block {} from '{:?}', already signed by this key", block.index, &block.pub_key);
-                return Bad;
-            }
-        }
-        Good
-    }
-
     /// Gets public keys of a node that needs to mine "signature" block above this block
     /// block - last full block
     pub fn get_block_signers(&self, block: &Block) -> Vec<Bytes> {
         let mut result = Vec::new();
-        if block.index < LOCKER_BLOCK_START {
+        if block.index < BLOCK_SIGNERS_START {
             return result;
         }
         let mut set = HashSet::new();
-        let tail = block.hash.get_tail_u64();
-        let interval = min(block.index, LOCKER_BLOCK_INTERVAL) - 1;
+        let tail = block.signature.get_tail_u64();
+        let interval = min(block.index, BLOCK_SIGNERS_WINDOW) - 1;
         let start_index = block.index - interval;
         let mut count = 1;
-        while set.len() < LOCKER_BLOCK_LOCKERS as usize {
-            let index = start_index + ((tail * count) % LOCKER_BLOCK_INTERVAL);
+        while set.len() < BLOCK_SIGNERS_ALL as usize {
+            let index = start_index + ((tail * count) % BLOCK_SIGNERS_WINDOW);
             if let Some(b) = self.get_block(index) {
                 if b.pub_key != block.pub_key && !set.contains(&b.pub_key) {
                     result.push(b.pub_key.clone());

@@ -14,12 +14,10 @@ use mio::net::{TcpListener, TcpStream};
 use log::{trace, debug, info, warn, error};
 
 use std::net::{SocketAddr, IpAddr, SocketAddrV4, Shutdown};
-use std::collections::HashSet;
-use crate::{Context, Block, p2p::Message, p2p::State, p2p::Peer, p2p::Peers, Bytes, is_yggdrasil};
+use crate::{Context, Block, p2p::Message, p2p::State, p2p::Peer, p2p::Peers, is_yggdrasil};
 use crate::blockchain::types::BlockQuality;
 use crate::commons::CHAIN_VERSION;
 use std::sync::atomic::{AtomicBool, Ordering};
-use chrono::Utc;
 
 const SERVER: Token = Token(0);
 const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(3000));
@@ -144,7 +142,6 @@ impl Network {
                         }
                         (height, context.chain.last_hash())
                     };
-                    mine_signing_block(Arc::clone(&context));
                     peers.send_pings(poll.registry(), height, hash);
                     peers.connect_new_peers(poll.registry(), &mut unique_token, yggdrasil_only);
                     peers_timer = Instant::now();
@@ -461,6 +458,8 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 match context.chain.check_new_block(&block) {
                     BlockQuality::Good => {
                         context.chain.add_block(block);
+                        let keystore = context.keystore.clone();
+                        context.chain.update(&keystore);
                         let my_height = context.chain.height();
                         context.bus.post(crate::event::Event::BlockchainChanged { index: my_height });
                         // If it was the last block to sync
@@ -482,6 +481,10 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                         let last_block = context.chain.last_block().unwrap();
                         if block.is_better_than(&last_block) {
                             context.chain.replace_block(block.index, block).expect("Error replacing block with fork");
+                            let keystore = context.keystore.clone();
+                            context.chain.update(&keystore);
+                            let index = context.chain.height();
+                            context.bus.post(crate::event::Event::BlockchainChanged { index });
                         }
                         //let peer = peers.get_mut_peer(token).unwrap();
                         //deal_with_fork(context, peer, block);
@@ -492,30 +495,6 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
         }
     };
     answer
-}
-
-/// Sends an Event to miner to start mining locker block if "locker" is our public key
-fn mine_signing_block(context: Arc<Mutex<Context>>) {
-    let mut context = context.lock().unwrap();
-    if let Some(block) = context.chain.get_last_full_block(None) {
-        if block.timestamp + 60 > Utc::now().timestamp() {
-            return;
-        }
-        if let Some(keystore) = &context.keystore {
-            if block.index < context.chain.max_height() {
-                trace!("No signing while syncing");
-                return;
-            }
-            let signers: HashSet<Bytes> = context.chain.get_block_signers(&block).into_iter().collect();
-            if signers.contains(&keystore.get_public()) {
-                info!("We have an honor to mine signing block!");
-                let keystore = Box::new(keystore.clone());
-                context.bus.post(crate::event::Event::ActionMineLocker { index: block.index + 1, hash: block.hash, keystore });
-            } else if !signers.is_empty() {
-                info!("Signing block must be mined by other nodes");
-            }
-        }
-    }
 }
 
 #[allow(dead_code)]

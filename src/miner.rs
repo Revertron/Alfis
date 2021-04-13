@@ -37,7 +37,7 @@ impl Miner {
     }
 
     pub fn add_block(&mut self, block: Block, keystore: Keystore) {
-        self.jobs.lock().unwrap().push(MineJob { block, keystore });
+        self.jobs.lock().unwrap().push(MineJob { start: 0, block, keystore });
         self.cond_var.notify_one();
     }
 
@@ -55,21 +55,28 @@ impl Miner {
         let cond_var = self.cond_var.clone();
         thread::spawn(move || {
             running.store(true, Ordering::SeqCst);
+            let delay = Duration::from_millis(1000);
             while running.load(Ordering::SeqCst) {
                 // If some transaction is being mined now, we yield
                 if mining.load(Ordering::SeqCst) {
-                    thread::sleep(Duration::from_millis(1000));
+                    thread::sleep(delay);
                     continue;
                 }
 
-                let mut lock = blocks.lock().unwrap();
-                if lock.len() > 0 {
-                    info!("Got new block to mine");
-                    let block = lock.remove(0);
-                    mining.store(true, Ordering::SeqCst);
-                    Miner::mine_internal(Arc::clone(&context), block, mining.clone());
+                let mut jobs = blocks.lock().unwrap();
+                if jobs.len() > 0 {
+                    debug!("Got new job to mine");
+                    let job = jobs.remove(0);
+                    if job.start == 0 || job.start < Utc::now().timestamp() {
+                        mining.store(true, Ordering::SeqCst);
+                        Miner::mine_internal(Arc::clone(&context), job, mining.clone());
+                    } else {
+                        debug!("This job will wait for now");
+                        thread::sleep(delay);
+                        jobs.push(job);
+                    }
                 } else {
-                    let _ = cond_var.wait(lock).expect("Error in wait lock!");
+                    let _ = cond_var.wait(jobs).expect("Error in wait lock!");
                 }
             }
         });
@@ -83,11 +90,11 @@ impl Miner {
                 Event::ActionStopMining => {
                     mining.store(false, Ordering::SeqCst);
                 }
-                Event::ActionMineLocker { index, hash, keystore } => {
+                Event::ActionMineLocker { start, index, hash, keystore } => {
                     if !mining.load(Ordering::SeqCst) {
                         let mut block = Block::new(None, Bytes::default(), hash, LOCKER_DIFFICULTY);
                         block.index = index;
-                        blocks.lock().unwrap().push(MineJob { block, keystore: keystore.deref().clone() });
+                        blocks.lock().unwrap().push(MineJob { start, block, keystore: keystore.deref().clone() });
                         cond_var.notify_all();
                         info!("Added a locker block to mine");
                     }
@@ -117,17 +124,15 @@ impl Miner {
                 mining.store(false, Ordering::SeqCst);
                 return;
             }
-            match context.lock().unwrap().chain.last_block() {
-                None => {}
-                Some(last_block) => {
-                    debug!("Last block found");
-                    // If we were doing something else and got new block before we could mine this block
-                    if last_block.index > job.block.index || last_block.hash != job.block.prev_block_hash {
-                        warn!("We missed block to lock");
-                        context.lock().unwrap().bus.post(Event::MinerStopped { success: false, full: false });
-                        mining.store(false, Ordering::SeqCst);
-                        return;
-                    }
+            match context.lock().unwrap().chain.update_sign_block_for_mining(job.block) {
+                None => {
+                    warn!("We missed block to lock");
+                    context.lock().unwrap().bus.post(Event::MinerStopped { success: false, full: false });
+                    mining.store(false, Ordering::SeqCst);
+                    return;
+                }
+                Some(block) => {
+                    job.block = block;
                 }
             }
         } else {
@@ -185,6 +190,8 @@ impl Miner {
                                 context.settings.origin = block.hash.to_string();
                             }
                             context.chain.add_block(block);
+                            let option = Some(job.keystore);
+                            context.chain.update(&option);
                             success = true;
                         }
                         context.bus.post(Event::MinerStopped { success, full });
@@ -199,6 +206,7 @@ impl Miner {
 
 #[derive(Clone)]
 pub struct MineJob {
+    start: i64,
     block: Block,
     keystore: Keystore
 }

@@ -13,7 +13,7 @@ pub enum Event {
     NewBlockReceived,
     BlockchainChanged { index: u64 },
     ActionStopMining,
-    ActionMineLocker { index: u64, hash: Bytes, keystore: Box<Keystore> },
+    ActionMineLocker { start: i64, index: u64, hash: Bytes, keystore: Box<Keystore> },
     ActionQuit,
     NetworkStatus { nodes: usize, blocks: u64 },
     Syncing { have: u64, height: u64 },
