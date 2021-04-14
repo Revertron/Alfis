@@ -226,7 +226,7 @@ fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<Atomic
             if let Some(b) = context.chain.last_block() {
                 block.prev_block_hash = b.hash;
             }
-            context.chain.next_allowed_block()
+            context.chain.next_allowed_full_block()
         };
 
         if full && next_allowed_block > block.index {

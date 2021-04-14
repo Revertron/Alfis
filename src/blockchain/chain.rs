@@ -15,7 +15,7 @@ use crate::blockchain::types::BlockQuality::*;
 use crate::blockchain::hash_utils::*;
 use crate::settings::Settings;
 use crate::keys::check_public_key_strength;
-use std::cmp::{min, max};
+use std::cmp::max;
 use crate::blockchain::transaction::{ZoneData, DomainData};
 use std::ops::Deref;
 use crate::blockchain::types::MineResult::*;
@@ -551,14 +551,14 @@ impl Chain {
         }
     }
 
-    pub fn next_allowed_block(&self) -> u64 {
+    pub fn next_allowed_full_block(&self) -> u64 {
         match self.last_full_block {
             None => { self.height() + 1 }
             Some(ref block) => {
                 if block.index < BLOCK_SIGNERS_START {
                     self.height() + 1
                 } else {
-                    max(block.index, self.height()) + BLOCK_SIGNERS_MIN
+                    max(block.index + BLOCK_SIGNERS_MIN, self.height() + 1)
                 }
             }
         }
@@ -803,18 +803,17 @@ impl Chain {
         }
         let mut set = HashSet::new();
         let tail = block.signature.get_tail_u64();
-        let interval = min(block.index, BLOCK_SIGNERS_WINDOW) - 1;
-        let start_index = block.index - interval;
         let mut count = 1;
+        let window = self.height() - 1; // Without the last block
         while set.len() < BLOCK_SIGNERS_ALL as usize {
-            let index = start_index + ((tail * count) % BLOCK_SIGNERS_WINDOW);
+            let index = ((tail * count) % window) + 1; // We want it to start from 1
             if let Some(b) = self.get_block(index) {
                 if b.pub_key != block.pub_key && !set.contains(&b.pub_key) {
                     result.push(b.pub_key.clone());
                     set.insert(b.pub_key);
                 }
-                count += 1;
             }
+            count += 1;
         }
         trace!("Got signers for block {}: {:?}", block.index, &result);
         result

@@ -15,9 +15,6 @@ pub const BLOCK_SIGNERS_ALL: u64 = 7;
 /// Minimal signatures needed
 pub const BLOCK_SIGNERS_MIN: u64 = 4;
 
-/// Last number of blocks from which we select signers
-pub const BLOCK_SIGNERS_WINDOW: u64 = 50;
-
 /// Signers have 30 minutes to sign, after that time any owner of first 1000 block can add needed signature
 pub const BLOCK_SIGNERS_TIME: i64 = 1800;
 
