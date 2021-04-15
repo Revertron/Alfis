@@ -441,7 +441,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             }
         }
         Message::Block { index, block } => {
-            debug!("Received block {}", index);
+            info!("Received block {}", index);
             let block: Block = match serde_json::from_str(&block) {
                 Ok(block) => block,
                 Err(_) => return State::Error
@@ -479,6 +479,9 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                     BlockQuality::Bad => {
                         // TODO save bad public keys to banned table
                         debug!("Ignoring bad block {} with hash {:?}", block.index, block.hash);
+                        let height = context.chain.height();
+                        context.chain.update_max_height(height);
+                        context.bus.post(crate::event::Event::SyncFinished);
                     }
                     BlockQuality::Fork => {
                         debug!("Got forked block {} with hash {:?}", block.index, block.hash);
@@ -490,8 +493,9 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                             let index = context.chain.height();
                             context.bus.post(crate::event::Event::BlockchainChanged { index });
                         }
-                        //let peer = peers.get_mut_peer(token).unwrap();
-                        //deal_with_fork(context, peer, block);
+                        let height = context.chain.height();
+                        context.chain.update_max_height(height);
+                        context.bus.post(crate::event::Event::SyncFinished);
                     }
                 }
             });
