@@ -26,7 +26,13 @@ impl DnsFilter for BlockchainFilter {
         let subdomain;
         let parts: Vec<&str> = qname.rsplitn(3, ".").collect();
         match parts.len() {
-            1 => { return None; }
+            1 => {
+                let mut packet = DnsPacket::new();
+                if self.get_zone_response(parts[0], &mut packet) {
+                    return Some(packet);
+                }
+                return None;
+            }
             2 => {
                 search = format!("{}.{}", parts[1], parts[0]);
                 subdomain = String::new();
@@ -183,5 +189,13 @@ impl BlockchainFilter {
             minimum: 60,
             ttl: TransientTtl(60),
         });
+    }
+
+    fn get_zone_response(&self, zone: &str, mut packet: &mut DnsPacket) -> bool {
+        let have_zone = self.context.lock().unwrap().chain.is_zone_in_blockchain(zone);
+        if have_zone {
+            BlockchainFilter::add_soa_record(zone.to_owned(), &mut packet);
+        }
+        have_zone
     }
 }
