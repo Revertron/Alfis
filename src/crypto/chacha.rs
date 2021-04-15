@@ -2,8 +2,8 @@ use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
 use chacha20poly1305::aead::{Aead, NewAead};
 use std::fmt::{Debug, Formatter};
 use std::fmt;
-
-const FAILURE: &str = "encryption failure!";
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
 
 /// A small wrap-up to use Chacha20 encryption for domain names.
 #[derive(Clone)]
@@ -20,12 +20,24 @@ impl Chacha {
 
     pub fn encrypt(&self, data: &[u8], nonce: &[u8]) -> Vec<u8> {
         let nonce = Nonce::from_slice(nonce);
-        Vec::from(self.cipher.encrypt(nonce, data.as_ref()).expect(FAILURE))
+        match self.cipher.encrypt(nonce, data.as_ref()) {
+            Ok(bytes) => { bytes }
+            Err(_) => {
+                warn!("Error encrypting data!");
+                Vec::new()
+            }
+        }
     }
 
     pub fn decrypt(&self, data: &[u8], nonce: &[u8]) -> Vec<u8> {
         let nonce = Nonce::from_slice(nonce);
-        Vec::from(self.cipher.decrypt(nonce, data.as_ref()).expect(FAILURE))
+        match self.cipher.decrypt(nonce, data.as_ref()) {
+            Ok(bytes) => { bytes }
+            Err(_) => {
+                warn!("Error decrypting data!");
+                Vec::new()
+            }
+        }
     }
 }
 

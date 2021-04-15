@@ -545,7 +545,10 @@ impl Chain {
             if let Some(data) = transaction.get_domain_data() {
                 let b = self.get_block(index - 1).unwrap();
                 let domain = keystore.decrypt(data.domain.as_slice(), &b.hash.as_slice()[..12]);
-                let domain = String::from_utf8(domain.to_vec()).unwrap();
+                let mut domain = String::from_utf8(domain.to_vec()).unwrap();
+                if domain.is_empty() {
+                    domain = String::from("unknown");
+                }
                 trace!("Found my domain {}", domain);
                 result.insert(domain, (timestamp, data));
             }
