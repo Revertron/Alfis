@@ -207,7 +207,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                 Event::KeyCreated { path, public, hash } => {
                     event_handle_luck(&handle, "Key successfully created! Don\\'t forget to save it!");
                     let mut s = format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash);
-                    s.push_str(" showSuccess('You\\'ve got a new key! Don\\'t forget to save it!')");
+                    s.push_str(" showSuccess('New key mined successfully! Save it to a safe place!')");
                     s
                 }
                 Event::KeyLoaded { path, public, hash } |
