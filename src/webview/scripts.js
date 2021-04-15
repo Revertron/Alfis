@@ -1,5 +1,6 @@
 var recordsBuffer = [];
 var availableZones = [];
+var myDomains = [];
 var currentZone;
 
 function addRecord(record) {
@@ -94,6 +95,57 @@ function get_record_from_dialog() {
         return { type: record_type, domain: record_name, ttl: record_ttl, priority: record_priority, weight: record_weight, port: record_port, host: record_data }
     }
     return { type: record_type, domain: record_name, ttl: record_ttl, addr: record_data }
+}
+
+function clearMyDomains() {
+    myDomains = [];
+}
+
+function addMyDomain(name, timestamp, data) {
+    myDomains.push({name: name, timestamp: timestamp, data: data});
+}
+
+function refreshMyDomains() {
+    var edit_icon = '<svg viewBox="0 0 24 24" class="tag-button" onclick="editDomain(\'{domain}\');"><path d="M21.04 12.13C21.18 12.13 21.31 12.19 21.42 12.3L22.7 13.58C22.92 13.79 22.92 14.14 22.7 14.35L21.7 15.35L19.65 13.3L20.65 12.3C20.76 12.19 20.9 12.13 21.04 12.13M19.07 13.88L21.12 15.93L15.06 22H13V19.94L19.07 13.88M11 19L9 21H5C3.9 21 3 20.1 3 19V5C3 3.9 3.9 3 5 3H9.18C9.6 1.84 10.7 1 12 1C13.3 1 14.4 1.84 14.82 3H19C20.1 3 21 3.9 21 5V9L19 11V5H17V7H7V5H5V19H11M12 3C11.45 3 11 3.45 11 4C11 4.55 11.45 5 12 5C12.55 5 13 4.55 13 4C13 3.45 12.55 3 12 3Z"></path></svg>';
+    var card = '<div class="card is-inline-block"><div class="card-content p-3"><div class="content is-small"><h3>{title}</h3><div class="tags">{tags}{edit}</div></div></div></div>';
+    var tag = '<span class="tag" title="{ip}">{domain}</span>';
+    var cards = "";
+    myDomains.forEach(function(value, index, array) {
+        var title = value.name;
+        var domain_data = JSON.parse(value.data);
+        var tags = "";
+        var edit = edit_icon.replace("{domain}", title);
+        domain_data.records.forEach(function(v, i, a) {
+            if (typeof v.domain !== 'undefined') {
+                var buf = tag.replace("{domain}", v.domain);
+                if (typeof v.addr !== 'undefined') {
+                    buf = buf.replace("{ip}", v.addr);
+                } else if (typeof v.host !== 'undefined') {
+                    buf = buf.replace("{ip}", v.host);
+                }
+                tags = tags + buf;
+            }
+        });
+        cards = cards + card.replace("{title}", title).replace("{tags}", tags).replace("{edit}", edit);
+    });
+    document.getElementById("my_domains").innerHTML = cards;
+}
+
+function editDomain(domain) {
+    myDomains.forEach(function(value, index, array) {
+        if (domain != value.name) {
+            return;
+        }
+        var title = value.name;
+        var domain_data = JSON.parse(value.data);
+        recordsBuffer = [];
+        domain_data.records.forEach(function(v, i, a) {
+            recordsBuffer.push(v);
+        });
+        document.getElementById("new_domain").value = title.replace("." + domain_data.zone, "");
+        changeZone(domain_data.zone);
+        refreshRecordsList();
+    });
 }
 
 function onLoad() {

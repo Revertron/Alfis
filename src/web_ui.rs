@@ -4,7 +4,7 @@ extern crate serde;
 extern crate serde_json;
 extern crate open;
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -195,6 +195,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
     let status = Arc::new(Mutex::new(Status::new(threads)));
     let context_copy = Arc::clone(&context);
     let mut c = context.lock().unwrap();
+
     c.bus.register(move |_uuid, e| {
         //debug!("Got event from bus {:?}", &e);
         let status = Arc::clone(&status);
@@ -202,9 +203,10 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
         let context_copy = Arc::clone(&context_copy);
         let _ = thread::Builder::new().name(String::from("webui")).spawn(move || {
             let mut status = status.lock().unwrap();
-            let context = context_copy.lock().unwrap();
+            let mut context = context_copy.lock().unwrap();
             let eval = match e {
                 Event::KeyCreated { path, public, hash } => {
+                    load_domains(&mut context, &handle);
                     event_handle_luck(&handle, "Key successfully created! Don\\'t forget to save it!");
                     let mut s = format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash);
                     s.push_str(" showSuccess('New key mined successfully! Save it to a safe place!')");
@@ -212,6 +214,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                 }
                 Event::KeyLoaded { path, public, hash } |
                 Event::KeySaved { path, public, hash } => {
+                    load_domains(&mut context, &handle);
                     format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash)
                 }
                 Event::MinerStarted | Event::KeyGeneratorStarted => {
@@ -317,6 +320,24 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
     let index = c.chain.height();
     c.bus.post(Event::BlockchainChanged { index });
     event_info(web_view, "Application loaded");
+}
+
+fn load_domains(context: &mut MutexGuard<Context>, handle: &Handle<()>) {
+    let _ = handle.dispatch(move |web_view|{
+        web_view.eval("clearMyDomains();")
+    });
+    let domains = context.chain.get_my_domains(&context.keystore);
+    debug!("Domains: {:?}", &domains);
+    for (domain, (timestamp, data)) in domains {
+        let d = serde_json::to_string(&data).unwrap();
+        let command = format!("addMyDomain('{}', {}, '{}');", &domain, timestamp, &d);
+        let _ = handle.dispatch(move |web_view|{
+            web_view.eval(&command)
+        });
+    }
+    let _ = handle.dispatch(move |web_view|{
+        web_view.eval("refreshMyDomains();")
+    });
 }
 
 fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, web_view: &mut WebView<()>, name: String, data: String) {

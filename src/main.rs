@@ -129,6 +129,7 @@ fn main() {
 
     create_genesis_if_needed(&context, &miner);
     if no_gui {
+        print_my_domains(&context);
         let sleep = Duration::from_millis(1000);
         loop {
             thread::sleep(sleep);
@@ -143,6 +144,12 @@ fn main() {
     unsafe {
         FreeConsole();
     }
+}
+
+fn print_my_domains(context: &Arc<Mutex<Context>>) {
+    let context = context.lock().unwrap();
+    let domains = context.chain.get_my_domains(&context.keystore);
+    debug!("Domains: {:?}", &domains);
 }
 
 fn create_genesis_if_needed(context: &Arc<Mutex<Context>>, miner: &Arc<Mutex<Miner>>) {

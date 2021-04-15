@@ -40,6 +40,7 @@ const SQL_GET_LAST_FULL_BLOCK_FOR_KEY: &str = "SELECT * FROM blocks WHERE `trans
 const SQL_GET_DOMAIN_PUBLIC_KEY_BY_ID: &str = "SELECT pub_key FROM domains WHERE identity = ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_ZONE_PUBLIC_KEY_BY_ID: &str = "SELECT pub_key FROM zones WHERE identity = ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_DOMAIN_BY_ID: &str = "SELECT * FROM domains WHERE identity = ? ORDER BY id DESC LIMIT 1;";
+const SQL_GET_DOMAINS_BY_KEY: &str = "SELECT * FROM domains WHERE pub_key = ?;";
 const SQL_GET_ZONES: &str = "SELECT data FROM zones;";
 
 const SQL_GET_OPTIONS: &str = "SELECT * FROM options;";
@@ -519,6 +520,37 @@ impl Chain {
             None => { None }
             Some(transaction) => { Some(transaction.data) }
         }
+    }
+
+    pub fn get_my_domains(&self, keystore: &Option<Keystore>) -> HashMap<String, (i64, DomainData)> {
+        if keystore.is_none() {
+            return HashMap::new();
+        }
+
+        let mut result = HashMap::new();
+        let keystore = keystore.clone().unwrap();
+        let pub_key = keystore.get_public();
+        let mut statement = self.db.prepare(SQL_GET_DOMAINS_BY_KEY).unwrap();
+        statement.bind(1, &**pub_key).expect("Error in bind");
+        while let State::Row = statement.next().unwrap() {
+            let index = statement.read::<i64>(0).unwrap() as u64;
+            let timestamp = statement.read::<i64>(1).unwrap();
+            let identity = Bytes::from_bytes(&statement.read::<Vec<u8>>(2).unwrap());
+            let confirmation = Bytes::from_bytes(&statement.read::<Vec<u8>>(3).unwrap());
+            let class = String::from("domain");
+            let data = statement.read::<String>(4).unwrap();
+            let pub_key = Bytes::from_bytes(&statement.read::<Vec<u8>>(5).unwrap());
+            let transaction = Transaction { identity, confirmation, class, data, pub_key };
+            //debug!("Found transaction for domain {}: {:?}", domain, &transaction);
+            if let Some(data) = transaction.get_domain_data() {
+                let b = self.get_block(index - 1).unwrap();
+                let domain = keystore.decrypt(data.domain.as_slice(), &b.hash.as_slice()[..12]);
+                let domain = String::from_utf8(domain.to_vec()).unwrap();
+                trace!("Found my domain {}", domain);
+                result.insert(domain, (timestamp, data));
+            }
+        }
+        result
     }
 
     pub fn get_zone_difficulty(&self, zone: &str) -> u32 {

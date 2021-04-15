@@ -63,6 +63,21 @@ body {
   right: 10pt;
 }
 
+.container.is-fluid.cards-container {
+  display: flex;
+  flex-grow: 0;
+  /*gap: .8em; supported only in Firefox/Edge/Chrome */
+  justify-content: center !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+.container.is-fluid.cards-container .card:not(:last-child) {
+  margin-right: 0.8rem;
+}
+
 .list {
   overflow-y: auto;
 }
@@ -85,4 +100,10 @@ path {
 
 .is-danger:hover > span.icon > svg > path {
   fill: #ffffff;
+}
+
+svg.tag-button {
+  width: 24px;
+  height: 24px;
+  margin-bottom: .5rem;
 }
