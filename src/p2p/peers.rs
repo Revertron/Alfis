@@ -290,12 +290,14 @@ impl Peers {
         if self.new_peers.is_empty() {
             return;
         }
+        self.new_peers.dedup();
         let addr = self.new_peers.remove(0);
         self.connect_peer(&addr, registry, unique_token, yggdrasil_only);
     }
 
     /// Connecting to configured (bootstrap) peers
     pub fn connect_peers(&mut self, peers_addrs: Vec<String>, registry: &Registry, unique_token: &mut Token, yggdrasil_only: bool) {
+        let mut set = HashSet::new();
         for peer in peers_addrs.iter() {
             let mut addresses: Vec<SocketAddr> = match peer.to_socket_addrs() {
                 Ok(peers) => { peers.collect() }
@@ -304,7 +306,10 @@ impl Peers {
 
             // At first we connect to one peer address from every "peer" or domain
             let addr = addresses.remove(0);
-            self.connect_peer(&addr, registry, unique_token, yggdrasil_only);
+            if !set.contains(&addr) {
+                self.connect_peer(&addr, registry, unique_token, yggdrasil_only);
+                set.insert(addr);
+            }
             // Copy others to new_peers, to connect later
             self.new_peers.append(&mut addresses);
         }
