@@ -563,7 +563,7 @@ impl Chain {
                 return z.difficulty;
             }
         }
-        u32::max_value()
+        u32::MAX
     }
 
     pub fn last_block(&self) -> Option<Block> {
@@ -816,16 +816,16 @@ impl Chain {
                                 return zone.difficulty;
                             }
                         }
-                        u32::max_value()
+                        u32::MAX
                     }
                     Err(_) => {
                         warn!("Error parsing DomainData from {:?}", transaction);
-                        u32::max_value()
+                        u32::MAX
                     }
                 }
             }
             "zone" => { ZONE_DIFFICULTY }
-            _ => { u32::max_value() }
+            _ => { u32::MAX }
         }
     }
 

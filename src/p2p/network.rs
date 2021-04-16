@@ -18,9 +18,10 @@ use crate::{Context, Block, p2p::Message, p2p::State, p2p::Peer, p2p::Peers, is_
 use crate::blockchain::types::BlockQuality;
 use crate::commons::CHAIN_VERSION;
 use std::sync::atomic::{AtomicBool, Ordering};
+use rand::random;
 
 const SERVER: Token = Token(0);
-const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(3000));
+const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(1000));
 pub const LISTEN_PORT: u16 = 4244;
 const MAX_PACKET_SIZE: usize = 1 * 1024 * 1024; // 1 Mb
 const MAX_READ_BLOCK_TIME: u128 = 500;
@@ -60,10 +61,16 @@ impl Network {
             // States of peer connections, and some data to send when sockets become writable
             let mut peers = Peers::new();
             // Starting peer connections to bootstrap nodes
-            peers.connect_peers(peers_addrs, &poll.registry(), &mut unique_token, yggdrasil_only);
+            peers.connect_peers(&peers_addrs, &poll.registry(), &mut unique_token, yggdrasil_only);
 
             let mut peers_timer = Instant::now();
+            let mut bootstrap_timer = Instant::now();
             loop {
+                if peers.get_peers_count() == 0 && bootstrap_timer.elapsed().as_secs() > 60 {
+                    // Starting peer connections to bootstrap nodes
+                    peers.connect_peers(&peers_addrs, &poll.registry(), &mut unique_token, yggdrasil_only);
+                    bootstrap_timer = Instant::now();
+                }
                 // Poll Mio for events, blocking until we get an event.
                 poll.poll(&mut events, POLL_TIMEOUT).expect("Error polling sockets");
                 if !running.load(Ordering::SeqCst) {
@@ -131,7 +138,7 @@ impl Network {
                 }
                 events.clear();
 
-                if peers_timer.elapsed().as_millis() > 500 {
+                if peers_timer.elapsed().as_millis() > 250 {
                     // Send pings to idle peers
                     let (height, hash) = {
                         let mut context = context.lock().unwrap();
@@ -142,7 +149,7 @@ impl Network {
                         }
                         (height, context.chain.last_hash())
                     };
-                    peers.send_pings(poll.registry(), height, hash);
+                    peers.update(poll.registry(), height, hash);
                     peers.connect_new_peers(poll.registry(), &mut unique_token, yggdrasil_only);
                     peers_timer = Instant::now();
                 }
@@ -376,13 +383,11 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 peer.set_active(true);
                 peer.reset_reconnects();
                 let mut context = context.lock().unwrap();
-                let blocks_count = context.chain.height();
-                context.bus.post(crate::event::Event::NetworkStatus { nodes: active_count + 1, blocks: blocks_count });
                 if peer.is_higher(my_height) {
                     context.chain.update_max_height(height);
                     context.bus.post(crate::event::Event::Syncing { have: my_height, height});
                     if active_count > 3 {
-                        State::message(Message::GetBlock { index: my_height + 1 })
+                        State::idle()
                     } else {
                         State::message(Message::GetPeers)
                     }
@@ -398,10 +403,12 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             let peer = peers.get_mut_peer(token).unwrap();
             peer.set_height(height);
             peer.set_active(true);
-            if peer.is_higher(my_height) || ( height == my_height && my_hash != hash) {
+            if peer.is_higher(my_height) {
                 let mut context = context.lock().unwrap();
                 context.chain.update_max_height(height);
-                State::message(Message::GetBlock { index: my_height + 1 })
+            }
+            if hash != my_hash {
+                State::message(Message::GetBlock { index: my_height })
             } else {
                 State::message(Message::pong(my_height, my_hash))
             }
@@ -410,19 +417,19 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             let peer = peers.get_mut_peer(token).unwrap();
             peer.set_height(height);
             peer.set_active(true);
-            let is_higher = peer.is_higher(my_height);
-
-            let mut context = context.lock().unwrap();
-            let blocks_count = context.chain.height();
-            context.bus.post(crate::event::Event::NetworkStatus { nodes: peers.get_peers_active_count(), blocks: blocks_count });
-
-            if is_higher {
+            if peer.is_higher(my_height) {
+                let mut context = context.lock().unwrap();
                 context.chain.update_max_height(height);
-                State::message(Message::GetBlock { index: my_height + 1 })
-            } else if my_hash != hash {
+            }
+            if hash != my_hash {
                 State::message(Message::GetBlock { index: my_height })
             } else {
-                State::idle()
+                if random::<u8>() < 10 {
+                    debug!("Requesting more peers");
+                    State::message(Message::GetPeers)
+                } else {
+                    State::idle()
+                }
             }
         }
         Message::GetPeers => {
