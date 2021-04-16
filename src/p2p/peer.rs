@@ -79,7 +79,16 @@ impl Peer {
     }
 
     pub fn has_more_blocks(&self, height: u64) -> bool {
-        self.height > self.received_block && self.height > height && self.get_state().is_idle()
+        if self.height <= height {
+            return false;
+        }
+        if self.received_block > height {
+            return false;
+        }
+        if !self.get_state().is_idle() {
+            return false;
+        }
+        self.height > height
     }
 
     pub fn is_public(&self) -> bool {

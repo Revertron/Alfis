@@ -357,7 +357,6 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
     };
     let answer = match message {
         Message::Hand { app_version, origin, version, public, rand} => {
-            debug!("Hello from v{}", &app_version);
             if peers.is_our_own_connect(&rand) {
                 warn!("Detected loop connect");
                 State::Banned
@@ -365,6 +364,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 if origin.eq(my_origin) && version == my_version {
                     let peer = peers.get_mut_peer(token).unwrap();
                     peer.set_public(public);
+                    debug!("Hello from v{} on {}", &app_version, peer.get_addr().ip());
                     State::message(Message::shake(&origin, version, true, my_height))
                 } else {
                     warn!("Handshake from unsupported chain or version");
@@ -453,63 +453,65 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 Ok(block) => block,
                 Err(_) => return State::Error
             };
-            let peer = peers.get_mut_peer(token).unwrap();
-            peer.set_received_block(block.index);
-            if let Some(transaction) = &block.transaction {
-                if context.lock().unwrap().x_zones.has_hash(&transaction.identity.to_string()) {
-                    // This peer has mined some of the forbidden zones
-                    return State::Banned;
-                }
-            }
-            let context = Arc::clone(&context);
-            let peers_count = peers.get_peers_active_count();
-            let _ = thread::Builder::new().name(String::from("Message::Block")).spawn(move || {
-                let mut context = context.lock().unwrap();
-                let max_height = context.chain.max_height();
-                match context.chain.check_new_block(&block) {
-                    BlockQuality::Good => {
-                        context.chain.add_block(block);
-                        let keystore = context.keystore.clone();
-                        context.chain.update(&keystore);
-                        let my_height = context.chain.height();
-                        context.bus.post(crate::event::Event::BlockchainChanged { index: my_height });
-                        // If it was the last block to sync
-                        if my_height == max_height {
-                            context.bus.post(crate::event::Event::SyncFinished);
-                        } else {
-                            context.bus.post(crate::event::Event::Syncing { have: my_height, height: max_height});
-                        }
-                        context.bus.post(crate::event::Event::NetworkStatus { nodes: peers_count, blocks: my_height });
-                    }
-                    BlockQuality::Twin => { debug!("Ignoring duplicate block {}", block.index); }
-                    BlockQuality::Future => { debug!("Ignoring future block {}", block.index); }
-                    BlockQuality::Bad => {
-                        // TODO save bad public keys to banned table
-                        debug!("Ignoring bad block {} with hash {:?}", block.index, block.hash);
-                        let height = context.chain.height();
-                        context.chain.update_max_height(height);
-                        context.bus.post(crate::event::Event::SyncFinished);
-                    }
-                    BlockQuality::Fork => {
-                        debug!("Got forked block {} with hash {:?}", block.index, block.hash);
-                        let last_block = context.chain.last_block().unwrap();
-                        if block.is_better_than(&last_block) {
-                            context.chain.replace_block(block.index, block).expect("Error replacing block with fork");
-                            let keystore = context.keystore.clone();
-                            context.chain.update(&keystore);
-                            let index = context.chain.height();
-                            context.bus.post(crate::event::Event::BlockchainChanged { index });
-                        }
-                        let height = context.chain.height();
-                        context.chain.update_max_height(height);
-                        context.bus.post(crate::event::Event::SyncFinished);
-                    }
-                }
-            });
-            State::idle()
+            process_new_block(context, peers, token, block)
         }
     };
     answer
+}
+
+fn process_new_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &Token, block: Block) -> State {
+    let peer = peers.get_mut_peer(token).unwrap();
+    peer.set_received_block(block.index);
+    if let Some(transaction) = &block.transaction {
+        if context.lock().unwrap().x_zones.has_hash(&transaction.identity.to_string()) {
+            // This peer has mined some of the forbidden zones
+            return State::Banned;
+        }
+    }
+    let peers_count = peers.get_peers_active_count();
+    let mut context = context.lock().unwrap();
+    let max_height = context.chain.max_height();
+    match context.chain.check_new_block(&block) {
+        BlockQuality::Good => {
+            context.chain.add_block(block);
+            let keystore = context.keystore.clone();
+            context.chain.update(&keystore);
+            let my_height = context.chain.height();
+            context.bus.post(crate::event::Event::BlockchainChanged { index: my_height });
+            // If it was the last block to sync
+            if my_height == max_height {
+                context.bus.post(crate::event::Event::SyncFinished);
+            } else {
+                context.bus.post(crate::event::Event::Syncing { have: my_height, height: max_height });
+            }
+            context.bus.post(crate::event::Event::NetworkStatus { nodes: peers_count, blocks: my_height });
+        }
+        BlockQuality::Twin => { debug!("Ignoring duplicate block {}", block.index); }
+        BlockQuality::Future => { debug!("Ignoring future block {}", block.index); }
+        BlockQuality::Bad => {
+            // TODO save bad public keys to banned table
+            debug!("Ignoring bad block {} with hash {:?}", block.index, block.hash);
+            let height = context.chain.height();
+            context.chain.update_max_height(height);
+            context.bus.post(crate::event::Event::SyncFinished);
+            return State::Banned;
+        }
+        BlockQuality::Fork => {
+            debug!("Got forked block {} with hash {:?}", block.index, block.hash);
+            let last_block = context.chain.last_block().unwrap();
+            if block.is_better_than(&last_block) {
+                context.chain.replace_block(block.index, block).expect("Error replacing block with fork");
+                let keystore = context.keystore.clone();
+                context.chain.update(&keystore);
+                let index = context.chain.height();
+                context.bus.post(crate::event::Event::BlockchainChanged { index });
+            }
+            let height = context.chain.height();
+            context.chain.update_max_height(height);
+            context.bus.post(crate::event::Event::SyncFinished);
+        }
+    }
+    State::idle()
 }
 
 #[allow(dead_code)]

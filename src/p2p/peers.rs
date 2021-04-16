@@ -239,7 +239,7 @@ impl Peers {
                 .choose(&mut rng) {
                 None => {}
                 Some((token, peer)) => {
-                    debug!("Found some peer higher than we are, requesting block {}", height + 1);
+                    debug!("Found some peer higher than we are, requesting block {}, from {}", height + 1, &peer.get_addr().ip());
                     registry.reregister(peer.get_stream(), token.clone(), Interest::WRITABLE).unwrap();
                     peer.set_state(State::message(Message::GetBlock { index: height + 1 }));
                     ping_sent = true;

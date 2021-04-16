@@ -611,6 +611,10 @@ impl Chain {
 
     /// Check if this block can be added to our blockchain
     pub fn check_new_block(&self, block: &Block) -> BlockQuality {
+        if block.version > CHAIN_VERSION {
+            warn!("Ignoring block from unsupported version:\n{:?}", &block);
+            return Bad;
+        }
         let timestamp = Utc::now().timestamp();
         if block.timestamp > timestamp + 60 {
             warn!("Ignoring block from the future:\n{:?}", &block);
