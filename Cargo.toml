@@ -1,6 +1,6 @@
 [package]
 name = "alfis"
-version = "0.4.5"
+version = "0.4.6"
 authors = ["Revertron <alfis@revertron.com>"]
 edition = "2018"
 build = "build.rs"
@@ -55,6 +55,10 @@ winres = "0.1"
 [dev-dependencies]
 serde_bytes = "0.11.5"
 serde_derive = "1.0.124"
+
+[profile.release]
+opt-level = 3
+lto = true
 
 [profile.dev]
 opt-level = 2
