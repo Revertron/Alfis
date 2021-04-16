@@ -4,6 +4,7 @@
 #![windows_subsystem = "windows"]
 
 use std::env;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -44,6 +45,7 @@ fn main() {
     opts.optflag("l", "list", "List blocks from DB and exit");
     opts.optflag("g", "generate", "Generate new config file. Generated config will be printed to console.");
     opts.optopt("c", "config", "Path to config file", "FILE");
+    opts.optopt("w", "work-dir", "Path to working directory", "DIRECTORY");
     opts.optopt("u", "upgrade", "Path to config file that you want to upgrade. Upgraded config will be printed to console.", "FILE");
 
     let opt_matches = match opts.parse(&args[1..]) {
@@ -91,6 +93,10 @@ fn main() {
         None => { SETTINGS_FILENAME.to_owned() }
         Some(path) => { path }
     };
+    if let Some(path) = opt_matches.opt_str("w") {
+        env::set_current_dir(Path::new(&path)).expect(&format!("Unable to change working directory to '{}'", &path));
+    }
+
     SimpleLogger::new()
         .with_level(level)
         .with_module_level("mio::poll", LevelFilter::Warn)
