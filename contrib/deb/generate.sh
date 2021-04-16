@@ -115,7 +115,9 @@ fi
 EOF
 cat > /tmp/$PKGNAME/debian/postrm << EOF
 #!/bin/sh
-rm /var/lib/alfis/blockchain.db
+if [ $2 != upgrade ] && [ -e /etc/alfis.conf ] then
+  rm /var/lib/alfis/blockchain.db
+fi
 EOF
 
 sudo cp alfis /tmp/$PKGNAME/usr/bin/
