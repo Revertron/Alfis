@@ -1,17 +1,18 @@
 use std::collections::{HashMap, HashSet};
-use std::net::{SocketAddr, IpAddr, Shutdown, ToSocketAddrs};
-use mio::{Token, Interest, Registry};
+use std::net::{IpAddr, Shutdown, SocketAddr, ToSocketAddrs};
+
+use chrono::Utc;
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+use mio::{Interest, Registry, Token};
 use mio::net::TcpStream;
-use crate::p2p::{Peer, State, Message};
-use crate::p2p::network::LISTEN_PORT;
-use crate::p2p::network::next;
 use rand::random;
 use rand::seq::IteratorRandom;
-#[allow(unused_imports)]
-use log::{trace, debug, info, warn, error};
-use crate::{Bytes, is_yggdrasil, commons};
-use crate::commons::MAX_RECONNECTS;
-use chrono::Utc;
+
+use crate::{Bytes, commons};
+use crate::commons::*;
+use crate::p2p::{Message, Peer, State};
+use crate::commons::next;
 
 pub struct Peers {
     peers: HashMap<Token, Peer>,
@@ -90,7 +91,7 @@ impl Peers {
                 peers.insert(peer.to_owned());
                 peers
             });
-        debug!("Got {} peers", peers.len());
+        debug!("Got {} peers from exchange", peers.len());
         //debug!("Got {} peers: {:?}", peers.len(), &peers);
         // TODO make it return error if these peers are wrong and seem like an attack
         for peer in peers.iter() {

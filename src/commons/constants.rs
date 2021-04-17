@@ -32,3 +32,8 @@ pub const MAX_RECONNECTS: u32 = 5;
 
 pub const CLASS_ZONE: &str = "zone";
 pub const CLASS_DOMAIN: &str = "domain";
+
+/// Public nodes listen port
+pub const LISTEN_PORT: u16 = 4244;
+pub const UI_REFRESH_DELAY_MS: u128 = 250;
+pub const LOG_REFRESH_DELAY_SEC: u64 = 60;

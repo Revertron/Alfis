@@ -1,13 +1,16 @@
-use std::num;
-use rand::Rng;
-
-pub mod constants;
-pub use constants::*;
 use std::net::IpAddr;
+use std::num;
 
+use mio::Token;
+use rand::Rng;
 #[cfg(not(target_os = "macos"))]
 use thread_priority::*;
+
+pub use constants::*;
+
 use crate::dns::protocol::DnsRecord;
+
+pub mod constants;
 
 /// Convert bytes array to HEX format
 pub fn to_hex(buf: &[u8]) -> String {
@@ -95,6 +98,13 @@ pub fn is_yggdrasil(addr: &IpAddr) -> bool {
     false
 }
 
+/// Gets new token from old token, mutating the last
+pub fn next(current: &mut Token) -> Token {
+    let next = current.0;
+    current.0 += 1;
+    Token(next)
+}
+
 /// Checks if this record has IP from Yggdrasil network
 /// https://yggdrasil-network.github.io
 pub fn is_yggdrasil_record(record: &DnsRecord) -> bool {
@@ -134,8 +144,8 @@ pub fn setup_miner_thread(cpu: u32) {
 
 #[cfg(test)]
 mod test {
-    use crate::{check_domain, is_yggdrasil};
     use std::net::IpAddr;
+    use crate::{check_domain, is_yggdrasil};
 
     #[test]
     fn test_check_domain() {

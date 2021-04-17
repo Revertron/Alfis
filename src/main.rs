@@ -9,14 +9,17 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use getopts::Options;
+use getopts::{Options, Matches};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn, LevelFilter};
-use simple_logger::SimpleLogger;
+use simplelog::*;
 #[cfg(windows)]
 use winapi::um::wincon::{ATTACH_PARENT_PROCESS, AttachConsole, FreeConsole};
 
 use alfis::{Block, Bytes, Chain, Miner, Context, Network, Settings, dns_utils, Keystore, ZONE_DIFFICULTY};
+use std::fs::OpenOptions;
+use std::process::exit;
+use std::io::{Seek, SeekFrom};
 
 #[cfg(feature = "webgui")]
 mod web_ui;
@@ -42,8 +45,9 @@ fn main() {
     opts.optflag("n", "nogui", "Run without graphic user interface (default for no gui builds)");
     opts.optflag("v", "verbose", "Show more debug messages");
     opts.optflag("d", "debug", "Show trace messages, more than debug");
-    opts.optflag("l", "list", "List blocks from DB and exit");
+    opts.optflag("b", "blocks", "List blocks from DB and exit");
     opts.optflag("g", "generate", "Generate new config file. Generated config will be printed to console.");
+    opts.optopt("l", "log", "Write log to file", "FILE");
     opts.optopt("c", "config", "Path to config file", "FILE");
     opts.optopt("w", "work-dir", "Path to working directory", "DIRECTORY");
     opts.optopt("u", "upgrade", "Path to config file that you want to upgrade. Upgraded config will be printed to console.", "FILE");
@@ -82,13 +86,6 @@ fn main() {
     #[cfg(not(feature = "webgui"))]
     let no_gui = true;
 
-    let mut level = LevelFilter::Info;
-    if opt_matches.opt_present("v") {
-        level = LevelFilter::Debug;
-    }
-    if opt_matches.opt_present("d") {
-        level = LevelFilter::Trace;
-    }
     let config_name = match opt_matches.opt_str("c") {
         None => { SETTINGS_FILENAME.to_owned() }
         Some(path) => { path }
@@ -97,18 +94,14 @@ fn main() {
         env::set_current_dir(Path::new(&path)).expect(&format!("Unable to change working directory to '{}'", &path));
     }
 
-    SimpleLogger::new()
-        .with_level(level)
-        .with_module_level("mio::poll", LevelFilter::Warn)
-        .init()
-        .unwrap();
+    setup_logger(&opt_matches);
     info!(target: LOG_TARGET_MAIN, "Starting ALFIS {}", env!("CARGO_PKG_VERSION"));
 
     let settings = Settings::load(&config_name).expect(&format!("Cannot load settings from {}!", &config_name));
     info!(target: LOG_TARGET_MAIN, "Loaded settings: {:?}", &settings);
     let keystore = Keystore::from_file(&settings.key_file, "");
     let chain: Chain = Chain::new(&settings);
-    if opt_matches.opt_present("l") {
+    if opt_matches.opt_present("b") {
         for i in 1..(chain.height() + 1) {
             if let Some(block) = chain.get_block(i) {
                 info!(target: LOG_TARGET_MAIN, "{:?}", &block);
@@ -152,12 +145,58 @@ fn main() {
     }
 }
 
+/// Sets up logger in accordance with command line options
+fn setup_logger(opt_matches: &Matches) {
+    let mut level = LevelFilter::Info;
+    if opt_matches.opt_present("v") {
+        level = LevelFilter::Debug;
+    }
+    if opt_matches.opt_present("d") {
+        level = LevelFilter::Trace;
+    }
+    let config = ConfigBuilder::new()
+        .add_filter_ignore_str("mio::poll")
+        .set_thread_level(LevelFilter::Off)
+        .set_location_level(LevelFilter::Off)
+        .set_target_level(LevelFilter::Error)
+        .set_time_level(LevelFilter::Error)
+        .set_time_to_local(true)
+        .build();
+    match opt_matches.opt_str("l") {
+        None => {
+            if let Err(e) = TermLogger::init(level, config, TerminalMode::Stdout, ColorChoice::Auto) {
+                println!("Unable to initialize logger!\n{}", e);
+            }
+        }
+        Some(path) => {
+            let file = match OpenOptions::new().write(true).create(true).open(&path) {
+                Ok(mut file) => {
+                    file.seek(SeekFrom::End(0)).unwrap();
+                    file
+                }
+                Err(e) => {
+                    println!("Could not open log file '{}' for writing!\n{}", &path, e);
+                    exit(1);
+                }
+            };
+            CombinedLogger::init(
+                vec![
+                    TermLogger::new(level, config.clone(), TerminalMode::Stdout, ColorChoice::Auto),
+                    WriteLogger::new(level, config, file),
+                ]
+            ).unwrap();
+        }
+    }
+}
+
+/// Gets own domains by current loaded keystore and writes them to log
 fn print_my_domains(context: &Arc<Mutex<Context>>) {
     let context = context.lock().unwrap();
     let domains = context.chain.get_my_domains(&context.keystore);
     debug!("Domains: {:?}", &domains);
 }
 
+/// Creates genesis (origin) block if `origin` is empty in config and we don't have any blocks in DB
 fn create_genesis_if_needed(context: &Arc<Mutex<Context>>, miner: &Arc<Mutex<Miner>>) {
     // If there is no origin in settings and no blockchain in DB, generate genesis block
     let context = context.lock().unwrap();

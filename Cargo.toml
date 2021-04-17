@@ -1,6 +1,6 @@
 [package]
 name = "alfis"
-version = "0.4.7"
+version = "0.4.8"
 authors = ["Revertron <alfis@revertron.com>"]
 edition = "2018"
 build = "build.rs"
@@ -12,7 +12,7 @@ repository = "https://github.com/Revertron/Alfis"
 [dependencies]
 getopts = "0.2.21"
 log = "0.4.14"
-simple_logger = "1.11.0"
+simplelog = "0.10"
 toml = "0.5.8"
 digest = "0.9.0"
 sha2 = "0.9.3"

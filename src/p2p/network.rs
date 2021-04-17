@@ -3,26 +3,25 @@ extern crate serde_json;
 
 use std::{io, thread};
 use std::io::{Read, Write};
+use std::net::{IpAddr, Shutdown, SocketAddr, SocketAddrV4};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
 use mio::{Events, Interest, Poll, Registry, Token};
 use mio::event::Event;
 use mio::net::{TcpListener, TcpStream};
-#[allow(unused_imports)]
-use log::{trace, debug, info, warn, error};
-
-use std::net::{SocketAddr, IpAddr, SocketAddrV4, Shutdown};
-use crate::{Context, Block, p2p::Message, p2p::State, p2p::Peer, p2p::Peers, is_yggdrasil};
-use crate::blockchain::types::BlockQuality;
-use crate::commons::CHAIN_VERSION;
-use std::sync::atomic::{AtomicBool, Ordering};
 use rand::random;
+
+use crate::{Block, Context, p2p::Message, p2p::Peer, p2p::Peers, p2p::State};
+use crate::blockchain::types::BlockQuality;
+use crate::commons::*;
 
 const SERVER: Token = Token(0);
 const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(1000));
-pub const LISTEN_PORT: u16 = 4244;
 const MAX_PACKET_SIZE: usize = 1 * 1024 * 1024; // 1 Mb
 const MAX_READ_BLOCK_TIME: u128 = 500;
 
@@ -63,7 +62,8 @@ impl Network {
             // Starting peer connections to bootstrap nodes
             peers.connect_peers(&peers_addrs, &poll.registry(), &mut unique_token, yggdrasil_only);
 
-            let mut peers_timer = Instant::now();
+            let mut ui_timer = Instant::now();
+            let mut log_timer = Instant::now();
             let mut bootstrap_timer = Instant::now();
             loop {
                 if peers.get_peers_count() == 0 && bootstrap_timer.elapsed().as_secs() > 60 {
@@ -138,7 +138,7 @@ impl Network {
                 }
                 events.clear();
 
-                if peers_timer.elapsed().as_millis() > 250 {
+                if ui_timer.elapsed().as_millis() > UI_REFRESH_DELAY_MS {
                     // Send pings to idle peers
                     let (height, hash) = {
                         let mut context = context.lock().unwrap();
@@ -147,11 +147,15 @@ impl Network {
                         if nodes > 0 {
                             context.bus.post(crate::event::Event::NetworkStatus { nodes, blocks: height });
                         }
+                        if log_timer.elapsed().as_secs() > LOG_REFRESH_DELAY_SEC {
+                            info!("Active nodes count: {}, blocks count: {}", nodes, height);
+                            log_timer = Instant::now();
+                        }
                         (height, context.chain.last_hash())
                     };
                     peers.update(poll.registry(), height, hash);
                     peers.connect_new_peers(poll.registry(), &mut unique_token, yggdrasil_only);
-                    peers_timer = Instant::now();
+                    ui_timer = Instant::now();
                 }
             }
             if !running.load(Ordering::SeqCst) {
@@ -555,12 +559,6 @@ fn deal_with_fork(context: MutexGuard<Context>, peer: &mut Peer, block: Block) {
 
 fn check_block(block: &Block, prev: &Block) -> bool {
     prev.index == block.index - 1 && prev.hash == block.prev_block_hash
-}
-
-pub(crate) fn next(current: &mut Token) -> Token {
-    let next = current.0;
-    current.0 += 1;
-    Token(next)
 }
 
 fn would_block(err: &io::Error) -> bool {
