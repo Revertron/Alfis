@@ -414,7 +414,7 @@ impl Chain {
             Ok(mut statement) => {
                 while statement.next().unwrap() == State::Row {
                     let data = statement.read::<String>(0).unwrap();
-                    debug!("Got zone data {}", &data);
+                    //debug!("Got zone data {}", &data);
                     if let Ok(zone_data) = serde_json::from_str::<ZoneData>(&data) {
                         map.insert(zone_data.name.clone(), zone_data);
                     }
@@ -522,7 +522,7 @@ impl Chain {
         }
     }
 
-    pub fn get_my_domains(&self, keystore: &Option<Keystore>) -> HashMap<String, (i64, DomainData)> {
+    pub fn get_my_domains(&self, keystore: &Option<Keystore>) -> HashMap<Bytes, (String, i64, DomainData)> {
         if keystore.is_none() {
             return HashMap::new();
         }
@@ -540,7 +540,7 @@ impl Chain {
             let class = String::from("domain");
             let data = statement.read::<String>(4).unwrap();
             let pub_key = Bytes::from_bytes(&statement.read::<Vec<u8>>(5).unwrap());
-            let transaction = Transaction { identity, confirmation, class, data, pub_key };
+            let transaction = Transaction { identity: identity.clone(), confirmation, class, data, pub_key };
             //debug!("Found transaction for domain {}: {:?}", domain, &transaction);
             if let Some(data) = transaction.get_domain_data() {
                 let b = self.get_block(index - 1).unwrap();
@@ -550,7 +550,7 @@ impl Chain {
                     domain = String::from("unknown");
                 }
                 trace!("Found my domain {}", domain);
-                result.insert(domain, (timestamp, data));
+                result.insert(identity, (domain, timestamp, data));
             }
         }
         result

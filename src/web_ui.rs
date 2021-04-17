@@ -327,8 +327,8 @@ fn load_domains(context: &mut MutexGuard<Context>, handle: &Handle<()>) {
         web_view.eval("clearMyDomains();")
     });
     let domains = context.chain.get_my_domains(&context.keystore);
-    debug!("Domains: {:?}", &domains);
-    for (domain, (timestamp, data)) in domains {
+    debug!("Domains: {:?}", &domains.values());
+    for (_identity, (domain, timestamp, data)) in domains {
         let d = serde_json::to_string(&data).unwrap();
         let command = format!("addMyDomain('{}', {}, '{}');", &domain, timestamp, &d);
         let _ = handle.dispatch(move |web_view|{
