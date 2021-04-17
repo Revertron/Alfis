@@ -42,7 +42,7 @@ jobs:
             ## A new version
             * Various fixes and stability improvements.
           draft: true
-          prerelease: true
+          prerelease: false
 
   build-and-upload:
     name: Create and upload builds
@@ -58,16 +58,16 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-      - name: install libgtk-dev libwebkit2gtk-4.0
-        run: |
-          sudo apt update && sudo apt install libwebkit2gtk-4.0-dev
-          cargo install cross
+      - name: install dependencies
         if: contains(matrix.os, 'ubuntu')
+        run: |
+          sudo apt update && sudo apt install libwebkit2gtk-4.0-dev upx
+          cargo install cross
       - name: Build release binaries
         run: |
           cargo build --release
           cargo build --release --no-default-features --target-dir nogui
-      - name: Build Windows release binaries with Edge
+      - name: Build Windows release binaries with Edge web-engine
         if: contains(matrix.os, 'windows')
         run: cargo build --release --features "edge" --target-dir edge
       - name: Build and package deb packages
@@ -80,12 +80,13 @@ jobs:
           PKGARCH=armhf contrib/deb/generate.sh
           PKGARCH=arm64 contrib/deb/generate.sh
 
-      - name: Upload debs
+      - name: Upload bins & debs
         if: contains(matrix.os, 'ubuntu')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag_name="${{ needs.get_version.outputs.project_version }}"
+          hub release edit $(find ./bin -type f -name "alfis-*" -printf "-a %p ") -m "" "$tag_name"
           hub release edit $(find . -type f -name "*.deb" -printf "-a %p ") -m "" "$tag_name"
 
       - name: win_arch
@@ -137,8 +138,8 @@ jobs:
           files: ${{ env.BIN_PATH_EDGE }} alfis.toml README.md LICENSE adblock.txt
           dest: ${{ env.ZIP_NAME_EDGE }}
 
-      - name: Upload binary
-        id: upload-binary
+      - name: Upload zip
+        id: upload-zip
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -148,8 +149,8 @@ jobs:
           asset_name: ${{ env.ZIP_NAME }}
           asset_content_type: application/zip
 
-      - name: Upload no GUI binary
-        id: upload-nogui-binary
+      - name: Upload NoGUI zip
+        id: upload-nogui-zip
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

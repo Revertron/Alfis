@@ -21,17 +21,25 @@ PKGREPLACES=alfis
 #  PKGREPLACES=alfis-develop
 #fi
 
+mkdir -p bin
+
+TARGET=""
 # Building nogui versions only
-if [ $PKGARCH = "amd64" ]; then cargo build --release --no-default-features --target x86_64-unknown-linux-musl && cp target/x86_64-unknown-linux-musl/release/alfis ./alfis
-elif [ $PKGARCH = "i686" ]; then cross build --release --no-default-features --target i686-unknown-linux-musl && cp target/i686-unknown-linux-musl/release/alfis ./alfis
-elif [ $PKGARCH = "mipsel" ]; then cross build --release --no-default-features --target mipsel-unknown-linux-musl && cp target/mipsel-unknown-linux-musl/release/alfis ./alfis
-elif [ $PKGARCH = "mips" ]; then cross build --release --no-default-features --target mips-unknown-linux-musl && cp target/mips-unknown-linux-musl/release/alfis ./alfis
-elif [ $PKGARCH = "armhf" ]; then cross build --release --no-default-features --target armv7-unknown-linux-musleabihf && cp target/armv7-unknown-linux-musleabihf/release/alfis ./alfis
-elif [ $PKGARCH = "arm64" ]; then cross build --release --no-default-features --target aarch64-unknown-linux-musl && cp target/aarch64-unknown-linux-musl/release/alfis ./alfis
+if [ $PKGARCH = "amd64" ]; then TARGET='x86_64-unknown-linux-musl'
+elif [ $PKGARCH = "i686" ]; then TARGET='i686-unknown-linux-musl'
+elif [ $PKGARCH = "mipsel" ]; then TARGET='mipsel-unknown-linux-musl'
+elif [ $PKGARCH = "mips" ]; then TARGET='mips-unknown-linux-musl'
+elif [ $PKGARCH = "armhf" ]; then TARGET='armv7-unknown-linux-musleabihf'
+elif [ $PKGARCH = "arm64" ]; then TARGET='aarch64-unknown-linux-musl'
 else
   echo "Specify PKGARCH=amd64,i686,mips,mipsel,armhf,arm64"
   exit 1
 fi
+
+cross build --release --no-default-features --target $TARGET
+upx target/$TARGET/release/alfis
+cp target/$TARGET/release/alfis ./alfis
+cp target/$TARGET/release/alfis ./bin/alfis-linux-$PKGARCH-v$PKGVERSION-nogui
 
 echo "Building $PKGFILE"
 
