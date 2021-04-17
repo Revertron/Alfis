@@ -43,7 +43,7 @@ fn main() {
     let mut opts = Options::new();
     opts.optflag("h", "help", "Print this help menu");
     opts.optflag("n", "nogui", "Run without graphic user interface (default for no gui builds)");
-    opts.optflag("v", "verbose", "Show more debug messages");
+    opts.optflag("v", "version", "Print version and exit");
     opts.optflag("d", "debug", "Show trace messages, more than debug");
     opts.optflag("b", "blocks", "List blocks from DB and exit");
     opts.optflag("g", "generate", "Generate new config file. Generated config will be printed to console.");
@@ -60,12 +60,17 @@ fn main() {
     if opt_matches.opt_present("h") {
         let brief = format!("Usage: {} [options]", program);
         println!("{}", opts.usage(&brief));
-        return;
+        exit(0);
+    }
+
+    if opt_matches.opt_present("v") {
+        println!("ALFIS v{}", env!("CARGO_PKG_VERSION"));
+        exit(0);
     }
 
     if opt_matches.opt_present("g") {
         println!("{}", include_str!("../alfis.toml"));
-        return;
+        exit(0);
     }
 
     match opt_matches.opt_str("u") {
@@ -148,9 +153,6 @@ fn main() {
 /// Sets up logger in accordance with command line options
 fn setup_logger(opt_matches: &Matches) {
     let mut level = LevelFilter::Info;
-    if opt_matches.opt_present("v") {
-        level = LevelFilter::Debug;
-    }
     if opt_matches.opt_present("d") {
         level = LevelFilter::Trace;
     }
