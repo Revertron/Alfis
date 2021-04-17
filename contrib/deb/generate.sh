@@ -115,7 +115,7 @@ fi
 EOF
 cat > /tmp/$PKGNAME/debian/postrm << EOF
 #!/bin/sh
-if [ $2 != upgrade ] && [ -e /etc/alfis.conf ] then
+if [ \$2 != upgrade ] && [ -e /etc/alfis.conf ] then
   rm /var/lib/alfis/blockchain.db
 fi
 EOF
