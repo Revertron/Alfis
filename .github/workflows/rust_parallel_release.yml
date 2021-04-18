@@ -61,17 +61,14 @@ jobs:
         uses: actions/checkout@v2
 
       - name: install dependencies
-        if: contains(matrix.os, 'ubuntu')
         run: |
           sudo apt update && sudo apt upgrade && sudo apt install libwebkit2gtk-4.0-dev upx
           cargo install cross
 
       - name: Build and package deb packages
-        if: contains(matrix.os, 'ubuntu')
         run: PKGARCH=${{ matrix.arch }} contrib/deb/generate.sh
 
       - name: Upload bins & debs
-        if: contains(matrix.os, 'ubuntu')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -96,7 +93,7 @@ jobs:
 
       - name: install dependencies
         if: contains(matrix.os, 'ubuntu')
-        run: sudo apt update && apt upgrade && sudo apt install libwebkit2gtk-4.0-dev upx
+        run: sudo apt update && sudo apt upgrade && sudo apt install libwebkit2gtk-4.0-dev upx
 
       - name: Build release binaries
         run: cargo build --release
