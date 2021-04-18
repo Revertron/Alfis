@@ -14,7 +14,7 @@ fi
 PKGNAME=$(sh contrib/semver/name.sh)
 PKGVERSION=$(sh contrib/semver/version.sh --bare)
 PKGARCH=${PKGARCH-amd64}
-PKGFILE=$PKGNAME-$PKGARCH-v$PKGVERSION.deb
+PKGFILE=$PKGNAME-$PKGARCH-v$PKGVERSION-nogui.deb
 PKGREPLACES=alfis
 
 #if [ $PKGBRANCH = "master" ]; then

@@ -19,8 +19,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Getting version
-        #run: echo "VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
-        run: echo "VERSION=0.0.1" >> $GITHUB_ENV
+        run: echo "VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
 
   create_release:
     name: Create Release
