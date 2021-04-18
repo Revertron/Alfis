@@ -202,11 +202,10 @@ impl Chain {
             return None;
         }
 
-        let block = self.last_full_block.unwrap();
-        if block.transaction.is_none() {
-            trace!("No need to mine signing block");
-            return None;
-        }
+        let block = match self.last_full_block {
+            None => { return None; }
+            Some(ref block) => { block.clone() }
+        };
         let keystore = keystore.clone().unwrap().clone();
         let signers: HashSet<Bytes> = self.get_block_signers(&block).into_iter().collect();
         if signers.contains(&keystore.get_public()) {
