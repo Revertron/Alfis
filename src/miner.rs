@@ -191,7 +191,9 @@ impl Miner {
                             }
                             context.chain.add_block(block);
                             let option = Some(job.keystore);
-                            context.chain.update(&option);
+                            if let Some(event) = context.chain.update(&option) {
+                                context.bus.post(event);
+                            }
                             success = true;
                         }
                         context.bus.post(Event::MinerStopped { success, full });
@@ -230,8 +232,9 @@ fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<Atomic
         };
 
         if full && next_allowed_block > block.index {
+            //trace!("Mining full block is not allowed until previous is not signed");
             // We can't mine now, as we need to wait for block to be signed
-            thread::sleep(Duration::from_millis(1000));
+            thread::sleep(Duration::from_millis(5000));
             continue;
         }
         debug!("Mining block {}", serde_json::to_string(&block).unwrap());

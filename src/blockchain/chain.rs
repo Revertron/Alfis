@@ -204,7 +204,7 @@ impl Chain {
 
         let block = self.last_block().unwrap();
         if block.transaction.is_none() {
-            trace!("No need to sign signing block");
+            trace!("No need to mine signing block");
             return None;
         }
         let keystore = keystore.clone().unwrap().clone();
@@ -229,6 +229,7 @@ impl Chain {
             }
             block.index = self.height() + 1;
             block.prev_block_hash = self.last_block.clone().unwrap().hash;
+            return Some(block);
         }
         None
     }

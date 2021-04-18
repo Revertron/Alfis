@@ -150,6 +150,10 @@ impl Network {
                         if log_timer.elapsed().as_secs() > LOG_REFRESH_DELAY_SEC {
                             info!("Active nodes count: {}, blocks count: {}", nodes, height);
                             log_timer = Instant::now();
+                            let keystore = context.keystore.clone();
+                            if let Some(event) = context.chain.update(&keystore) {
+                                context.bus.post(event);
+                            }
                         }
                         (height, context.chain.last_hash())
                     };
@@ -479,7 +483,9 @@ fn process_new_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &To
         BlockQuality::Good => {
             context.chain.add_block(block);
             let keystore = context.keystore.clone();
-            context.chain.update(&keystore);
+            if let Some(event) = context.chain.update(&keystore) {
+                context.bus.post(event);
+            }
             let my_height = context.chain.height();
             context.bus.post(crate::event::Event::BlockchainChanged { index: my_height });
             // If it was the last block to sync
@@ -506,7 +512,9 @@ fn process_new_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &To
             if block.is_better_than(&last_block) {
                 context.chain.replace_block(block.index, block).expect("Error replacing block with fork");
                 let keystore = context.keystore.clone();
-                context.chain.update(&keystore);
+                if let Some(event) = context.chain.update(&keystore) {
+                    context.bus.post(event);
+                }
                 let index = context.chain.height();
                 context.bus.post(crate::event::Event::BlockchainChanged { index });
             }

@@ -1,8 +1,8 @@
-extern crate web_view;
-extern crate tinyfiledialogs as tfd;
+extern crate open;
 extern crate serde;
 extern crate serde_json;
-extern crate open;
+extern crate tinyfiledialogs as tfd;
+extern crate web_view;
 
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
@@ -196,6 +196,11 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
     let context_copy = Arc::clone(&context);
     let mut c = context.lock().unwrap();
 
+    let keystore = c.keystore.clone();
+    if let Some(event) = c.chain.update(&keystore) {
+        c.bus.post(event);
+    }
+
     c.bus.register(move |_uuid, e| {
         //debug!("Got event from bus {:?}", &e);
         let status = Arc::clone(&status);
@@ -215,6 +220,10 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                 Event::KeyLoaded { path, public, hash } |
                 Event::KeySaved { path, public, hash } => {
                     load_domains(&mut context, &handle);
+                    let keystore = context.keystore.clone();
+                    if let Some(event) = context.chain.update(&keystore) {
+                        context.bus.post(event);
+                    }
                     format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash)
                 }
                 Event::MinerStarted | Event::KeyGeneratorStarted => {
