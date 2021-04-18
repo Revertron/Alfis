@@ -93,7 +93,7 @@ jobs:
 
       - name: install dependencies
         if: contains(matrix.os, 'ubuntu')
-        run: sudo apt update && sudo apt upgrade && sudo apt install libwebkit2gtk-4.0-dev upx
+        run: sudo apt update && sudo apt install --no-install-recommends libwebkit2gtk-4.0-dev upx
 
       - name: Build release binaries
         run: cargo build --release
@@ -147,7 +147,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ needs.make_release.outputs.upload_url }}
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
           asset_path: ${{ env.ZIP_NAME }}
           asset_name: ${{ env.ZIP_NAME }}
           asset_content_type: application/zip
@@ -159,7 +159,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ needs.make_release.outputs.upload_url }}
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
           asset_path: ${{ env.ZIP_NAME_EDGE }}
           asset_name: ${{ env.ZIP_NAME_EDGE }}
           asset_content_type: application/zip
