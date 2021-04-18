@@ -708,7 +708,7 @@ impl Chain {
                     warn!("Block {} arrived too early.", block.index);
                     return Future;
                 }
-                if block.index >= BLOCK_SIGNERS_START {
+                if block.index > BLOCK_SIGNERS_START {
                     // If this block is main, signed part of blockchain
                     if !self.is_good_sign_block(&block) {
                         return Bad;
