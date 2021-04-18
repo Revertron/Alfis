@@ -121,13 +121,6 @@ if command -v systemctl >/dev/null; then
   systemctl disable alfis || true
 fi
 EOF
-cat > /tmp/$PKGNAME/debian/postrm << EOF
-#!/bin/sh
-if [ \$2 != upgrade ] && [ -e /etc/alfis.conf ]
-then
-  rm /var/lib/alfis/blockchain.db
-fi
-EOF
 
 sudo cp alfis /tmp/$PKGNAME/usr/bin/
 cp contrib/systemd/*.service /tmp/$PKGNAME/etc/systemd/system/
