@@ -232,6 +232,9 @@ fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<Atomic
         };
 
         if full && next_allowed_block > block.index {
+            if !running.load(Ordering::Relaxed) {
+                return None;
+            }
             //trace!("Mining full block is not allowed until previous is not signed");
             // We can't mine now, as we need to wait for block to be signed
             thread::sleep(Duration::from_millis(5000));
