@@ -209,6 +209,14 @@ impl Chain {
         let keystore = keystore.clone().unwrap().clone();
         let signers: HashSet<Bytes> = self.get_block_signers(&block).into_iter().collect();
         if signers.contains(&keystore.get_public()) {
+            for index in block.index..=self.height() {
+                let b = self.get_block(index).unwrap();
+                if b.pub_key == keystore.get_public() {
+                    info!("We already mined signing block for block {}", block.index);
+                    return None;
+                }
+            }
+
             info!("We have an honor to mine signing block!");
             let keystore = Box::new(keystore);
             // We start mining sign block after some time, not everyone in the same time
