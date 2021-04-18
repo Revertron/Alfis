@@ -173,6 +173,10 @@ impl Peers {
         count
     }
 
+    pub fn get_peers_banned_count(&self) -> usize {
+        self.ignored.len()
+    }
+
     pub fn ignore_peer(&mut self, registry: &Registry, token: &Token) {
         let peer = self.peers.get_mut(token).unwrap();
         peer.set_state(State::Banned);

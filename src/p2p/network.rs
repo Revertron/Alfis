@@ -65,6 +65,7 @@ impl Network {
             let mut ui_timer = Instant::now();
             let mut log_timer = Instant::now();
             let mut bootstrap_timer = Instant::now();
+            let mut last_events_time = Instant::now();
             loop {
                 if peers.get_peers_count() == 0 && bootstrap_timer.elapsed().as_secs() > 60 {
                     // Starting peer connections to bootstrap nodes
@@ -136,6 +137,9 @@ impl Network {
                         }
                     }
                 }
+                if !events.is_empty() {
+                    last_events_time = Instant::now();
+                }
                 events.clear();
 
                 if ui_timer.elapsed().as_millis() > UI_REFRESH_DELAY_MS {
@@ -144,11 +148,16 @@ impl Network {
                         let mut context = context.lock().unwrap();
                         let height = context.chain.height();
                         let nodes = peers.get_peers_active_count();
+                        let banned = peers.get_peers_banned_count();
                         if nodes > 0 {
                             context.bus.post(crate::event::Event::NetworkStatus { nodes, blocks: height });
                         }
                         if log_timer.elapsed().as_secs() > LOG_REFRESH_DELAY_SEC {
-                            info!("Active nodes count: {}, blocks count: {}", nodes, height);
+                            info!("Active nodes count: {}, banned count: {}, blocks count: {}", nodes, banned, height);
+                            let elapsed = last_events_time.elapsed().as_secs();
+                            if elapsed >= 10 {
+                                warn!("Last network events time {} seconds ago", elapsed);
+                            }
                             log_timer = Instant::now();
                             let keystore = context.keystore.clone();
                             if let Some(event) = context.chain.update(&keystore) {
@@ -433,7 +442,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 State::message(Message::GetBlock { index: my_height })
             } else {
                 if random::<u8>() < 10 {
-                    debug!("Requesting more peers");
+                    debug!("Requesting more peers from {}", peer.get_addr().ip());
                     State::message(Message::GetPeers)
                 } else {
                     State::idle()

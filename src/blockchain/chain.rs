@@ -206,6 +206,12 @@ impl Chain {
             None => { return None; }
             Some(ref block) => { block.clone() }
         };
+        // TODO maybe make some config option to mine signing blocks above?
+        let sign_count = self.height() - block.index;
+        if sign_count >= BLOCK_SIGNERS_MIN {
+            trace!("Block {} has enough signing blocks", block.index);
+            return None;
+        }
         let keystore = keystore.clone().unwrap().clone();
         let signers: HashSet<Bytes> = self.get_block_signers(&block).into_iter().collect();
         if signers.contains(&keystore.get_public()) {
