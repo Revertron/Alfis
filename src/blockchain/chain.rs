@@ -202,7 +202,7 @@ impl Chain {
             return None;
         }
 
-        let block = self.last_block().unwrap();
+        let block = self.last_full_block.unwrap();
         if block.transaction.is_none() {
             trace!("No need to mine signing block");
             return None;
