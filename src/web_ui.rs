@@ -357,6 +357,11 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
         show_warning(web_view, "You don't have keys loaded!<br>Load or mine the keys and try again.");
         return;
     }
+    if context.chain.is_waiting_signers() {
+        show_warning(web_view, "Waiting for last full block to be signed. Try again later.");
+        info!("Waiting for last full block to be signed. Try again later.");
+        return;
+    }
     let keystore = context.get_keystore().unwrap();
     let pub_key = keystore.get_public();
     let mut data = match serde_json::from_str::<DomainData>(&data) {
@@ -407,6 +412,12 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
 }
 
 fn action_create_zone(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, web_view: &mut WebView<()>, name: String, data: String) {
+    if context.lock().unwrap().chain.is_waiting_signers() {
+        show_warning(web_view, "Waiting for last full block to be signed. Try again later.");
+        info!("Waiting for last full block to be signed. Try again later.");
+        return;
+    }
+
     let name = name.to_lowercase();
     if name.len() > ZONE_MAX_LENGTH || !check_domain(&name, false) || context.lock().unwrap().x_zones.has_zone(&name) {
         warn!("This zone is unavailable for mining!");

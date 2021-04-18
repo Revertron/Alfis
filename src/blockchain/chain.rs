@@ -234,6 +234,17 @@ impl Chain {
         None
     }
 
+    pub fn is_waiting_signers(&self) -> bool {
+        if let Some(full_block) = &self.last_full_block {
+            let sign_count = self.height() - full_block.index;
+            if sign_count < BLOCK_SIGNERS_MIN {
+                return true;
+            }
+        }
+
+        false
+    }
+
     fn delete_transaction(&mut self, index: u64) -> sqlite::Result<()> {
         let mut statement = self.db.prepare(SQL_DELETE_DOMAIN)?;
         statement.bind(1, index as i64)?;
