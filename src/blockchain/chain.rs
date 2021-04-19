@@ -635,9 +635,7 @@ impl Chain {
     }
 
     pub fn update_max_height(&mut self, height: u64) {
-        if height > self.max_height {
-            self.max_height = height;
-        }
+        self.max_height = height;
     }
 
     /// Check if this block can be added to our blockchain

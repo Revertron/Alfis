@@ -140,6 +140,10 @@ impl Peers {
         self.my_id.eq(rand)
     }
 
+    pub fn is_ignored(&self, addr: &IpAddr) -> bool {
+        self.ignored.contains(addr)
+    }
+
     pub fn get_peers_for_exchange(&self, peer_address: &SocketAddr) -> Vec<String> {
         let mut result: Vec<String> = Vec::new();
         for (_, peer) in self.peers.iter() {

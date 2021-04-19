@@ -98,6 +98,11 @@ impl Network {
                                         }
                                     }
 
+                                    if peers.is_ignored(&address.ip()) {
+                                        debug!("Ignoring connection from banned {:?}", &address.ip());
+                                        continue;
+                                    }
+
                                     if yggdrasil_only && !is_yggdrasil(&address.ip()) {
                                         debug!("Dropping connection from Internet");
                                         stream.shutdown(Shutdown::Both).unwrap_or_else(|e|{ warn!("Error in shutdown, {}", e); });
