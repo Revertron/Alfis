@@ -676,11 +676,18 @@ impl Chain {
             return Bad;
         }
 
-        let faulty_block_hash = "0000133B790B61460D757E1F1F2D04480C8340D28CA73AE5AF27DBBF60548D00";
-        let bytes = Bytes::from_bytes(&from_hex(faulty_block_hash).unwrap());
-        if block.hash == bytes {
-            warn!("Block {:?} is faulty! Ignoring!", &block);
-            return Bad;
+        let faulty_blocks = vec![
+            "0000133B790B61460D757E1F1F2D04480C8340D28CA73AE5AF27DBBF60548D00",
+            "8564E56AB50AE8473C3A26D7F5FF768A0238D463FAAE4A2049B2A6052F140000",
+            "0000FD8442CE01D9F25A4F53BE21A8552E83182184F2FF75E2A77718CF87483E",
+            "000CF01FA8E538A5AEA1E0E7B5FAB14914A4407B1CBE93CBB0F2129782661160",
+        ];
+        for hash in faulty_blocks {
+            let bytes = Bytes::from_bytes(&from_hex(hash).unwrap());
+            if block.hash == bytes {
+                warn!("Block {:?} is faulty! Ignoring!", &block);
+                return Bad;
+            }
         }
 
         if let Some(transaction) = &block.transaction {
@@ -864,13 +871,13 @@ impl Chain {
     /// block - last full block
     pub fn get_block_signers(&self, block: &Block) -> Vec<Bytes> {
         let mut result = Vec::new();
-        if block.index < BLOCK_SIGNERS_START {
+        if block.index < BLOCK_SIGNERS_START || self.height() < block.index {
             return result;
         }
         let mut set = HashSet::new();
         let tail = block.signature.get_tail_u64();
         let mut count = 1;
-        let window = self.height() - 1; // Without the last block
+        let window = block.index - 1; // Without the last block
         while set.len() < BLOCK_SIGNERS_ALL as usize {
             let index = ((tail * count) % window) + 1; // We want it to start from 1
             if let Some(b) = self.get_block(index) {
