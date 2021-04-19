@@ -48,14 +48,14 @@ fn download_iana_zones(zones_name: &str, hashes_name: &str) {
         Ok(mut file) => {
             file.write_all(zones.trim().as_bytes()).expect("Error saving TLDs file!");
         }
-        Err(e) => { println!("Error opening TLDs file!\n{}", e); }
+        Err(e) => { panic!("Error opening TLDs file!\n{}", e); }
     }
 
     match File::create(Path::new(hashes_name)) {
         Ok(mut file) => {
             file.write_all(hashes.trim().as_bytes()).expect("Error saving TLD-hashes file!");
         }
-        Err(e) => { println!("Error opening TLD-hashes file!\n{}", e); }
+        Err(e) => { panic!("Error opening TLD-hashes file!\n{}", e); }
     }
 }
 

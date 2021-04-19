@@ -477,6 +477,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
 }
 
 fn process_new_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &Token, block: Block) -> State {
+    let peers_count = peers.get_peers_active_count();
     let peer = peers.get_mut_peer(token).unwrap();
     peer.set_received_block(block.index);
     if let Some(transaction) = &block.transaction {
@@ -485,7 +486,7 @@ fn process_new_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &To
             return State::Banned;
         }
     }
-    let peers_count = peers.get_peers_active_count();
+
     let mut context = context.lock().unwrap();
     let max_height = context.chain.max_height();
     match context.chain.check_new_block(&block) {
