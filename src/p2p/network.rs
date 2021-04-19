@@ -509,7 +509,7 @@ fn process_new_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &To
         BlockQuality::Future => { debug!("Ignoring future block {}", block.index); }
         BlockQuality::Bad => {
             // TODO save bad public keys to banned table
-            debug!("Ignoring bad block {} with hash {:?}", block.index, block.hash);
+            debug!("Ignoring bad block {} with hash {:?} from {}", block.index, block.hash, peer.get_addr());
             let height = context.chain.height();
             context.chain.update_max_height(height);
             context.bus.post(crate::event::Event::SyncFinished);

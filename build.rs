@@ -1,11 +1,16 @@
 extern crate winres;
 
 use std::fs::File;
+use std::fs::read_to_string;
 use std::path::Path;
 use std::io::Write;
 
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
+
+const IANA_FILE: &'static str = "iana-tlds.txt";
+const IANA_HASHES: &'static str = "iana-hashes.txt";
+const IANA_ZONES_URL: &'static str = "https://data.iana.org/TLD/tlds-alpha-by-domain.txt";
 
 fn main() {
     if cfg!(target_os = "windows") {
@@ -14,13 +19,18 @@ fn main() {
         res.compile().unwrap();
     }
 
-    download_iana_zones("iana-tlds.txt", "iana-hashes.txt");
+    download_iana_zones(IANA_FILE, IANA_HASHES);
 }
 
 fn download_iana_zones(zones_name: &str, hashes_name: &str) {
-    let response = minreq::get("https://data.iana.org/TLD/tlds-alpha-by-domain.txt").send().expect("Could not make request!");
+    let response = match read_to_string(Path::new(IANA_FILE)) {
+        Ok(string) => { string }
+        Err(_) => {
+            let response = minreq::get(IANA_ZONES_URL).send().expect("Could not make request!");
+            response.as_str().expect("Response is not a valid UTF-8!").to_lowercase()
+        }
+    };
 
-    let response = response.as_str().expect("Response is not a valid UTF-8!").to_lowercase();
     let list: Vec<_> = response.split("\n").collect();
     let mut zones = String::new();
     let mut hashes = String::new();

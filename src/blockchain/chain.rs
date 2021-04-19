@@ -754,8 +754,10 @@ impl Chain {
                             Twin
                         };
                     }
+                } else if block.prev_block_hash != last_block.hash {
+                    warn!("Ignoring block with wrong previous hash:\n{:?}", &block);
+                    return Bad;
                 }
-
             }
         }
 
