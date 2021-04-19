@@ -276,6 +276,10 @@ fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<Atomic
                 if block.index > 1 {
                     if let Ok(context) = context.lock() {
                         if context.chain.height() >= block.index {
+                            if !full {
+                                info!("Blockchain changed while mining signing block, dropping work");
+                                return None;
+                            }
                             break;
                         }
                     }

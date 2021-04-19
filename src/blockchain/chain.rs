@@ -212,6 +212,12 @@ impl Chain {
             trace!("Block {} has enough signing blocks", block.index);
             return None;
         }
+        if let Some(block) = &self.last_block {
+            if block.timestamp + 60 > Utc::now().timestamp() {
+                info!("Waiting for other blocks before signing.");
+                return None;
+            }
+        }
         let keystore = keystore.clone().unwrap().clone();
         let signers: HashSet<Bytes> = self.get_block_signers(&block).into_iter().collect();
         if signers.contains(&keystore.get_public()) {
@@ -645,6 +651,10 @@ impl Chain {
             warn!("Ignoring block from the future:\n{:?}", &block);
             return Bad;
         }
+        if block.index > self.height() + 1 {
+            info!("Ignoring future block:\n{:?}", &block);
+            return Future;
+        }
         if !check_public_key_strength(&block.pub_key, KEYSTORE_DIFFICULTY) {
             warn!("Ignoring block with weak public key:\n{:?}", &block);
             return Bad;
@@ -674,6 +684,12 @@ impl Chain {
         if !check_block_signature(&block) {
             warn!("Block {:?} has wrong signature! Ignoring!", &block);
             return Bad;
+        }
+        if let Some(prev_block) = self.get_block(block.index - 1) {
+            if block.prev_block_hash != prev_block.hash {
+                warn!("Ignoring block with wrong previous hash:\n{:?}", &block);
+                return Bad;
+            }
         }
 
         let faulty_blocks = vec![
