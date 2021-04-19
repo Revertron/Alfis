@@ -233,7 +233,7 @@ impl Chain {
             let keystore = Box::new(keystore);
             // We start mining sign block after some time, not everyone in the same time
             let start = Utc::now().timestamp() + (rand::random::<i64>() % BLOCK_SIGNERS_START_RANDOM);
-            return Some(Event::ActionMineLocker { start, index: block.index + 1, hash: block.hash, keystore });
+            return Some(Event::ActionMineSigning { start, index: block.index + 1, hash: block.hash, keystore });
         } else if !signers.is_empty() {
             info!("Signing block must be mined by other nodes");
         }
@@ -664,7 +664,7 @@ impl Chain {
                 if block.index == 1 {
                     ZONE_DIFFICULTY
                 } else {
-                    LOCKER_DIFFICULTY
+                    SIGNER_DIFFICULTY
                 }
             }
             Some(t) => { self.get_difficulty_for_transaction(&t) }
@@ -816,7 +816,7 @@ impl Chain {
         if self.can_sign_by_pos(sign_count, full_block.timestamp, block.timestamp, &block.pub_key) {
             return true;
         }
-        // If we got a locker/signing block
+        // If we got a signing block
         let signers: HashSet<Bytes> = self.get_block_signers(full_block).into_iter().collect();
         if !signers.contains(&block.pub_key) {
             warn!("Ignoring block {} from '{:?}', as wrong signer!", block.index, &block.pub_key);

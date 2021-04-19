@@ -9,7 +9,7 @@ use log::{debug, error, info, trace, warn};
 use num_cpus;
 
 use crate::{Block, Bytes, Context, Keystore, setup_miner_thread};
-use crate::commons::{CHAIN_VERSION, LOCKER_DIFFICULTY, KEYSTORE_DIFFICULTY};
+use crate::commons::{CHAIN_VERSION, SIGNER_DIFFICULTY, KEYSTORE_DIFFICULTY};
 use crate::blockchain::types::BlockQuality;
 use crate::blockchain::hash_utils::*;
 use crate::keys::check_public_key_strength;
@@ -37,7 +37,13 @@ impl Miner {
     }
 
     pub fn add_block(&mut self, block: Block, keystore: Keystore) {
-        self.jobs.lock().unwrap().push(MineJob { start: 0, block, keystore });
+        {
+            let mut jobs = self.jobs.lock().unwrap();
+            if block.transaction.is_none() {
+                jobs.retain(|job| job.block.transaction.is_some());
+            }
+            jobs.push(MineJob { start: 0, block, keystore });
+        }
         self.cond_var.notify_one();
     }
 
@@ -90,13 +96,13 @@ impl Miner {
                 Event::ActionStopMining => {
                     mining.store(false, Ordering::SeqCst);
                 }
-                Event::ActionMineLocker { start, index, hash, keystore } => {
+                Event::ActionMineSigning { start, index, hash, keystore } => {
                     if !mining.load(Ordering::SeqCst) {
-                        let mut block = Block::new(None, Bytes::default(), hash, LOCKER_DIFFICULTY);
+                        let mut block = Block::new(None, Bytes::default(), hash, SIGNER_DIFFICULTY);
                         block.index = index;
                         blocks.lock().unwrap().push(MineJob { start, block, keystore: keystore.deref().clone() });
                         cond_var.notify_all();
-                        info!("Added a locker block to mine");
+                        info!("Added a signing block to mine");
                     }
                 }
                 _ => {}
@@ -114,9 +120,9 @@ impl Miner {
         job.block.signature = Bytes::default();
         job.block.hash = Bytes::default();
         job.block.version = CHAIN_VERSION;
-        // If this block needs to be a locker
+        // If this block needs to be a signer
         if job.block.index > 0 && !job.block.prev_block_hash.is_empty() {
-            info!("Mining locker block");
+            info!("Mining signing block");
             job.block.pub_key = job.keystore.get_public();
             if !check_public_key_strength(&job.block.pub_key, KEYSTORE_DIFFICULTY) {
                 warn!("Can not mine block with weak public key!");
@@ -190,10 +196,6 @@ impl Miner {
                                 context.settings.origin = block.hash.to_string();
                             }
                             context.chain.add_block(block);
-                            let option = Some(job.keystore);
-                            if let Some(event) = context.chain.update(&option) {
-                                context.bus.post(event);
-                            }
                             success = true;
                         }
                         context.bus.post(Event::MinerStopped { success, full });

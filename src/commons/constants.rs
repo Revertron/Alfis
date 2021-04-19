@@ -3,7 +3,7 @@ pub const CHAIN_VERSION: u32 = 0;
 
 pub const ZONE_DIFFICULTY: u32 = 28;
 pub const ZONE_MIN_DIFFICULTY: u32 = 22;
-pub const LOCKER_DIFFICULTY: u32 = 16;
+pub const SIGNER_DIFFICULTY: u32 = 16;
 pub const KEYSTORE_DIFFICULTY: u32 = 23;
 
 /// Blocks start to be signed starting from this index
