@@ -166,7 +166,8 @@ impl Network {
                                 warn!("Last network events time {} seconds ago", elapsed);
                             }
                             log_timer = Instant::now();
-                            if sent_mining_event_index < height || sent_mining_event_time.elapsed().as_secs() >= 600 {
+                            let mining = context.miner_state.mining;
+                            if !mining && (sent_mining_event_index < height || sent_mining_event_time.elapsed().as_secs() >= 600) {
                                 let keystore = context.keystore.clone();
                                 if let Some(event) = context.chain.update(&keystore) {
                                     context.bus.post(event);
