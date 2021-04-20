@@ -78,8 +78,8 @@ impl Miner {
                         Miner::mine_internal(Arc::clone(&context), job, mining.clone());
                     } else {
                         debug!("This job will wait for now");
-                        thread::sleep(delay);
-                        jobs.push(job);
+                        jobs.insert(0, job);
+                        let _ = cond_var.wait_timeout(jobs, delay).expect("Error in wait lock!");
                     }
                 } else {
                     let _ = cond_var.wait(jobs).expect("Error in wait lock!");
@@ -87,7 +87,7 @@ impl Miner {
             }
         });
         let mining = self.mining.clone();
-        let blocks = self.jobs.clone();
+        let jobs = self.jobs.clone();
         let cond_var = self.cond_var.clone();
         self.context.lock().unwrap().bus.register(move |_uuid, e| {
             match e {
@@ -100,7 +100,7 @@ impl Miner {
                     if !mining.load(Ordering::SeqCst) {
                         let mut block = Block::new(None, Bytes::default(), hash, SIGNER_DIFFICULTY);
                         block.index = index;
-                        blocks.lock().unwrap().push(MineJob { start, block, keystore: keystore.deref().clone() });
+                        jobs.lock().unwrap().push(MineJob { start, block, keystore: keystore.deref().clone() });
                         cond_var.notify_all();
                         info!("Added a signing block to mine");
                     }

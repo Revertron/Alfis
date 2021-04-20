@@ -4,7 +4,7 @@ extern crate serde_json;
 use std::{io, thread};
 use std::io::{Read, Write};
 use std::net::{IpAddr, Shutdown, SocketAddr, SocketAddrV4};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
@@ -167,6 +167,7 @@ impl Network {
                             let keystore = context.keystore.clone();
                             if let Some(event) = context.chain.update(&keystore) {
                                 context.bus.post(event);
+                                trace!("Posted an event to mine signing block");
                             }
                         }
                         (height, context.chain.last_hash())
@@ -429,7 +430,9 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 let mut context = context.lock().unwrap();
                 context.chain.update_max_height(height);
             }
-            if hash != my_hash {
+            if hash.ne(&my_hash) {
+                debug!("1Hashes are different, requesting block {} from {}", my_height, peer.get_addr().ip());
+                debug!("My hash: {:?}, their hash: {:?}", &my_hash, &hash);
                 State::message(Message::GetBlock { index: my_height })
             } else {
                 State::message(Message::pong(my_height, my_hash))
@@ -443,7 +446,9 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 let mut context = context.lock().unwrap();
                 context.chain.update_max_height(height);
             }
-            if hash != my_hash {
+            if hash.ne(&my_hash) {
+                debug!("2Hashes are different, requesting block {} from {}", my_height, peer.get_addr().ip());
+                debug!("My hash: {:?}, their hash: {:?}", &my_hash, &hash);
                 State::message(Message::GetBlock { index: my_height })
             } else {
                 if random::<u8>() < 10 {
@@ -511,7 +516,7 @@ fn process_new_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &To
         BlockQuality::Future => { debug!("Ignoring future block {}", block.index); }
         BlockQuality::Bad => {
             // TODO save bad public keys to banned table
-            debug!("Ignoring bad block {} with hash {:?} from {}", block.index, block.hash, peer.get_addr());
+            debug!("Ignoring bad block from {}:\n{:?}", peer.get_addr(), &block);
             let height = context.chain.height();
             context.chain.update_max_height(height);
             context.bus.post(crate::event::Event::SyncFinished);
@@ -531,49 +536,6 @@ fn process_new_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &To
         }
     }
     State::idle()
-}
-
-#[allow(dead_code)]
-fn deal_with_fork(context: MutexGuard<Context>, peer: &mut Peer, block: Block) {
-    peer.add_fork_block(block);
-    let mut vector: Vec<&Block> = peer.get_fork().values().collect();
-    vector.sort_by(|a, b| a.index.cmp(&b.index));
-    if vector[0].index == 0 {
-        return;
-    }
-    if let Some(prev_block) = context.chain.get_block(vector[0].index - 1) {
-        // If this block is not root of the fork (we need to go ~deeper~ more backwards)
-        if vector[0].prev_block_hash != prev_block.hash {
-            return;
-        }
-        // Okay, prev_block is the common root for our chain and the fork
-        let mut check_ok = true;
-        vector.insert(0, &prev_block);
-        let mut prev_block = &vector[0];
-        for block in &vector {
-            if block == prev_block {
-                continue;
-            }
-            if !check_block(block, prev_block) {
-                check_ok = false;
-                break;
-            }
-            prev_block = block;
-        }
-        match check_ok {
-            true => {
-                // TODO count fork chain "work" and decide which chain is "better"
-            }
-            false => {
-                warn!("Fork chain is wrong!");
-                peer.set_state(State::Banned);
-            }
-        }
-    };
-}
-
-fn check_block(block: &Block, prev: &Block) -> bool {
-    prev.index == block.index - 1 && prev.hash == block.prev_block_hash
 }
 
 fn would_block(err: &io::Error) -> bool {

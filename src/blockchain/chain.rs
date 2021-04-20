@@ -30,13 +30,16 @@ const SQL_REPLACE_BLOCK: &str = "UPDATE blocks SET timestamp = ?, version = ?, d
                           prev_block_hash = ?, hash = ?, pub_key = ?, signature = ? WHERE id = ?;";
 const SQL_GET_LAST_BLOCK: &str = "SELECT * FROM blocks ORDER BY id DESC LIMIT 1;";
 const SQL_GET_FIRST_BLOCK_FOR_KEY: &str = "SELECT id FROM blocks WHERE pub_key = ? LIMIT 1;";
+const SQL_DELETE_BLOCK_AND_TRANSACTIONS: &str = "DELETE FROM blocks WHERE id = ?; DELETE FROM domains WHERE id = ?; DELETE FROM zones WHERE id = ?;";
+const SQL_TRUNCATE_DB_FROM_BLOCK: &str = "DELETE FROM blocks WHERE id >= ?; DELETE FROM domains WHERE id >= ?; DELETE FROM zones WHERE id >= ?;";
+
 const SQL_ADD_DOMAIN: &str = "INSERT INTO domains (id, timestamp, identity, confirmation, data, pub_key) VALUES (?, ?, ?, ?, ?, ?)";
 const SQL_ADD_ZONE: &str = "INSERT INTO zones (id, timestamp, identity, confirmation, data, pub_key) VALUES (?, ?, ?, ?, ?, ?)";
 const SQL_DELETE_DOMAIN: &str = "DELETE FROM domains WHERE id = ?";
 const SQL_DELETE_ZONE: &str = "DELETE FROM zones WHERE id = ?";
 const SQL_GET_BLOCK_BY_ID: &str = "SELECT * FROM blocks WHERE id=? LIMIT 1;";
-const SQL_GET_LAST_FULL_BLOCK: &str = "SELECT * FROM blocks WHERE `transaction`<>'' ORDER BY id DESC LIMIT 1;";
-const SQL_GET_LAST_FULL_BLOCK_FOR_KEY: &str = "SELECT * FROM blocks WHERE `transaction`<>'' AND pub_key = ? ORDER BY id DESC LIMIT 1;";
+const SQL_GET_LAST_FULL_BLOCK: &str = "SELECT * FROM blocks WHERE id < ? AND `transaction`<>'' ORDER BY id DESC LIMIT 1;";
+const SQL_GET_LAST_FULL_BLOCK_FOR_KEY: &str = "SELECT * FROM blocks WHERE id < ? AND `transaction`<>'' AND pub_key = ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_DOMAIN_PUBLIC_KEY_BY_ID: &str = "SELECT pub_key FROM domains WHERE identity = ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_ZONE_PUBLIC_KEY_BY_ID: &str = "SELECT pub_key FROM zones WHERE identity = ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_DOMAIN_BY_ID: &str = "SELECT * FROM domains WHERE identity = ? ORDER BY id DESC LIMIT 1;";
@@ -83,9 +86,68 @@ impl Chain {
             if block.transaction.is_some() {
                 self.last_full_block = Some(block);
             } else {
-                self.last_full_block = self.get_last_full_block(None);
+                self.last_full_block = self.get_last_full_block(u64::MAX, None);
             }
         }
+        self.check_chain();
+    }
+
+    fn check_chain(&mut self) {
+        let height = self.height();
+        info!("Local blockchain height is {}, starting full blockchain check...", height);
+        for id in 1..=height {
+            info!("Checking block {}", id);
+            match self.get_block(id) {
+                None => {
+                    panic!("Blockchain is corrupted! Please, delete 'blockchain.db' and restart.");
+                }
+                Some(block) => {
+                    if block.index == 1 {
+                        if block.hash != self.origin {
+                            panic!("Loaded DB is not of origin {:?}! Please, delete 'blockchain.db' and restart.", &self.origin);
+                        }
+                        self.last_block = Some(block);
+                        continue;
+                    }
+
+                    //let last = self.last_block.clone().unwrap();
+                    if self.check_new_block(&block) != BlockQuality::Good {
+                        error!("Block {} is bad:\n{:?}", block.index, &block);
+                        info!("Truncating database from block {}...", block.index);
+                        if self.truncate_db_from_block(block.index).is_err() {
+                            panic!("Error truncating database! Please, delete 'blockchain.db' and restart.");
+                        }
+                        break;
+                    }
+                    info!("Block {} is good!", block.index);
+                    if block.transaction.is_some() {
+                        self.last_full_block = Some(block.clone());
+                    }
+                    self.last_block = Some(block);
+                }
+            }
+        }
+        self.last_block = self.load_last_block();
+        self.last_full_block = self.get_last_full_block(u64::MAX, None);
+        info!("Last block after chain check: {:?}", &self.last_block);
+    }
+
+    #[allow(dead_code)]
+    fn delete_block(&mut self, index: u64) -> sqlite::Result<State> {
+        let mut statement = self.db.prepare(SQL_DELETE_BLOCK_AND_TRANSACTIONS)?;
+        statement.bind(1, index as i64)?;
+        statement.bind(2, index as i64)?;
+        statement.bind(3, index as i64)?;
+        statement.next()
+    }
+
+    #[allow(dead_code)]
+    fn truncate_db_from_block(&mut self, index: u64) -> sqlite::Result<State> {
+        let mut statement = self.db.prepare(SQL_TRUNCATE_DB_FROM_BLOCK)?;
+        statement.bind(1, index as i64)?;
+        statement.bind(2, index as i64)?;
+        statement.bind(3, index as i64)?;
+        statement.next()
     }
 
     fn load_last_block(&mut self) -> Option<Block> {
@@ -241,14 +303,21 @@ impl Chain {
     }
 
     pub fn update_sign_block_for_mining(&self, mut block: Block) -> Option<Block> {
+        info!("11");
         if let Some(full_block) = &self.last_full_block {
+            info!("22");
             let sign_count = self.height() - full_block.index;
             if sign_count >= BLOCK_SIGNERS_MIN {
+                info!("23");
                 return None;
             }
-            block.index = self.height() + 1;
-            block.prev_block_hash = self.last_block.clone().unwrap().hash;
-            return Some(block);
+            info!("33");
+            if let Some(last) = &self.last_block {
+                block.index = last.index + 1;
+                block.prev_block_hash = last.hash.clone();
+                info!("44");
+                return Some(block);
+            }
         }
         None
     }
@@ -363,7 +432,7 @@ impl Chain {
     }
 
     /// Gets last block that has a Transaction within
-    pub fn get_last_full_block(&self, pub_key: Option<&[u8]>) -> Option<Block> {
+    pub fn get_last_full_block(&self, index: u64, pub_key: Option<&[u8]>) -> Option<Block> {
         if let Some(block) = &self.last_full_block {
             match pub_key {
                 None => { return Some(block.clone()); }
@@ -377,11 +446,14 @@ impl Chain {
 
         let mut statement = match pub_key {
             None => {
-                self.db.prepare(SQL_GET_LAST_FULL_BLOCK).expect("Unable to prepare")
+                let mut statement = self.db.prepare(SQL_GET_LAST_FULL_BLOCK).expect("Unable to prepare");
+                statement.bind(1, index as i64).expect("Unable to bind");
+                statement
             }
             Some(pub_key) => {
                 let mut statement = self.db.prepare(SQL_GET_LAST_FULL_BLOCK_FOR_KEY).expect("Unable to prepare");
-                statement.bind(1, pub_key).expect("Unable to bind");
+                statement.bind(1, index as i64).expect("Unable to bind");
+                statement.bind(2, pub_key).expect("Unable to bind");
                 statement
             }
         };
@@ -506,7 +578,7 @@ impl Chain {
             }
         }
         let identity_hash = hash_identity(&name, None);
-        if let Some(last) = self.get_last_full_block(Some(&pub_key)) {
+        if let Some(last) = self.get_last_full_block(u64::MAX, Some(&pub_key)) {
             let new_id = !self.is_id_in_blockchain(&identity_hash, false);
             let time = last.timestamp + NEW_DOMAINS_INTERVAL - Utc::now().timestamp();
             if new_id && time > 0 {
@@ -684,7 +756,7 @@ impl Chain {
             return Bad;
         }
         if let Some(prev_block) = self.get_block(block.index - 1) {
-            if block.prev_block_hash != prev_block.hash {
+            if block.prev_block_hash.ne(&prev_block.hash) {
                 warn!("Ignoring block with wrong previous hash:\n{:?}", &block);
                 return Bad;
             }
@@ -710,11 +782,13 @@ impl Chain {
                 warn!("Block {:?} is trying to spoof an identity!", &block);
                 return Bad;
             }
-            if let Some(last) = self.get_last_full_block(Some(&block.pub_key)) {
-                let new_id = !self.is_id_in_blockchain(&transaction.identity, false);
-                if new_id && last.timestamp + NEW_DOMAINS_INTERVAL > block.timestamp {
-                    warn!("Block {:?} is mined too early!", &block);
-                    return Bad;
+            if let Some(last) = self.get_last_full_block(block.index, Some(&block.pub_key)) {
+                if last.index < block.index {
+                    let new_id = !self.is_id_in_blockchain(&transaction.identity, false);
+                    if new_id && last.timestamp + NEW_DOMAINS_INTERVAL > block.timestamp {
+                        warn!("Block {:?} is mined too early!", &block);
+                        return Bad;
+                    }
                 }
             }
             // Check if yggdrasil only quality of zone is not violated
@@ -740,7 +814,7 @@ impl Chain {
                     warn!("Block is from the future, how is this possible?");
                     return Future;
                 }
-                if !self.origin.is_zero() && block.hash != self.origin {
+                if !self.origin.is_zero() && block.hash.ne(&self.origin) {
                     warn!("Mining gave us a bad block:\n{:?}", &block);
                     return Bad;
                 }
@@ -767,7 +841,7 @@ impl Chain {
                         return Twin;
                     }
                     if let Some(my_block) = self.get_block(block.index) {
-                        return if my_block.hash != block.hash {
+                        return if my_block.hash.ne(&block.hash) {
                             warn!("Got forked block {} with hash {:?} instead of {:?}", block.index, block.hash, last_block.hash);
                             Fork
                         } else {
@@ -775,7 +849,7 @@ impl Chain {
                             Twin
                         };
                     }
-                } else if block.prev_block_hash != last_block.hash {
+                } else if block.prev_block_hash.ne(&last_block.hash) {
                     warn!("Ignoring block with wrong previous hash:\n{:?}", &block);
                     return Bad;
                 }
