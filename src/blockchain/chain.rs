@@ -303,19 +303,14 @@ impl Chain {
     }
 
     pub fn update_sign_block_for_mining(&self, mut block: Block) -> Option<Block> {
-        info!("11");
         if let Some(full_block) = &self.last_full_block {
-            info!("22");
             let sign_count = self.height() - full_block.index;
             if sign_count >= BLOCK_SIGNERS_MIN {
-                info!("23");
                 return None;
             }
-            info!("33");
             if let Some(last) = &self.last_block {
                 block.index = last.index + 1;
                 block.prev_block_hash = last.hash.clone();
-                info!("44");
                 return Some(block);
             }
         }
