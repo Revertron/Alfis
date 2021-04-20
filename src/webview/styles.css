@@ -21,6 +21,7 @@ body {
 
 .main .row.header {
   flex: 0 1 auto;
+  min-height: 42px;
 }
 
 .main .row.page {
