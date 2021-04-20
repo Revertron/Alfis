@@ -13,6 +13,11 @@ use crate::{Bytes, commons};
 use crate::commons::*;
 use crate::p2p::{Message, Peer, State};
 use crate::commons::next;
+use std::time::Duration;
+use std::io;
+
+const PING_PERIOD: u64 = 60;
+const TCP_TIMEOUT: Duration = Duration::from_millis(10000);
 
 pub struct Peers {
     peers: HashMap<Token, Peer>,
@@ -22,8 +27,6 @@ pub struct Peers {
     asked_block: u64,
     asked_time: i64,
 }
-
-const PING_PERIOD: u64 = 60;
 
 impl Peers {
     pub fn new() -> Self {
@@ -311,7 +314,12 @@ impl Peers {
         }
         self.new_peers.dedup();
         let addr = self.new_peers.remove(0);
-        self.connect_peer(&addr, registry, unique_token, yggdrasil_only);
+        match self.connect_peer(&addr, registry, unique_token, yggdrasil_only) {
+            Ok(_) => {}
+            Err(_) => {
+                debug!("Could not connect to {}", &addr);
+            }
+        }
     }
 
     /// Connecting to configured (bootstrap) peers
@@ -326,30 +334,43 @@ impl Peers {
             // At first we connect to one peer address from every "peer" or domain
             let addr = addresses.remove(0);
             if !set.contains(&addr) {
-                self.connect_peer(&addr, registry, unique_token, yggdrasil_only);
-                set.insert(addr);
+                match self.connect_peer(&addr, registry, unique_token, yggdrasil_only) {
+                    Ok(_) => {
+                        set.insert(addr);
+                    }
+                    Err(_) => {
+                        debug!("Could not connect to {}", &addr);
+                    }
+                }
             }
             // Copy others to new_peers, to connect later
             self.new_peers.append(&mut addresses);
         }
     }
 
-    fn connect_peer(&mut self, addr: &SocketAddr, registry: &Registry, unique_token: &mut Token, yggdrasil_only: bool) {
+    fn connect_peer(&mut self, addr: &SocketAddr, registry: &Registry, unique_token: &mut Token, yggdrasil_only: bool) -> io::Result<()> {
         if self.ignored.contains(&addr.ip()) {
-            return;
+            return Err(io::Error::from(io::ErrorKind::ConnectionAborted));
         }
         if yggdrasil_only && !is_yggdrasil(&addr.ip()) {
             debug!("Ignoring not Yggdrasil address '{}'", &addr.ip());
-            return;
+            return Err(io::Error::from(io::ErrorKind::InvalidInput));
         }
-        if let Ok(mut stream) = TcpStream::connect(addr.clone()) {
+        if let Ok(stream) = std::net::TcpStream::connect_timeout(&addr.clone(), TCP_TIMEOUT) {
+            stream.set_nodelay(true)?;
+            stream.set_read_timeout(Some(TCP_TIMEOUT))?;
+            stream.set_write_timeout(Some(TCP_TIMEOUT))?;
+            stream.set_nonblocking(true)?;
+
+            let mut stream = TcpStream::from_std(stream);
             let token = next(unique_token);
             trace!("Created connection {}, to peer {}", &token.0, &addr);
-            registry.register(&mut stream, token, Interest::WRITABLE).unwrap();
+            registry.register(&mut stream, token, Interest::WRITABLE)?;
             let mut peer = Peer::new(addr.clone(), stream, State::Connecting, false);
             peer.set_public(true);
             self.peers.insert(token, peer);
         }
+        Ok(())
     }
 
 
