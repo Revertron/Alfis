@@ -406,7 +406,8 @@ function addEvent(type, time, message) {
         t = "is-success";
     }
 
-    var buf = "<article class=\"message mb-1 {1}\"><div class=\"message-body px-2 py-1\"><strong>{2}</strong>&nbsp;&nbsp;{3}</div></article>".replace("{1}", t).replace("{2}", time).replace("{3}", message);
+    var html = "<article class=\"message mb-1 {type}\"><div class=\"message-body px-2 py-1\">{time}&nbsp;&nbsp;<strong>{text}</strong></div></article>";
+    var buf = html.replace("{type}", t).replace("{time}", time).replace("{text}", message);
     var tab_events = document.getElementById("tab_events");
     tab_events.innerHTML = tab_events.innerHTML + buf;
 }

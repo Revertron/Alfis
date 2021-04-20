@@ -46,6 +46,10 @@ body {
   margin: 10pt;
 }
 
+.message {
+  min-height: 2rem;
+}
+
 .notification {
   position: absolute;
   z-index: 100;
