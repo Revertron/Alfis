@@ -93,7 +93,7 @@ impl Chain {
     }
 
     fn check_chain(&mut self) {
-        let height = self.height();
+        let height = self.get_height();
         info!("Local blockchain height is {}, starting full blockchain check...", height);
         for id in 1..=height {
             info!("Checking block {}", id);
@@ -251,7 +251,7 @@ impl Chain {
     }
 
     pub fn update(&mut self, keystore: &Option<Keystore>) -> Option<Event> {
-        if self.height() < BLOCK_SIGNERS_START {
+        if self.get_height() < BLOCK_SIGNERS_START {
             trace!("Too early to start block signings");
             return None;
         }
@@ -259,7 +259,7 @@ impl Chain {
             trace!("We can't sign blocks without keys");
             return None;
         }
-        if self.height() < self.max_height() {
+        if self.get_height() < self.max_height() {
             trace!("No signing while syncing");
             return None;
         }
@@ -269,7 +269,7 @@ impl Chain {
             Some(ref block) => { block.clone() }
         };
         // TODO maybe make some config option to mine signing blocks above?
-        let sign_count = self.height() - block.index;
+        let sign_count = self.get_height() - block.index;
         if sign_count >= BLOCK_SIGNERS_MIN {
             trace!("Block {} has enough signing blocks", block.index);
             return None;
@@ -283,7 +283,7 @@ impl Chain {
         let keystore = keystore.clone().unwrap().clone();
         let signers: HashSet<Bytes> = self.get_block_signers(&block).into_iter().collect();
         if signers.contains(&keystore.get_public()) {
-            for index in block.index..=self.height() {
+            for index in block.index..=self.get_height() {
                 let b = self.get_block(index).unwrap();
                 if b.pub_key == keystore.get_public() {
                     info!("We already mined signing block for block {}", block.index);
@@ -304,7 +304,7 @@ impl Chain {
 
     pub fn update_sign_block_for_mining(&self, mut block: Block) -> Option<Block> {
         if let Some(full_block) = &self.last_full_block {
-            let sign_count = self.height() - full_block.index;
+            let sign_count = self.get_height() - full_block.index;
             if sign_count >= BLOCK_SIGNERS_MIN {
                 return None;
             }
@@ -319,7 +319,7 @@ impl Chain {
 
     pub fn is_waiting_signers(&self) -> bool {
         if let Some(full_block) = &self.last_full_block {
-            let sign_count = self.height() - full_block.index;
+            let sign_count = self.get_height() - full_block.index;
             if sign_count < BLOCK_SIGNERS_MIN {
                 return true;
             }
@@ -668,7 +668,7 @@ impl Chain {
         self.last_block.clone()
     }
 
-    pub fn height(&self) -> u64 {
+    pub fn get_height(&self) -> u64 {
         match self.last_block {
             None => { 0u64 }
             Some(ref block) => {
@@ -686,12 +686,12 @@ impl Chain {
 
     pub fn next_allowed_full_block(&self) -> u64 {
         match self.last_full_block {
-            None => { self.height() + 1 }
+            None => { self.get_height() + 1 }
             Some(ref block) => {
                 if block.index < BLOCK_SIGNERS_START {
-                    self.height() + 1
+                    self.get_height() + 1
                 } else {
-                    max(block.index + BLOCK_SIGNERS_MIN, self.height() + 1)
+                    max(block.index + BLOCK_SIGNERS_MIN, self.get_height() + 1)
                 }
             }
         }
@@ -716,7 +716,7 @@ impl Chain {
             warn!("Ignoring block from the future:\n{:?}", &block);
             return Bad;
         }
-        if block.index > self.height() + 1 {
+        if block.index > self.get_height() + 1 {
             info!("Ignoring future block:\n{:?}", &block);
             return Future;
         }
@@ -857,10 +857,10 @@ impl Chain {
     /// Checks if this block is a good signature block
     fn is_good_sign_block(&self, block: &Block) -> bool {
         if let Some(full_block) = &self.last_full_block {
-            let sign_count = self.height() - full_block.index;
+            let sign_count = self.get_height() - full_block.index;
             if sign_count < BLOCK_SIGNERS_MIN {
                 // Last full block is not locked enough
-                if block.transaction.is_some() {
+                if block.index > full_block.index && block.transaction.is_some() {
                     warn!("Not enough signing blocks over full {} block!", full_block.index);
                     return false;
                 } else {
@@ -954,7 +954,7 @@ impl Chain {
     /// block - last full block
     pub fn get_block_signers(&self, block: &Block) -> Vec<Bytes> {
         let mut result = Vec::new();
-        if block.index < BLOCK_SIGNERS_START || self.height() < block.index {
+        if block.index < BLOCK_SIGNERS_START || self.get_height() < block.index {
             return result;
         }
         let mut set = HashSet::new();

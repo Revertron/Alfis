@@ -66,6 +66,8 @@ impl Network {
             let mut log_timer = Instant::now();
             let mut bootstrap_timer = Instant::now();
             let mut last_events_time = Instant::now();
+            let mut sent_mining_event_index = 0u64;
+            let mut sent_mining_event_time = Instant::now();
             loop {
                 if peers.get_peers_count() == 0 && bootstrap_timer.elapsed().as_secs() > 60 {
                     // Starting peer connections to bootstrap nodes
@@ -136,7 +138,7 @@ impl Network {
                             if !handle_connection_event(Arc::clone(&context), &mut peers, &poll.registry(), &event) {
                                 let _ = peers.close_peer(poll.registry(), &token);
                                 let mut context = context.lock().unwrap();
-                                let blocks_count = context.chain.height();
+                                let blocks_count = context.chain.get_height();
                                 context.bus.post(crate::event::Event::NetworkStatus { nodes: peers.get_peers_active_count(), blocks: blocks_count });
                             }
                         }
@@ -151,7 +153,7 @@ impl Network {
                     // Send pings to idle peers
                     let (height, hash) = {
                         let mut context = context.lock().unwrap();
-                        let height = context.chain.height();
+                        let height = context.chain.get_height();
                         let nodes = peers.get_peers_active_count();
                         let banned = peers.get_peers_banned_count();
                         if nodes > 0 {
@@ -164,10 +166,14 @@ impl Network {
                                 warn!("Last network events time {} seconds ago", elapsed);
                             }
                             log_timer = Instant::now();
-                            let keystore = context.keystore.clone();
-                            if let Some(event) = context.chain.update(&keystore) {
-                                context.bus.post(event);
-                                trace!("Posted an event to mine signing block");
+                            if sent_mining_event_index < height || sent_mining_event_time.elapsed().as_secs() >= 600 {
+                                let keystore = context.keystore.clone();
+                                if let Some(event) = context.chain.update(&keystore) {
+                                    context.bus.post(event);
+                                    trace!("Posted an event to mine signing block");
+                                    sent_mining_event_index = height;
+                                    sent_mining_event_time = Instant::now();
+                                }
                             }
                         }
                         (height, context.chain.last_hash())
@@ -300,7 +306,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                         if from.elapsed().as_secs() >= 30 {
                             let data: String = {
                                 let c = context.lock().unwrap();
-                                let message = Message::ping(c.chain.height(), c.chain.last_hash());
+                                let message = Message::ping(c.chain.get_height(), c.chain.last_hash());
                                 serde_json::to_string(&message).unwrap()
                             };
                             send_message(peer.get_stream(), &data.into_bytes()).unwrap_or_else(|e| warn!("Error sending ping {}", e));
@@ -376,7 +382,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
     let (my_height, my_hash, my_origin, my_version) = {
         let context = context.lock().unwrap();
         // TODO cache it somewhere
-        (context.chain.height(), context.chain.last_hash(), &context.settings.origin.clone(), CHAIN_VERSION)
+        (context.chain.get_height(), context.chain.last_hash(), &context.settings.origin.clone(), CHAIN_VERSION)
     };
     let answer = match message {
         Message::Hand { app_version, origin, version, public, rand} => {
@@ -502,7 +508,7 @@ fn process_new_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &To
     match context.chain.check_new_block(&block) {
         BlockQuality::Good => {
             context.chain.add_block(block);
-            let my_height = context.chain.height();
+            let my_height = context.chain.get_height();
             context.bus.post(crate::event::Event::BlockchainChanged { index: my_height });
             // If it was the last block to sync
             if my_height == max_height {
@@ -517,7 +523,7 @@ fn process_new_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &To
         BlockQuality::Bad => {
             // TODO save bad public keys to banned table
             debug!("Ignoring bad block from {}:\n{:?}", peer.get_addr(), &block);
-            let height = context.chain.height();
+            let height = context.chain.get_height();
             context.chain.update_max_height(height);
             context.bus.post(crate::event::Event::SyncFinished);
             return State::Banned;
@@ -527,10 +533,10 @@ fn process_new_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &To
             let last_block = context.chain.last_block().unwrap();
             if block.is_better_than(&last_block) {
                 context.chain.replace_block(block.index, block).expect("Error replacing block with fork");
-                let index = context.chain.height();
+                let index = context.chain.get_height();
                 context.bus.post(crate::event::Event::BlockchainChanged { index });
             }
-            let height = context.chain.height();
+            let height = context.chain.get_height();
             context.chain.update_max_height(height);
             context.bus.post(crate::event::Event::SyncFinished);
         }

@@ -17,6 +17,19 @@ use crate::event::Event;
 use blakeout::Blakeout;
 use std::ops::Deref;
 
+#[derive(Clone)]
+pub struct MineJob {
+    start: i64,
+    block: Block,
+    keystore: Keystore
+}
+
+#[derive(Clone, Debug)]
+pub struct MinerState {
+    pub mining: bool,
+    pub full: bool
+}
+
 pub struct Miner {
     context: Arc<Mutex<Context>>,
     jobs: Arc<Mutex<Vec<MineJob>>>,
@@ -142,24 +155,28 @@ impl Miner {
                 }
             }
         } else {
-            job.block.index = context.lock().unwrap().chain.height() + 1;
+            job.block.index = context.lock().unwrap().chain.get_height() + 1;
             job.block.prev_block_hash = match context.lock().unwrap().chain.last_block() {
                 None => { Bytes::default() }
                 Some(block) => { block.hash }
             };
         }
 
-        context.lock().unwrap().bus.post(Event::MinerStarted);
-        let thread_spawn_interval = Duration::from_millis(10);
-        let live_threads = Arc::new(AtomicU32::new(0u32));
-        let lower = context.lock().unwrap().settings.mining.lower;
+        let (lower, threads) = {
+            let mut context = context.lock().unwrap();
+            context.bus.post(Event::MinerStarted);
+            context.miner_state.mining = true;
+            context.miner_state.full = job.block.transaction.is_some();
+            (context.settings.mining.lower, context.settings.mining.threads)
+        };
         let cpus = num_cpus::get();
-        let threads = context.lock().unwrap().settings.mining.threads;
         let threads = match threads {
             0 => cpus,
             _ => threads
         };
         debug!("Starting {} threads for mining", threads);
+        let thread_spawn_interval = Duration::from_millis(100);
+        let live_threads = Arc::new(AtomicU32::new(0u32));
         for cpu in 0..threads {
             let context = Arc::clone(&context);
             let job = job.clone();
@@ -178,6 +195,7 @@ impl Miner {
                         // If this is the last thread, but mining was not stopped by another thread
                         if count == 1 {
                             let mut context = context.lock().unwrap();
+                            context.miner_state.mining = false;
                             context.bus.post(Event::MinerStopped { success: false, full });
                         }
                     },
@@ -198,6 +216,7 @@ impl Miner {
                             context.chain.add_block(block);
                             success = true;
                         }
+                        context.miner_state.mining = false;
                         context.bus.post(Event::MinerStopped { success, full });
                         mining.store(false, Ordering::SeqCst);
                     },
@@ -206,13 +225,6 @@ impl Miner {
             thread::sleep(thread_spawn_interval);
         }
     }
-}
-
-#[derive(Clone)]
-pub struct MineJob {
-    start: i64,
-    block: Block,
-    keystore: Keystore
 }
 
 fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<AtomicBool>, thread: usize) -> Option<Block> {
@@ -226,7 +238,7 @@ fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<Atomic
         let next_allowed_block = {
             let context = context.lock().unwrap();
             // We use this block to fill some fields of our block as well
-            block.index = context.chain.height() + 1;
+            block.index = context.chain.get_height() + 1;
             if let Some(b) = context.chain.last_block() {
                 block.prev_block_hash = b.hash;
             }
@@ -245,7 +257,7 @@ fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<Atomic
         debug!("Mining block {}", serde_json::to_string(&block).unwrap());
         let mut time = Instant::now();
         let mut prev_nonce = 0;
-        for nonce in 0..std::u64::MAX {
+        for nonce in 0..u64::MAX {
             if !running.load(Ordering::Relaxed) {
                 return None;
             }
@@ -268,7 +280,7 @@ fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<Atomic
                 if elapsed > 5000 {
                     let speed = (nonce - prev_nonce) / (elapsed as u64 / 1000);
                     //debug!("Mining speed {} H/s, max difficulty {}", speed, max_diff);
-                    if let Ok(mut context) = context.lock() {
+                    if let Ok(mut context) = context.try_lock() {
                         context.bus.post(Event::MinerStats { thread, speed, max_diff, aim_diff: difficulty })
                     }
                     time = Instant::now();
@@ -276,8 +288,8 @@ fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<Atomic
                 }
 
                 if block.index > 1 {
-                    if let Ok(context) = context.lock() {
-                        if context.chain.height() >= block.index {
+                    if let Ok(context) = context.try_lock() {
+                        if context.chain.get_height() >= block.index {
                             if !full {
                                 info!("Blockchain changed while mining signing block, dropping work");
                                 return None;

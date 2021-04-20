@@ -317,7 +317,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
         let hash = keystore.get_hash().to_string();
         c.bus.post(Event::KeyLoaded { path, public, hash });
     }
-    let index = c.chain.height();
+    let index = c.chain.get_height();
     c.bus.post(Event::BlockchainChanged { index });
     event_info(web_view, "Application loaded");
 }

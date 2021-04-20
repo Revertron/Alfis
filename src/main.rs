@@ -107,7 +107,7 @@ fn main() {
     let keystore = Keystore::from_file(&settings.key_file, "");
     let chain: Chain = Chain::new(&settings);
     if opt_matches.opt_present("b") {
-        for i in 1..(chain.height() + 1) {
+        for i in 1..(chain.get_height() + 1) {
             if let Some(block) = chain.get_block(i) {
                 info!(target: LOG_TARGET_MAIN, "{:?}", &block);
             }

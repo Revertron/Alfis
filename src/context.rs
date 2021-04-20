@@ -2,6 +2,7 @@ use crate::{Chain, Bus, Keystore, Settings, ExternalZones};
 use crate::event::Event;
 #[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
+use crate::miner::MinerState;
 
 pub struct Context {
     pub app_version: String,
@@ -10,12 +11,21 @@ pub struct Context {
     pub chain: Chain,
     pub x_zones: ExternalZones,
     pub bus: Bus<Event>,
+    pub miner_state: MinerState,
 }
 
 impl Context {
     /// Creating an essential context to work with
     pub fn new(app_version: String, settings: Settings, keystore: Option<Keystore>, chain: Chain) -> Context {
-        Context { app_version, settings, keystore, chain, x_zones: ExternalZones::new(), bus: Bus::new() }
+        Context {
+            app_version,
+            settings,
+            keystore,
+            chain,
+            x_zones: ExternalZones::new(),
+            bus: Bus::new(),
+            miner_state: MinerState { mining: false, full: false }
+        }
     }
 
     /// Load keystore and return Context
