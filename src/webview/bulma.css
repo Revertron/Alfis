@@ -336,6 +336,7 @@ header,
 hgroup,
 section {
   display: block;
+  min-height: 30px;
 }
 
 body,
