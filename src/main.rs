@@ -16,7 +16,7 @@ use simplelog::*;
 #[cfg(windows)]
 use winapi::um::wincon::{ATTACH_PARENT_PROCESS, AttachConsole, FreeConsole};
 
-use alfis::{Block, Bytes, Chain, Miner, Context, Network, Settings, dns_utils, Keystore, ZONE_DIFFICULTY};
+use alfis::{Block, Bytes, Chain, Miner, Context, Network, Settings, dns_utils, Keystore, ZONE_DIFFICULTY, ALFIS_DEBUG};
 use std::fs::OpenOptions;
 use std::process::exit;
 use std::io::{Seek, SeekFrom};
@@ -153,7 +153,7 @@ fn main() {
 /// Sets up logger in accordance with command line options
 fn setup_logger(opt_matches: &Matches) {
     let mut level = LevelFilter::Info;
-    if opt_matches.opt_present("d") {
+    if opt_matches.opt_present("d") || env::var(ALFIS_DEBUG).is_ok() {
         level = LevelFilter::Trace;
     }
     let config = ConfigBuilder::new()

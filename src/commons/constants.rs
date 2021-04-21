@@ -32,6 +32,7 @@ pub const MAX_RECONNECTS: u32 = 5;
 
 pub const CLASS_ZONE: &str = "zone";
 pub const CLASS_DOMAIN: &str = "domain";
+pub const ALFIS_DEBUG: &str = "ALFIS_DEBUG";
 
 /// Public nodes listen port
 pub const LISTEN_PORT: u16 = 4244;
