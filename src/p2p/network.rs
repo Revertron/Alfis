@@ -66,8 +66,6 @@ impl Network {
             let mut log_timer = Instant::now();
             let mut bootstrap_timer = Instant::now();
             let mut last_events_time = Instant::now();
-            let mut sent_mining_event_index = 0u64;
-            let mut sent_mining_event_time = Instant::now();
             loop {
                 if peers.get_peers_count() == 0 && bootstrap_timer.elapsed().as_secs() > 60 {
                     // Starting peer connections to bootstrap nodes
@@ -166,16 +164,6 @@ impl Network {
                                 warn!("Last network events time {} seconds ago", elapsed);
                             }
                             log_timer = Instant::now();
-                            let mining = context.miner_state.mining;
-                            if !mining && (sent_mining_event_index < height || sent_mining_event_time.elapsed().as_secs() >= 600) {
-                                let keystore = context.keystore.clone();
-                                if let Some(event) = context.chain.update(&keystore) {
-                                    context.bus.post(event);
-                                    trace!("Posted an event to mine signing block");
-                                    sent_mining_event_index = height;
-                                    sent_mining_event_time = Instant::now();
-                                }
-                            }
                         }
                         (height, context.chain.last_hash())
                     };

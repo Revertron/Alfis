@@ -9,13 +9,12 @@ use log::{debug, error, info, trace, warn};
 use num_cpus;
 
 use crate::{Block, Bytes, Context, Keystore, setup_miner_thread};
-use crate::commons::{CHAIN_VERSION, SIGNER_DIFFICULTY, KEYSTORE_DIFFICULTY};
+use crate::commons::*;
 use crate::blockchain::types::BlockQuality;
 use crate::blockchain::hash_utils::*;
 use crate::keys::check_public_key_strength;
 use crate::event::Event;
 use blakeout::Blakeout;
-use std::ops::Deref;
 
 #[derive(Clone)]
 pub struct MineJob {
@@ -74,7 +73,7 @@ impl Miner {
         let cond_var = self.cond_var.clone();
         thread::spawn(move || {
             running.store(true, Ordering::SeqCst);
-            let delay = Duration::from_millis(1000);
+            let delay = Duration::from_secs(30);
             while running.load(Ordering::SeqCst) {
                 // If some transaction is being mined now, we yield
                 if mining.load(Ordering::SeqCst) {
@@ -92,31 +91,28 @@ impl Miner {
                     } else {
                         debug!("This job will wait for now");
                         jobs.insert(0, job);
-                        let _ = cond_var.wait_timeout(jobs, delay).expect("Error in wait lock!");
                     }
-                } else {
-                    let _ = cond_var.wait(jobs).expect("Error in wait lock!");
+                } else if !mining.load(Ordering::SeqCst) {
+                    if let Ok(context) = context.try_lock() {
+                        let keystore = context.get_keystore();
+                        if let Some(block) = context.chain.get_sign_block(&keystore) {
+                            info!("Got signing job, adding to queue");
+                            // We start mining sign block after some time, not everyone in the same time
+                            let start = Utc::now().timestamp() + (rand::random::<i64>() % BLOCK_SIGNERS_START_RANDOM);
+                            jobs.push(MineJob { start, block, keystore: keystore.unwrap() });
+                        }
+                    }
                 }
+                let _ = cond_var.wait_timeout(jobs, delay).expect("Error in wait lock!");
             }
         });
         let mining = self.mining.clone();
-        let jobs = self.jobs.clone();
-        let cond_var = self.cond_var.clone();
         self.context.lock().unwrap().bus.register(move |_uuid, e| {
             match e {
                 Event::NewBlockReceived => {}
                 Event::BlockchainChanged {..} => {}
                 Event::ActionStopMining => {
                     mining.store(false, Ordering::SeqCst);
-                }
-                Event::ActionMineSigning { start, index, hash, keystore } => {
-                    if !mining.load(Ordering::SeqCst) {
-                        let mut block = Block::new(None, Bytes::default(), hash, SIGNER_DIFFICULTY);
-                        block.index = index;
-                        jobs.lock().unwrap().push(MineJob { start, block, keystore: keystore.deref().clone() });
-                        cond_var.notify_all();
-                        info!("Added a signing block to mine");
-                    }
                 }
                 _ => {}
             }

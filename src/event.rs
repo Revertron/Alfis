@@ -1,5 +1,3 @@
-use crate::{Bytes, Keystore};
-
 #[derive(Clone, PartialEq, Debug)]
 pub enum Event {
     MinerStarted,
@@ -13,7 +11,6 @@ pub enum Event {
     NewBlockReceived,
     BlockchainChanged { index: u64 },
     ActionStopMining,
-    ActionMineSigning { start: i64, index: u64, hash: Bytes, keystore: Box<Keystore> },
     ActionQuit,
     NetworkStatus { nodes: usize, blocks: u64 },
     Syncing { have: u64, height: u64 },

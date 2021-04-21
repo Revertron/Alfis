@@ -19,7 +19,6 @@ use std::cmp::max;
 use crate::blockchain::transaction::{ZoneData, DomainData};
 use std::ops::Deref;
 use crate::blockchain::types::MineResult::*;
-use crate::event::Event;
 
 const DB_NAME: &str = "blockchain.db";
 const TEMP_DB_NAME: &str = "temp.db";
@@ -57,6 +56,7 @@ pub struct Chain {
     max_height: u64,
     db: Connection,
     zones: RefCell<HashSet<String>>,
+    signers: RefCell<SignersCache>,
 }
 
 impl Chain {
@@ -65,7 +65,7 @@ impl Chain {
 
         let db = sqlite::open(DB_NAME).expect("Unable to open blockchain DB");
         let zones = RefCell::new(HashSet::new());
-        let mut chain = Chain { origin, last_block: None, last_full_block: None, max_height: 0, db, zones };
+        let mut chain = Chain { origin, last_block: None, last_full_block: None, max_height: 0, db, zones, signers: SignersCache::new() };
         chain.init_db();
         chain
     }
@@ -262,7 +262,7 @@ impl Chain {
         Ok(())
     }
 
-    pub fn update(&mut self, keystore: &Option<Keystore>) -> Option<Event> {
+    pub fn get_sign_block(&self, keystore: &Option<Keystore>) -> Option<Block> {
         if self.get_height() < BLOCK_SIGNERS_START {
             trace!("Too early to start block signings");
             return None;
@@ -292,6 +292,11 @@ impl Chain {
                 return None;
             }
         }
+        let (last_hash, last_index) = match &self.last_block {
+            Some(block) => (block.hash.clone(), block.index),
+            None => { return None; }
+        };
+
         let keystore = keystore.clone().unwrap().clone();
         let signers: HashSet<Bytes> = self.get_block_signers(&block).into_iter().collect();
         if signers.contains(&keystore.get_public()) {
@@ -304,10 +309,9 @@ impl Chain {
             }
 
             info!("We have an honor to mine signing block!");
-            let keystore = Box::new(keystore);
-            // We start mining sign block after some time, not everyone in the same time
-            let start = Utc::now().timestamp() + (rand::random::<i64>() % BLOCK_SIGNERS_START_RANDOM);
-            return Some(Event::ActionMineSigning { start, index: block.index + 1, hash: block.hash, keystore });
+            let mut block = Block::new(None, Bytes::default(), last_hash, SIGNER_DIFFICULTY);
+            block.index = last_index + 1;
+            return Some(block);
         } else if !signers.is_empty() {
             info!("Signing block must be mined by other nodes");
         }
@@ -973,6 +977,12 @@ impl Chain {
         if block.index < BLOCK_SIGNERS_START || self.get_height() < block.index {
             return result;
         }
+
+        assert!(block.transaction.is_some());
+        if self.signers.borrow().has_signers_for(block.index) {
+            return self.signers.borrow().signers.clone();
+        }
+
         let mut set = HashSet::new();
         let tail = block.signature.get_tail_u64();
         let mut count = 1;
@@ -988,6 +998,9 @@ impl Chain {
             count += 1;
         }
         trace!("Got signers for block {}: {:?}", block.index, &result);
+        let mut signers = self.signers.borrow_mut();
+        signers.index = block.index;
+        signers.signers = result.clone();
         result
     }
 
@@ -1004,5 +1017,21 @@ impl Chain {
         let pub_key = Bytes::from_bytes(statement.read::<Vec<u8>>(9).unwrap().as_slice());
         let signature = Bytes::from_bytes(statement.read::<Vec<u8>>(10).unwrap().as_slice());
         Some(Block::from_all_params(index, timestamp, version, difficulty, random, nonce, prev_block_hash, hash, pub_key, signature, transaction))
+    }
+}
+
+struct SignersCache {
+    index: u64,
+    signers: Vec<Bytes>
+}
+
+impl SignersCache {
+    pub fn new() -> RefCell<SignersCache> {
+        let cache = SignersCache { index: 0, signers: Vec::new() };
+        RefCell::new(cache)
+    }
+
+    pub fn has_signers_for(&self, index: u64) -> bool {
+        self.index == index && !self.signers.is_empty()
     }
 }
