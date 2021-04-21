@@ -84,6 +84,7 @@ mod tests {
     use std::env;
 
     #[test]
+    #[ignore]
     pub fn load_hosts() {
         let filter = if cfg!(target_os = "windows") {
             if let Ok(root) = env::var("SYSTEMROOT") {
