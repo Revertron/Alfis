@@ -49,6 +49,9 @@ const SQL_GET_ZONES: &str = "SELECT data FROM zones;";
 
 const SQL_GET_OPTIONS: &str = "SELECT * FROM options;";
 
+/// Max possible block index
+const MAX:u64 = i64::MAX as u64;
+
 pub struct Chain {
     origin: Bytes,
     last_block: Option<Block>,
@@ -88,7 +91,7 @@ impl Chain {
             if block.transaction.is_some() {
                 self.last_full_block = Some(block);
             } else {
-                self.last_full_block = self.get_last_full_block(u64::MAX, None);
+                self.last_full_block = self.get_last_full_block(MAX, None);
             }
         }
         // TODO Add env-var and commandline switches for full check
@@ -136,7 +139,7 @@ impl Chain {
             }
         }
         self.last_block = self.load_last_block();
-        self.last_full_block = self.get_last_full_block(u64::MAX, None);
+        self.last_full_block = self.get_last_full_block(MAX, None);
         info!("Last block after chain check: {:?}", &self.last_block);
     }
 
@@ -591,7 +594,7 @@ impl Chain {
             }
         }
         let identity_hash = hash_identity(&name, None);
-        if let Some(last) = self.get_last_full_block(u64::MAX, Some(&pub_key)) {
+        if let Some(last) = self.get_last_full_block(MAX, Some(&pub_key)) {
             let new_id = !self.is_id_in_blockchain(&identity_hash, false);
             let time = last.timestamp + NEW_DOMAINS_INTERVAL - Utc::now().timestamp();
             if new_id && time > 0 {
