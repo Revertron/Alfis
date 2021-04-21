@@ -31,7 +31,9 @@ const SQL_REPLACE_BLOCK: &str = "UPDATE blocks SET timestamp = ?, version = ?, d
 const SQL_GET_LAST_BLOCK: &str = "SELECT * FROM blocks ORDER BY id DESC LIMIT 1;";
 const SQL_GET_FIRST_BLOCK_FOR_KEY: &str = "SELECT id FROM blocks WHERE pub_key = ? LIMIT 1;";
 const SQL_DELETE_BLOCK_AND_TRANSACTIONS: &str = "DELETE FROM blocks WHERE id = ?; DELETE FROM domains WHERE id = ?; DELETE FROM zones WHERE id = ?;";
-const SQL_TRUNCATE_DB_FROM_BLOCK: &str = "DELETE FROM blocks WHERE id >= ?; DELETE FROM domains WHERE id >= ?; DELETE FROM zones WHERE id >= ?;";
+const SQL_TRUNCATE_BLOCKS: &str = "DELETE FROM blocks WHERE id >= ?;";
+const SQL_TRUNCATE_DOMAINS: &str = "DELETE FROM domains WHERE id >= ?;";
+const SQL_TRUNCATE_ZONES: &str = "DELETE FROM zones WHERE id >= ?;";
 
 const SQL_ADD_DOMAIN: &str = "INSERT INTO domains (id, timestamp, identity, confirmation, data, pub_key) VALUES (?, ?, ?, ?, ?, ?)";
 const SQL_ADD_ZONE: &str = "INSERT INTO zones (id, timestamp, identity, confirmation, data, pub_key) VALUES (?, ?, ?, ?, ?, ?)";
@@ -114,12 +116,16 @@ impl Chain {
                     if self.check_new_block(&block) != BlockQuality::Good {
                         error!("Block {} is bad:\n{:?}", block.index, &block);
                         info!("Truncating database from block {}...", block.index);
-                        if self.truncate_db_from_block(block.index).is_err() {
-                            panic!("Error truncating database! Please, delete 'blockchain.db' and restart.");
+                        match self.truncate_db_from_block(block.index) {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("{}", e);
+                                panic!("Error truncating database! Please, delete 'blockchain.db' and restart.");
+                            }
                         }
                         break;
                     }
-                    info!("Block {} is good!", block.index);
+                    info!("Block {} with hash {:?} is good!", block.index, &block.hash);
                     if block.transaction.is_some() {
                         self.last_full_block = Some(block.clone());
                     }
@@ -143,10 +149,16 @@ impl Chain {
 
     #[allow(dead_code)]
     fn truncate_db_from_block(&mut self, index: u64) -> sqlite::Result<State> {
-        let mut statement = self.db.prepare(SQL_TRUNCATE_DB_FROM_BLOCK)?;
+        let mut statement = self.db.prepare(SQL_TRUNCATE_BLOCKS)?;
         statement.bind(1, index as i64)?;
-        statement.bind(2, index as i64)?;
-        statement.bind(3, index as i64)?;
+        statement.next()?;
+
+        let mut statement = self.db.prepare(SQL_TRUNCATE_DOMAINS)?;
+        statement.bind(1, index as i64)?;
+        statement.next()?;
+
+        let mut statement = self.db.prepare(SQL_TRUNCATE_ZONES)?;
+        statement.bind(1, index as i64)?;
         statement.next()
     }
 

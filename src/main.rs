@@ -91,13 +91,13 @@ fn main() {
     #[cfg(not(feature = "webgui"))]
     let no_gui = true;
 
+    if let Some(path) = opt_matches.opt_str("w") {
+        env::set_current_dir(Path::new(&path)).expect(&format!("Unable to change working directory to '{}'", &path));
+    }
     let config_name = match opt_matches.opt_str("c") {
         None => { SETTINGS_FILENAME.to_owned() }
         Some(path) => { path }
     };
-    if let Some(path) = opt_matches.opt_str("w") {
-        env::set_current_dir(Path::new(&path)).expect(&format!("Unable to change working directory to '{}'", &path));
-    }
 
     setup_logger(&opt_matches);
     info!(target: LOG_TARGET_MAIN, "Starting ALFIS {}", env!("CARGO_PKG_VERSION"));
