@@ -21,7 +21,7 @@ use crate::blockchain::types::BlockQuality;
 use crate::commons::*;
 
 const SERVER: Token = Token(0);
-const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(1000));
+const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(500));
 const MAX_PACKET_SIZE: usize = 1 * 1024 * 1024; // 1 Mb
 const MAX_READ_BLOCK_TIME: u128 = 500;
 
@@ -165,7 +165,7 @@ impl Network {
                             }
                             log_timer = Instant::now();
                         }
-                        (height, context.chain.last_hash())
+                        (height, context.chain.get_last_hash())
                     };
                     peers.update(poll.registry(), height, hash);
                     peers.connect_new_peers(poll.registry(), &mut unique_token, yggdrasil_only);
@@ -295,7 +295,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                         if from.elapsed().as_secs() >= 30 {
                             let data: String = {
                                 let c = context.lock().unwrap();
-                                let message = Message::ping(c.chain.get_height(), c.chain.last_hash());
+                                let message = Message::ping(c.chain.get_height(), c.chain.get_last_hash());
                                 serde_json::to_string(&message).unwrap()
                             };
                             send_message(peer.get_stream(), &data.into_bytes()).unwrap_or_else(|e| warn!("Error sending ping {}", e));
@@ -371,7 +371,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
     let (my_height, my_hash, my_origin, my_version) = {
         let context = context.lock().unwrap();
         // TODO cache it somewhere
-        (context.chain.get_height(), context.chain.last_hash(), &context.settings.origin.clone(), CHAIN_VERSION)
+        (context.chain.get_height(), context.chain.get_last_hash(), &context.settings.origin.clone(), CHAIN_VERSION)
     };
     let answer = match message {
         Message::Hand { app_version, origin, version, public, rand} => {
@@ -382,6 +382,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 if origin.eq(my_origin) && version == my_version {
                     let peer = peers.get_mut_peer(token).unwrap();
                     peer.set_public(public);
+                    peer.set_active(true);
                     debug!("Hello from v{} on {}", &app_version, peer.get_addr().ip());
                     State::message(Message::shake(&origin, version, true, my_height))
                 } else {
@@ -404,13 +405,12 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 if peer.is_higher(my_height) {
                     context.chain.update_max_height(height);
                     context.bus.post(crate::event::Event::Syncing { have: my_height, height});
-                    if active_count > 3 {
-                        State::idle()
-                    } else {
-                        State::message(Message::GetPeers)
-                    }
-                } else {
+                }
+                if active_count < 5 || random::<u8>() < 10 {
+                    debug!("Requesting more peers from {}", peer.get_addr().ip());
                     State::message(Message::GetPeers)
+                } else {
+                    State::idle()
                 }
             } else {
                 State::Banned
@@ -425,15 +425,16 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 let mut context = context.lock().unwrap();
                 context.chain.update_max_height(height);
             }
-            if hash.ne(&my_hash) {
-                debug!("1Hashes are different, requesting block {} from {}", my_height, peer.get_addr().ip());
-                debug!("My hash: {:?}, their hash: {:?}", &my_hash, &hash);
+            if my_height == height && hash.ne(&my_hash) {
+                info!("Hashes are different, requesting block {} from {}", my_height, peer.get_addr().ip());
+                info!("My hash: {:?}, their hash: {:?}", &my_hash, &hash);
                 State::message(Message::GetBlock { index: my_height })
             } else {
                 State::message(Message::pong(my_height, my_hash))
             }
         }
         Message::Pong { height, hash } => {
+            let active_count = peers.get_peers_active_count();
             let peer = peers.get_mut_peer(token).unwrap();
             peer.set_height(height);
             peer.set_active(true);
@@ -441,12 +442,12 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 let mut context = context.lock().unwrap();
                 context.chain.update_max_height(height);
             }
-            if hash.ne(&my_hash) {
-                debug!("2Hashes are different, requesting block {} from {}", my_height, peer.get_addr().ip());
-                debug!("My hash: {:?}, their hash: {:?}", &my_hash, &hash);
+            if my_height == height && hash.ne(&my_hash) {
+                info!("Hashes are different, requesting block {} from {}", my_height, peer.get_addr().ip());
+                info!("My hash: {:?}, their hash: {:?}", &my_hash, &hash);
                 State::message(Message::GetBlock { index: my_height })
             } else {
-                if random::<u8>() < 10 {
+                if active_count < 5 || random::<u8>() < 10 {
                     debug!("Requesting more peers from {}", peer.get_addr().ip());
                     State::message(Message::GetPeers)
                 } else {
@@ -455,14 +456,22 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             }
         }
         Message::GetPeers => {
-            let peer = peers.get_peer(token).unwrap();
-            State::message(Message::Peers { peers: peers.get_peers_for_exchange(&peer.get_addr()) })
+            let addr = {
+                let peer = peers.get_mut_peer(token).unwrap();
+                peer.set_active(true);
+                peer.get_addr().clone()
+            };
+            State::message(Message::Peers { peers: peers.get_peers_for_exchange(&addr) })
         }
         Message::Peers { peers: new_peers } => {
+            let peer = peers.get_mut_peer(token).unwrap();
+            peer.set_active(true);
             peers.add_peers_from_exchange(new_peers);
             State::idle()
         }
         Message::GetBlock { index } => {
+            let peer = peers.get_mut_peer(token).unwrap();
+            peer.set_active(true);
             let context = context.lock().unwrap();
             match context.chain.get_block(index) {
                 Some(block) => State::message(Message::block(block.index, serde_json::to_string(&block).unwrap())),
@@ -470,6 +479,8 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             }
         }
         Message::Block { index, block } => {
+            let peer = peers.get_mut_peer(token).unwrap();
+            peer.set_active(true);
             info!("Received block {}", index);
             let block: Block = match serde_json::from_str(&block) {
                 Ok(block) => block,

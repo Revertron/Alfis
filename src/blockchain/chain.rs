@@ -91,9 +91,11 @@ impl Chain {
                 self.last_full_block = self.get_last_full_block(u64::MAX, None);
             }
         }
-        self.check_chain();
+        // TODO Add env-var and commandline switches for full check
+        //self.check_chain();
     }
 
+    #[allow(dead_code)]
     fn check_chain(&mut self) {
         let height = self.get_height();
         info!("Local blockchain height is {}, starting full blockchain check...", height);
@@ -693,7 +695,7 @@ impl Chain {
         }
     }
 
-    pub fn last_hash(&self) -> Bytes {
+    pub fn get_last_hash(&self) -> Bytes {
         match &self.last_block {
             None => { Bytes::default() }
             Some(block) => { block.hash.clone() }
@@ -988,7 +990,7 @@ impl Chain {
         let mut count = 1;
         let window = block.index - 1; // Without the last block
         while set.len() < BLOCK_SIGNERS_ALL as usize {
-            let index = ((tail * count) % window) + 1; // We want it to start from 1
+            let index = (tail.wrapping_mul(count) % window) + 1; // We want it to start from 1
             if let Some(b) = self.get_block(index) {
                 if b.pub_key != block.pub_key && !set.contains(&b.pub_key) {
                     result.push(b.pub_key.clone());

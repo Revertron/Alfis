@@ -13,19 +13,16 @@ use crate::{Bytes, commons};
 use crate::commons::*;
 use crate::p2p::{Message, Peer, State};
 use crate::commons::next;
-use std::time::Duration;
 use std::io;
 
-const PING_PERIOD: u64 = 60;
-const TCP_TIMEOUT: Duration = Duration::from_millis(10000);
+const PING_PERIOD: u64 = 30;
 
 pub struct Peers {
     peers: HashMap<Token, Peer>,
     new_peers: Vec<SocketAddr>,
     ignored: HashSet<IpAddr>,
     my_id: String,
-    asked_block: u64,
-    asked_time: i64,
+    block_asked_time: i64,
 }
 
 impl Peers {
@@ -35,8 +32,7 @@ impl Peers {
             new_peers: Vec::new(),
             ignored: HashSet::new(),
             my_id: commons::random_string(6),
-            asked_block: 0,
-            asked_time: 0
+            block_asked_time: 0
         }
     }
 
@@ -217,7 +213,6 @@ impl Peers {
     }
 
     pub fn update(&mut self, registry: &Registry, height: u64, hash: Bytes) {
-        let mut ping_sent = false;
         for (token, peer) in self.peers.iter_mut() {
             match peer.get_state() {
                 State::Idle { from } => {
@@ -225,7 +220,7 @@ impl Peers {
                     if from.elapsed().as_secs() >= PING_PERIOD + random_time {
                         // Sometimes we check for new peers instead of pinging
                         let random: u8 = random();
-                        let message = if random < 16 {
+                        let message = if random < 10 {
                             Message::GetPeers
                         } else {
                             Message::ping(height, hash.clone())
@@ -234,7 +229,6 @@ impl Peers {
                         peer.set_state(State::message(message));
                         let stream = peer.get_stream();
                         registry.reregister(stream, token.clone(), Interest::WRITABLE).unwrap();
-                        ping_sent = true;
                     }
                 }
                 _ => {}
@@ -242,7 +236,7 @@ impl Peers {
         }
 
         // If someone has more blocks we sync
-        if self.need_ask_block(height + 1) {
+        if self.need_ask_block() {
             let mut rng = rand::thread_rng();
             let mut asked = false;
             match self.peers
@@ -254,17 +248,16 @@ impl Peers {
                     debug!("Found some peer higher than we are, requesting block {}, from {}", height + 1, &peer.get_addr().ip());
                     registry.reregister(peer.get_stream(), token.clone(), Interest::WRITABLE).unwrap();
                     peer.set_state(State::message(Message::GetBlock { index: height + 1 }));
-                    ping_sent = true;
                     asked = true;
                 }
             }
             if asked {
-                self.set_asked_block(height + 1);
+                self.update_asked_block_time();
             }
         }
 
         // If someone has less blocks (we mined a new block) we send a ping with our height
-        if !ping_sent {
+        {
             let mut rng = rand::thread_rng();
             match self.peers
                 .iter_mut()
@@ -326,25 +319,36 @@ impl Peers {
     pub fn connect_peers(&mut self, peers_addrs: &Vec<String>, registry: &Registry, unique_token: &mut Token, yggdrasil_only: bool) {
         let mut set = HashSet::new();
         for peer in peers_addrs.iter() {
+            info!("Resolving address {}", peer);
             let mut addresses: Vec<SocketAddr> = match peer.to_socket_addrs() {
                 Ok(peers) => { peers.collect() }
                 Err(_) => { error!("Can't resolve address {}", &peer); continue; }
             };
+            info!("Got addresses: {:?}", &addresses);
 
-            // At first we connect to one peer address from every "peer" or domain
-            let addr = addresses.remove(0);
-            if !set.contains(&addr) {
-                match self.connect_peer(&addr, registry, unique_token, yggdrasil_only) {
-                    Ok(_) => {
-                        set.insert(addr);
-                    }
-                    Err(_) => {
-                        debug!("Could not connect to {}", &addr);
+            // At first we connect to 5 peer addresses
+            if set.len() >= 10 {
+                break;
+            }
+
+            while addresses.len() > 0 {
+                let addr = addresses.remove(0);
+                if !set.contains(&addr) {
+                    match self.connect_peer(&addr, registry, unique_token, yggdrasil_only) {
+                        Ok(_) => {
+                            set.insert(addr);
+                        }
+                        Err(_) => {
+                            debug!("Could not connect to {}", &addr);
+                        }
                     }
                 }
             }
+
             // Copy others to new_peers, to connect later
-            self.new_peers.append(&mut addresses);
+            if addresses.len() > 0 {
+                self.new_peers.append(&mut addresses);
+            }
         }
     }
 
@@ -356,31 +360,28 @@ impl Peers {
             debug!("Ignoring not Yggdrasil address '{}'", &addr.ip());
             return Err(io::Error::from(io::ErrorKind::InvalidInput));
         }
-        if let Ok(stream) = std::net::TcpStream::connect_timeout(&addr.clone(), TCP_TIMEOUT) {
-            stream.set_nodelay(true)?;
-            stream.set_read_timeout(Some(TCP_TIMEOUT))?;
-            stream.set_write_timeout(Some(TCP_TIMEOUT))?;
-            stream.set_nonblocking(true)?;
-
-            let mut stream = TcpStream::from_std(stream);
-            let token = next(unique_token);
-            trace!("Created connection {}, to peer {}", &token.0, &addr);
-            registry.register(&mut stream, token, Interest::WRITABLE)?;
-            let mut peer = Peer::new(addr.clone(), stream, State::Connecting, false);
-            peer.set_public(true);
-            self.peers.insert(token, peer);
+        trace!("Connecting to peer {}", &addr);
+        match TcpStream::connect(addr.clone()) {
+            Ok(mut stream ) => {
+                //stream.set_nodelay(true)?;
+                let token = next(unique_token);
+                trace!("Created connection {}, to peer {}", &token.0, &addr);
+                registry.register(&mut stream, token, Interest::WRITABLE).unwrap();
+                let mut peer = Peer::new(addr.clone(), stream, State::Connecting, false);
+                peer.set_public(true);
+                self.peers.insert(token, peer);
+                Ok(())
+            }
+            Err(e) => { Err(e) }
         }
-        Ok(())
     }
 
-
-    pub fn set_asked_block(&mut self, index: u64) {
-        self.asked_block = index;
-        self.asked_time = Utc::now().timestamp();
+    pub fn update_asked_block_time(&mut self) {
+        self.block_asked_time = Utc::now().timestamp();
     }
 
-    pub fn need_ask_block(&self, index: u64) -> bool {
-        index > self.asked_block || self.asked_time + 3 < Utc::now().timestamp()
+    pub fn need_ask_block(&self) -> bool {
+        self.block_asked_time + 5 < Utc::now().timestamp()
     }
 }
 
