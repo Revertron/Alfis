@@ -61,23 +61,23 @@ impl Peers {
                 let _ = registry.deregister(stream);
                 match peer.get_state() {
                     State::Connecting => {
-                        trace!("Peer connection {} to {:?} has timed out", &token.0, &peer.get_addr());
+                        error!("Peer connection {} to {:?} has timed out", &token.0, &peer.get_addr());
                     }
                     State::Connected => {
-                        trace!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
+                        error!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
                     }
                     State::Idle { .. } | State::Message { .. } => {
-                        trace!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
+                        error!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
                     }
                     State::Error => {
-                        trace!("Peer connection {} to {:?} has shut down on error", &token.0, &peer.get_addr());
+                        error!("Peer connection {} to {:?} has shut down on error", &token.0, &peer.get_addr());
                     }
                     State::Banned => {
-                        trace!("Peer connection {} to {:?} has shut down, banned", &token.0, &peer.get_addr());
+                        error!("Peer connection {} to {:?} has shut down, banned", &token.0, &peer.get_addr());
                         self.ignored.insert(peer.get_addr().ip().clone());
                     }
                     State::Offline { .. } => {
-                        trace!("Peer connection {} to {:?} is offline", &token.0, &peer.get_addr());
+                        error!("Peer connection {} to {:?} is offline", &token.0, &peer.get_addr());
                     }
                 }
 

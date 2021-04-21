@@ -856,6 +856,10 @@ impl Chain {
 
     /// Checks if this block is a good signature block
     fn is_good_sign_block(&self, block: &Block) -> bool {
+        // If this is not a signing block
+        if block.transaction.is_some() {
+            return true;
+        }
         if let Some(full_block) = &self.last_full_block {
             let sign_count = self.get_height() - full_block.index;
             if sign_count < BLOCK_SIGNERS_MIN {
