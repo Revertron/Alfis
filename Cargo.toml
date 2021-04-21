@@ -1,12 +1,13 @@
 [package]
 name = "alfis"
-version = "0.4.19"
+version = "0.4.20"
 authors = ["Revertron <alfis@revertron.com>"]
 edition = "2018"
 build = "build.rs"
 readme = "README.md"
 homepage = "https://alfis.name"
 repository = "https://github.com/Revertron/Alfis"
+exclude = ["blockchain.db", "alfis.toml"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
