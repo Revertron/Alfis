@@ -19,6 +19,7 @@ use rand::random;
 use crate::{Block, Context, p2p::Message, p2p::Peer, p2p::Peers, p2p::State};
 use crate::blockchain::types::BlockQuality;
 use crate::commons::*;
+use std::cmp::max;
 
 const SERVER: Token = Token(0);
 const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(500));
@@ -404,7 +405,8 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 let mut context = context.lock().unwrap();
                 if peer.is_higher(my_height) {
                     context.chain.update_max_height(height);
-                    context.bus.post(crate::event::Event::Syncing { have: my_height, height});
+                    let event = crate::event::Event::Syncing { have: my_height, height: max(height, my_height) };
+                    context.bus.post(event);
                 }
                 if active_count < 5 || random::<u8>() < 10 {
                     debug!("Requesting more peers from {}", peer.get_addr().ip());
@@ -514,7 +516,8 @@ fn process_new_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &To
             if my_height == max_height {
                 context.bus.post(crate::event::Event::SyncFinished);
             } else {
-                context.bus.post(crate::event::Event::Syncing { have: my_height, height: max_height });
+                let event = crate::event::Event::Syncing { have: my_height, height: max(max_height, my_height) };
+                context.bus.post(event);
             }
             context.bus.post(crate::event::Event::NetworkStatus { nodes: peers_count, blocks: my_height });
         }
@@ -528,11 +531,15 @@ fn process_new_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &To
             context.bus.post(crate::event::Event::SyncFinished);
             return State::Banned;
         }
+        BlockQuality::Rewind => {
+            debug!("Got some orphan block, requesting its parent");
+            return State::message(Message::GetBlock { index: block.index - 1 });
+        }
         BlockQuality::Fork => {
             debug!("Got forked block {} with hash {:?}", block.index, block.hash);
             let last_block = context.chain.last_block().unwrap();
             if block.is_better_than(&last_block) {
-                context.chain.replace_block(block.index, block).expect("Error replacing block with fork");
+                context.chain.replace_block(block).expect("Error replacing block with fork");
                 let index = context.chain.get_height();
                 context.bus.post(crate::event::Event::BlockchainChanged { index });
             }

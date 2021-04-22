@@ -23,6 +23,7 @@ pub struct Peers {
     ignored: HashSet<IpAddr>,
     my_id: String,
     block_asked_time: i64,
+    behind_ping_sent_time: i64,
 }
 
 impl Peers {
@@ -32,7 +33,8 @@ impl Peers {
             new_peers: Vec::new(),
             ignored: HashSet::new(),
             my_id: commons::random_string(6),
-            block_asked_time: 0
+            block_asked_time: 0,
+            behind_ping_sent_time: 0
         }
     }
 
@@ -257,7 +259,7 @@ impl Peers {
         }
 
         // If someone has less blocks (we mined a new block) we send a ping with our height
-        {
+        if self.need_behind_ping() {
             let mut rng = rand::thread_rng();
             match self.peers
                 .iter_mut()
@@ -268,6 +270,7 @@ impl Peers {
                     debug!("Found some peer lower than we are, sending ping");
                     registry.reregister(peer.get_stream(), token.clone(), Interest::WRITABLE).unwrap();
                     peer.set_state(State::message(Message::Ping { height, hash }));
+                    self.update_behind_ping_time();
                 }
             }
         }
@@ -382,6 +385,14 @@ impl Peers {
 
     pub fn need_ask_block(&self) -> bool {
         self.block_asked_time + 5 < Utc::now().timestamp()
+    }
+
+    pub fn update_behind_ping_time(&mut self) {
+        self.behind_ping_sent_time = Utc::now().timestamp();
+    }
+
+    pub fn need_behind_ping(&self) -> bool {
+        self.behind_ping_sent_time + 5 < Utc::now().timestamp()
     }
 }
 

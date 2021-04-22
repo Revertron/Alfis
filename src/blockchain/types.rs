@@ -4,6 +4,7 @@ pub enum BlockQuality {
     Good,
     Twin,
     Future,
+    Rewind,
     Bad,
     Fork,
 }

@@ -25,8 +25,6 @@ const TEMP_DB_NAME: &str = "temp.db";
 const SQL_CREATE_TABLES: &str = include_str!("sql/create_db.sql");
 const SQL_ADD_BLOCK: &str = "INSERT INTO blocks (id, timestamp, version, difficulty, random, nonce, 'transaction',\
                           prev_block_hash, hash, pub_key, signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
-const SQL_REPLACE_BLOCK: &str = "UPDATE blocks SET timestamp = ?, version = ?, difficulty = ?, random = ?, nonce = ?, 'transaction' = ?,\
-                          prev_block_hash = ?, hash = ?, pub_key = ?, signature = ? WHERE id = ?;";
 const SQL_GET_LAST_BLOCK: &str = "SELECT * FROM blocks ORDER BY id DESC LIMIT 1;";
 const SQL_GET_FIRST_BLOCK_FOR_KEY: &str = "SELECT id FROM blocks WHERE pub_key = ? LIMIT 1;";
 const SQL_DELETE_BLOCK_AND_TRANSACTIONS: &str = "DELETE FROM blocks WHERE id = ?; DELETE FROM domains WHERE id = ?; DELETE FROM zones WHERE id = ?;";
@@ -36,8 +34,6 @@ const SQL_TRUNCATE_ZONES: &str = "DELETE FROM zones WHERE id >= ?;";
 
 const SQL_ADD_DOMAIN: &str = "INSERT INTO domains (id, timestamp, identity, confirmation, data, pub_key) VALUES (?, ?, ?, ?, ?, ?)";
 const SQL_ADD_ZONE: &str = "INSERT INTO zones (id, timestamp, identity, confirmation, data, pub_key) VALUES (?, ?, ?, ?, ?, ?)";
-const SQL_DELETE_DOMAIN: &str = "DELETE FROM domains WHERE id = ?";
-const SQL_DELETE_ZONE: &str = "DELETE FROM zones WHERE id = ?";
 const SQL_GET_BLOCK_BY_ID: &str = "SELECT * FROM blocks WHERE id=? LIMIT 1;";
 const SQL_GET_LAST_FULL_BLOCK: &str = "SELECT * FROM blocks WHERE id < ? AND `transaction`<>'' ORDER BY id DESC LIMIT 1;";
 const SQL_GET_LAST_FULL_BLOCK_FOR_KEY: &str = "SELECT * FROM blocks WHERE id < ? AND `transaction`<>'' AND pub_key = ? ORDER BY id DESC LIMIT 1;";
@@ -245,25 +241,10 @@ impl Chain {
         }
     }
 
-    pub fn replace_block(&mut self, index: u64, block: Block) -> sqlite::Result<()> {
-        debug!("Replacing block {} with:\n{:?}", index, &block);
-        let old_block = self.get_block(index).unwrap();
-        if old_block.transaction.is_some() {
-            let _ = self.delete_transaction(index);
-        }
-
-        let index = block.index;
-        let timestamp = block.timestamp;
-        self.last_block = Some(block.clone());
-        if block.transaction.is_some() {
-            self.last_full_block = Some(block.clone());
-        }
-        let transaction = block.transaction.clone();
-        if self.replace_block_in_table(block).is_ok() {
-            if let Some(transaction) = transaction {
-                self.add_transaction_to_table(index, timestamp, &transaction).expect("Error adding transaction");
-            }
-        }
+    pub fn replace_block(&mut self, block: Block) -> sqlite::Result<()> {
+        warn!("Replacing block {} with:\n{:?}", block.index, &block);
+        self.truncate_db_from_block(block.index)?;
+        self.add_block(block);
         Ok(())
     }
 
@@ -349,17 +330,6 @@ impl Chain {
         false
     }
 
-    fn delete_transaction(&mut self, index: u64) -> sqlite::Result<()> {
-        let mut statement = self.db.prepare(SQL_DELETE_DOMAIN)?;
-        statement.bind(1, index as i64)?;
-        statement.next()?;
-
-        let mut statement = self.db.prepare(SQL_DELETE_ZONE)?;
-        statement.bind(1, index as i64)?;
-        statement.next()?;
-        Ok(())
-    }
-
     /// Adds block to blocks table
     fn add_block_to_table(&mut self, block: Block) -> sqlite::Result<State> {
         let mut statement = self.db.prepare(SQL_ADD_BLOCK)?;
@@ -379,28 +349,6 @@ impl Chain {
         statement.bind(9, &**block.hash)?;
         statement.bind(10, &**block.pub_key)?;
         statement.bind(11, &**block.signature)?;
-        statement.next()
-    }
-
-    /// Replaces block in blocks table on arrival of better block from some fork
-    fn replace_block_in_table(&mut self, block: Block) -> sqlite::Result<State> {
-        let mut statement = self.db.prepare(SQL_REPLACE_BLOCK)?;
-        statement.bind(1, block.timestamp as i64)?;
-        statement.bind(2, block.version as i64)?;
-        statement.bind(3, block.difficulty as i64)?;
-        statement.bind(4, block.random as i64)?;
-        statement.bind(5, block.nonce as i64)?;
-        match &block.transaction {
-            None => { statement.bind(6, "")?; }
-            Some(transaction) => {
-                statement.bind(6, transaction.to_string().as_str())?;
-            }
-        }
-        statement.bind(7, &**block.prev_block_hash)?;
-        statement.bind(8, &**block.hash)?;
-        statement.bind(9, &**block.pub_key)?;
-        statement.bind(10, &**block.signature)?;
-        statement.bind(11, block.index as i64)?;
         statement.next()
     }
 
@@ -774,7 +722,7 @@ impl Chain {
         if let Some(prev_block) = self.get_block(block.index - 1) {
             if block.prev_block_hash.ne(&prev_block.hash) {
                 warn!("Ignoring block with wrong previous hash:\n{:?}", &block);
-                return Bad;
+                return Rewind;
             }
         }
 
