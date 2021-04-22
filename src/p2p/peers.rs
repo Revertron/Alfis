@@ -22,7 +22,6 @@ pub struct Peers {
     new_peers: Vec<SocketAddr>,
     ignored: HashSet<IpAddr>,
     my_id: String,
-    block_asked_time: i64,
     behind_ping_sent_time: i64,
 }
 
@@ -33,7 +32,6 @@ impl Peers {
             new_peers: Vec::new(),
             ignored: HashSet::new(),
             my_id: commons::random_string(6),
-            block_asked_time: 0,
             behind_ping_sent_time: 0
         }
     }
@@ -59,23 +57,23 @@ impl Peers {
                 let _ = registry.deregister(stream);
                 match peer.get_state() {
                     State::Connecting => {
-                        error!("Peer connection {} to {:?} has timed out", &token.0, &peer.get_addr());
+                        info!("Peer connection {} to {:?} has timed out", &token.0, &peer.get_addr());
                     }
                     State::Connected => {
-                        error!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
+                        info!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
                     }
                     State::Idle { .. } | State::Message { .. } => {
-                        error!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
+                        info!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
                     }
                     State::Error => {
-                        error!("Peer connection {} to {:?} has shut down on error", &token.0, &peer.get_addr());
+                        info!("Peer connection {} to {:?} has shut down on error", &token.0, &peer.get_addr());
                     }
                     State::Banned => {
-                        error!("Peer connection {} to {:?} has shut down, banned", &token.0, &peer.get_addr());
+                        info!("Peer connection {} to {:?} has shut down, banned", &token.0, &peer.get_addr());
                         self.ignored.insert(peer.get_addr().ip().clone());
                     }
                     State::Offline { .. } => {
-                        error!("Peer connection {} to {:?} is offline", &token.0, &peer.get_addr());
+                        info!("Peer connection {} to {:?} is offline", &token.0, &peer.get_addr());
                     }
                 }
 
@@ -238,23 +236,18 @@ impl Peers {
         }
 
         // If someone has more blocks we sync
-        if self.need_ask_block() {
+        {
             let mut rng = rand::thread_rng();
-            let mut asked = false;
             match self.peers
                 .iter_mut()
                 .filter_map(|(token, peer)| if peer.has_more_blocks(height) { Some((token, peer)) } else { None })
                 .choose(&mut rng) {
                 None => {}
                 Some((token, peer)) => {
-                    debug!("Found some peer higher than we are, requesting block {}, from {}", height + 1, &peer.get_addr().ip());
+                    debug!("Peer {} is higher than we are, requesting block {}", &peer.get_addr().ip(), height + 1);
                     registry.reregister(peer.get_stream(), token.clone(), Interest::WRITABLE).unwrap();
                     peer.set_state(State::message(Message::GetBlock { index: height + 1 }));
-                    asked = true;
                 }
-            }
-            if asked {
-                self.update_asked_block_time();
             }
         }
 
@@ -267,7 +260,7 @@ impl Peers {
                 .choose(&mut rng) {
                 None => {}
                 Some((token, peer)) => {
-                    debug!("Found some peer lower than we are, sending ping");
+                    debug!("Peer {} is behind, sending ping", &peer.get_addr().ip());
                     registry.reregister(peer.get_stream(), token.clone(), Interest::WRITABLE).unwrap();
                     peer.set_state(State::message(Message::Ping { height, hash }));
                     self.update_behind_ping_time();
@@ -377,14 +370,6 @@ impl Peers {
             }
             Err(e) => { Err(e) }
         }
-    }
-
-    pub fn update_asked_block_time(&mut self) {
-        self.block_asked_time = Utc::now().timestamp();
-    }
-
-    pub fn need_ask_block(&self) -> bool {
-        self.block_asked_time + 5 < Utc::now().timestamp()
     }
 
     pub fn update_behind_ping_time(&mut self) {

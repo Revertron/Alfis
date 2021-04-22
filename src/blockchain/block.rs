@@ -73,22 +73,9 @@ impl Block {
         if self.transaction.is_some() && other.transaction.is_none() {
             return true;
         }
-        let my_diff = hash_difficulty(self.hash.as_slice());
-        let it_diff = hash_difficulty(other.hash.as_slice());
+        let my_diff = hash_difficulty(self.hash.as_slice()) + key_hash_difficulty(self.hash.as_slice());
+        let it_diff = hash_difficulty(other.hash.as_slice()) + key_hash_difficulty(other.hash.as_slice());
         if my_diff > it_diff {
-            return true;
-        }
-        let my_diff = key_hash_difficulty(self.hash.as_slice());
-        let it_diff = key_hash_difficulty(other.hash.as_slice());
-        if my_diff > it_diff {
-            return true;
-        }
-        let my_diff = hash_difficulty(self.signature.as_slice());
-        let it_diff = hash_difficulty(other.signature.as_slice());
-        if my_diff > it_diff {
-            return true;
-        }
-        if self.nonce < other.nonce {
             return true;
         }
 

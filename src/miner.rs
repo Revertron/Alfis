@@ -231,25 +231,24 @@ fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<Atomic
     loop {
         block.random = rand::random();
         block.timestamp = Utc::now().timestamp();
-        let next_allowed_block = {
+        let waiting_signers = {
             let context = context.lock().unwrap();
-            // We use this block to fill some fields of our block as well
-            block.index = context.chain.get_height() + 1;
             if let Some(b) = context.chain.last_block() {
                 block.prev_block_hash = b.hash;
+                block.index = b.index + 1;
             }
-            context.chain.next_allowed_full_block()
+            context.chain.is_waiting_signers()
         };
-
-        if full && next_allowed_block > block.index {
-            if !running.load(Ordering::Relaxed) {
-                return None;
-            }
+        if !running.load(Ordering::Relaxed) {
+            return None;
+        }
+        if full && waiting_signers {
             //trace!("Mining full block is not allowed until previous is not signed");
             // We can't mine now, as we need to wait for block to be signed
             thread::sleep(Duration::from_millis(5000));
             continue;
         }
+
         debug!("Mining block {}", serde_json::to_string(&block).unwrap());
         let mut time = Instant::now();
         let mut prev_nonce = 0;

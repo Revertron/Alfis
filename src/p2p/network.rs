@@ -22,7 +22,7 @@ use crate::commons::*;
 use std::cmp::max;
 
 const SERVER: Token = Token(0);
-const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(500));
+const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(250));
 const MAX_PACKET_SIZE: usize = 1 * 1024 * 1024; // 1 Mb
 const MAX_READ_BLOCK_TIME: u128 = 500;
 
@@ -66,6 +66,7 @@ impl Network {
             let mut ui_timer = Instant::now();
             let mut log_timer = Instant::now();
             let mut bootstrap_timer = Instant::now();
+            let mut connect_timer = Instant::now();
             let mut last_events_time = Instant::now();
             loop {
                 if peers.get_peers_count() == 0 && bootstrap_timer.elapsed().as_secs() > 60 {
@@ -169,8 +170,11 @@ impl Network {
                         (height, context.chain.get_last_hash())
                     };
                     peers.update(poll.registry(), height, hash);
-                    peers.connect_new_peers(poll.registry(), &mut unique_token, yggdrasil_only);
                     ui_timer = Instant::now();
+                }
+                if connect_timer.elapsed().as_secs() >= 10 {
+                    peers.connect_new_peers(poll.registry(), &mut unique_token, yggdrasil_only);
+                    connect_timer = Instant::now();
                 }
             }
             if !running.load(Ordering::SeqCst) {
@@ -214,7 +218,7 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                     if event.is_read_closed() {
                         //debug!("Spurious wakeup for connection {}, ignoring", token.0);
                         if peer.spurious() >= 3 {
-                            //debug!("Disconnecting socket on 3 spurious wakeups");
+                            debug!("Disconnecting socket for 3 spurious wakeups {}", peer.get_addr().ip());
                             return false;
                         }
                         let interest = if let State::Message{..} = peer.get_state() {
@@ -483,18 +487,21 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
         Message::Block { index, block } => {
             let peer = peers.get_mut_peer(token).unwrap();
             peer.set_active(true);
-            info!("Received block {}", index);
             let block: Block = match serde_json::from_str(&block) {
                 Ok(block) => block,
-                Err(_) => return State::Error
+                Err(_) => return State::Banned
             };
-            process_new_block(context, peers, token, block)
+            if index != block.index {
+                return State::Banned;
+            }
+            info!("Received block {} with hash {:?}", block.index, &block.hash);
+            handle_block(context, peers, token, block)
         }
     };
     answer
 }
 
-fn process_new_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &Token, block: Block) -> State {
+fn handle_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &Token, block: Block) -> State {
     let peers_count = peers.get_peers_active_count();
     let peer = peers.get_mut_peer(token).unwrap();
     peer.set_received_block(block.index);
