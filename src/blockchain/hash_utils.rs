@@ -70,7 +70,7 @@ pub fn hash_difficulty(hash: &[u8]) -> u32 {
 
 /// Returns hash difficulty for keys (only from the start)
 #[inline]
-pub fn hash_difficulty_key(hash: &[u8]) -> u32 {
+pub fn key_hash_difficulty(hash: &[u8]) -> u32 {
     let bytes: [u8; 8] = hash[..8].try_into().unwrap();
     let int = u64::from_be_bytes(bytes);
     int.leading_zeros()

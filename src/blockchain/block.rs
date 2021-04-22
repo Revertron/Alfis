@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use serde::{Serialize, Deserialize};
 use crate::bytes::Bytes;
 use crate::Transaction;
-use crate::blockchain::hash_utils::hash_difficulty;
+use crate::blockchain::hash_utils::{hash_difficulty, key_hash_difficulty};
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Block {
@@ -68,15 +68,30 @@ impl Block {
         Vec::from(serde_json::to_string(&self).unwrap().as_bytes())
     }
 
+    /// Checks if this block is superior than the other
     pub fn is_better_than(&self, other: &Block) -> bool {
-        if self.transaction.is_none() && other.transaction.is_some() {
-            return false;
+        if self.transaction.is_some() && other.transaction.is_none() {
+            return true;
         }
-        if hash_difficulty(self.hash.as_slice()) < hash_difficulty(other.hash.as_slice()) {
-            return false;
+        let my_diff = hash_difficulty(self.hash.as_slice());
+        let it_diff = hash_difficulty(other.hash.as_slice());
+        if my_diff > it_diff {
+            return true;
         }
-        // TODO add more checks
+        let my_diff = key_hash_difficulty(self.hash.as_slice());
+        let it_diff = key_hash_difficulty(other.hash.as_slice());
+        if my_diff > it_diff {
+            return true;
+        }
+        let my_diff = hash_difficulty(self.signature.as_slice());
+        let it_diff = hash_difficulty(other.signature.as_slice());
+        if my_diff > it_diff {
+            return true;
+        }
+        if self.nonce < other.nonce {
+            return true;
+        }
 
-        true
+        false
     }
 }

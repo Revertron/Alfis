@@ -166,7 +166,7 @@ impl PartialEq for Keystore {
 /// TODO Optimize by caching Blakeout somewhere
 pub fn check_public_key_strength(key: &Bytes, strength: u32) -> bool {
     let bytes = blakeout_data(&key);
-    hash_difficulty_key(&bytes) >= strength
+    key_hash_difficulty(&bytes) >= strength
 }
 
 pub fn create_key(context: Arc<Mutex<Context>>) {
@@ -230,7 +230,7 @@ fn generate_key(difficulty: u32, mining: Arc<AtomicBool>) -> Option<Keystore> {
         let keystore = Keystore::from_random_bytes(&buf);
         digest.reset();
         digest.update(keystore.get_public().as_slice());
-        if hash_difficulty_key(digest.result()) >= difficulty {
+        if key_hash_difficulty(digest.result()) >= difficulty {
             info!("Generated keypair with public key: {:?} and hash {:?}", &keystore.get_public(), &keystore.get_hash());
             return Some(keystore);
         }
