@@ -219,11 +219,13 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                 }
                 Event::MinerStarted | Event::KeyGeneratorStarted => {
                     status.mining = true;
+                    status.max_diff = 0;
                     event_handle_info(&handle, "Mining started");
                     String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
                 }
                 Event::MinerStopped { success, full} => {
                     status.mining = false;
+                    status.max_diff = 0;
                     let mut s = if status.syncing {
                         String::from("setLeftStatusBarText('Syncing...'); showMiningIndicator(true, true);")
                     } else {
