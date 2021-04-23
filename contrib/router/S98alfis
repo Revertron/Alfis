@@ -1,0 +1,13 @@
+#!/bin/sh
+
+# This is the "Service" file for ALFIS in OPKG environment
+# Usually lives in /opt/etc/init.d/ directory
+
+ENABLED=yes
+PROCS=alfis
+ARGS="-d -c /opt/etc/alfis.conf -w /opt/var/lib/alfis/ -l /opt/var/log/alfis.log"
+PREARGS=""
+DESC=$PROCS
+PATH=/opt/sbin:/opt/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+. /opt/etc/init.d/rc.func
