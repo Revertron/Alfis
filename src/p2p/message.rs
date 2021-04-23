@@ -8,7 +8,7 @@ use crate::Bytes;
 pub enum Message {
     Error,
     Hand { #[serde(default = "default_version")] app_version: String, origin: String, version: u32, public: bool, #[serde(default)] rand: String },
-    Shake { origin: String, version: u32, ok: bool, height: u64 },
+    Shake { #[serde(default = "default_version")] app_version: String, origin: String, version: u32, ok: bool, height: u64 },
     Ping { height: u64, hash: Bytes },
     Pong { height: u64, hash: Bytes },
     Twin,
@@ -32,8 +32,8 @@ impl Message {
         Message::Hand { app_version: app_version.to_owned(), origin: origin.to_owned(), version, public, rand: rand.to_owned() }
     }
 
-    pub fn shake(origin: &str, version: u32, ok: bool, height: u64) -> Self {
-        Message::Shake { origin: origin.to_owned(), version, ok, height }
+    pub fn shake(app_version: &str, origin: &str, version: u32, ok: bool, height: u64) -> Self {
+        Message::Shake { app_version: app_version.to_owned(), origin: origin.to_owned(), version, ok, height }
     }
 
     pub fn ping(height: u64, hash: Bytes) -> Self {

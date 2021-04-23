@@ -397,21 +397,23 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                     let peer = peers.get_mut_peer(token).unwrap();
                     peer.set_public(public);
                     peer.set_active(true);
-                    debug!("Hello from v{} on {}", &app_version, peer.get_addr().ip());
-                    State::message(Message::shake(&origin, version, true, my_height))
+                    debug!(">> v{} on {}", &app_version, peer.get_addr().ip());
+                    let app_version = context.lock().unwrap().app_version.clone();
+                    State::message(Message::shake(&app_version, &origin, version, true, my_height))
                 } else {
                     warn!("Handshake from unsupported chain or version");
                     State::Banned
                 }
             }
         }
-        Message::Shake { origin, version, ok, height } => {
+        Message::Shake { app_version, origin, version, ok, height } => {
             if origin.ne(my_origin) || version != my_version {
                 return State::Banned;
             }
             if ok {
                 let nodes = peers.get_peers_active_count();
                 let peer = peers.get_mut_peer(token).unwrap();
+                debug!("<< v{} on {}", &app_version, peer.get_addr().ip());
                 peer.set_height(height);
                 peer.set_active(true);
                 peer.reset_reconnects();

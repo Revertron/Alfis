@@ -39,8 +39,12 @@ jobs:
           tag_name: ${{ env.VERSION }}
           release_name: ${{ env.VERSION }}
           body: |
-            ## A new version
+            ## New
+            * Added new features.
+            ## Bug Fixes & Improvements
             * Various fixes and stability improvements.
+            ## Documentation & others
+            * Updated documentation.
           draft: true
           prerelease: false
 
