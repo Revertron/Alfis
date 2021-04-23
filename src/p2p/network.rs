@@ -2,6 +2,7 @@ extern crate serde;
 extern crate serde_json;
 
 use std::{io, thread};
+use std::cmp::max;
 use std::io::{Read, Write};
 use std::net::{IpAddr, Shutdown, SocketAddr, SocketAddrV4};
 use std::sync::{Arc, Mutex};
@@ -19,12 +20,8 @@ use rand::random;
 use crate::{Block, Context, p2p::Message, p2p::Peer, p2p::Peers, p2p::State};
 use crate::blockchain::types::BlockQuality;
 use crate::commons::*;
-use std::cmp::max;
 
 const SERVER: Token = Token(0);
-const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(250));
-const MAX_PACKET_SIZE: usize = 1 * 1024 * 1024; // 1 Mb
-const MAX_READ_BLOCK_TIME: u128 = 500;
 
 pub struct Network {
     context: Arc<Mutex<Context>>
@@ -147,7 +144,6 @@ impl Network {
                 if !events.is_empty() {
                     last_events_time = Instant::now();
                 }
-                events.clear();
 
                 if ui_timer.elapsed().as_millis() > UI_REFRESH_DELAY_MS {
                     // Send pings to idle peers
@@ -167,14 +163,14 @@ impl Network {
                             }
                             log_timer = Instant::now();
                         }
+                        if nodes < MAX_NODES && connect_timer.elapsed().as_secs() >= 10 {
+                            peers.connect_new_peers(poll.registry(), &mut unique_token, yggdrasil_only);
+                            connect_timer = Instant::now();
+                        }
                         (height, context.chain.get_last_hash())
                     };
                     peers.update(poll.registry(), height, hash);
                     ui_timer = Instant::now();
-                }
-                if connect_timer.elapsed().as_secs() >= 10 {
-                    peers.connect_new_peers(poll.registry(), &mut unique_token, yggdrasil_only);
-                    connect_timer = Instant::now();
                 }
             }
             if !running.load(Ordering::SeqCst) {
@@ -401,7 +397,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 return State::Banned;
             }
             if ok {
-                let active_count = peers.get_peers_active_count();
+                let nodes = peers.get_peers_active_count();
                 let peer = peers.get_mut_peer(token).unwrap();
                 peer.set_height(height);
                 peer.set_active(true);
@@ -412,7 +408,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                     let event = crate::event::Event::Syncing { have: my_height, height: max(height, my_height) };
                     context.bus.post(event);
                 }
-                if active_count < 5 || random::<u8>() < 10 {
+                if nodes < MAX_NODES && random::<bool>() {
                     debug!("Requesting more peers from {}", peer.get_addr().ip());
                     State::message(Message::GetPeers)
                 } else {
@@ -453,7 +449,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 info!("My hash: {:?}, their hash: {:?}", &my_hash, &hash);
                 State::message(Message::GetBlock { index: my_height })
             } else {
-                if active_count < 5 || random::<u8>() < 10 {
+                if active_count < MAX_NODES && random::<u8>() < 50 {
                     debug!("Requesting more peers from {}", peer.get_addr().ip());
                     State::message(Message::GetPeers)
                 } else {

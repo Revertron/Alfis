@@ -224,7 +224,7 @@ impl Miner {
 }
 
 fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<AtomicBool>, thread: usize) -> Option<Block> {
-    let difficulty = block.difficulty;
+    let target_diff = block.difficulty;
     let full = block.transaction.is_some();
     let mut digest = Blakeout::new();
     let mut max_diff = 0;
@@ -261,7 +261,7 @@ fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<Atomic
             digest.reset();
             digest.update(&block.as_bytes());
             let diff = hash_difficulty(digest.result());
-            if diff >= difficulty {
+            if diff >= target_diff {
                 block.hash = Bytes::from_bytes(digest.result());
                 return Some(block);
             }
@@ -276,7 +276,7 @@ fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<Atomic
                     let speed = (nonce - prev_nonce) / (elapsed as u64 / 1000);
                     //debug!("Mining speed {} H/s, max difficulty {}", speed, max_diff);
                     if let Ok(mut context) = context.try_lock() {
-                        context.bus.post(Event::MinerStats { thread, speed, max_diff, aim_diff: difficulty })
+                        context.bus.post(Event::MinerStats { thread, speed, max_diff, target_diff })
                     }
                     time = Instant::now();
                     prev_nonce = nonce;

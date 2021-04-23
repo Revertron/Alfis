@@ -213,14 +213,15 @@ impl Peers {
     }
 
     pub fn update(&mut self, registry: &Registry, height: u64, hash: Bytes) {
+        let nodes = self.get_peers_active_count();
+
+        let random_time = random::<u64>() % PING_PERIOD;
         for (token, peer) in self.peers.iter_mut() {
             match peer.get_state() {
                 State::Idle { from } => {
-                    let random_time = random::<u64>() % PING_PERIOD;
                     if from.elapsed().as_secs() >= PING_PERIOD + random_time {
                         // Sometimes we check for new peers instead of pinging
-                        let random: u8 = random();
-                        let message = if random < 10 {
+                        let message = if nodes < MAX_NODES && random::<bool>() {
                             Message::GetPeers
                         } else {
                             Message::ping(height, hash.clone())
