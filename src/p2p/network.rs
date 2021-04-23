@@ -441,8 +441,9 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             if peer.is_higher(my_height) {
                 let mut context = context.lock().unwrap();
                 context.chain.update_max_height(height);
-            }
-            if my_height == height && hash.ne(&my_hash) {
+                info!("Peer is higher, requesting block {} from {}", height, peer.get_addr().ip());
+                State::message(Message::GetBlock { index: height })
+            } else if my_height == height && hash.ne(&my_hash) {
                 info!("Hashes are different, requesting block {} from {}", my_height, peer.get_addr().ip());
                 info!("My hash: {:?}, their hash: {:?}", &my_hash, &hash);
                 State::message(Message::GetBlock { index: my_height })
@@ -458,8 +459,9 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             if peer.is_higher(my_height) {
                 let mut context = context.lock().unwrap();
                 context.chain.update_max_height(height);
-            }
-            if my_height == height && hash.ne(&my_hash) {
+                info!("Peer is higher, requesting block {} from {}", height, peer.get_addr().ip());
+                State::message(Message::GetBlock { index: height })
+            } else if my_height == height && hash.ne(&my_hash) {
                 info!("Hashes are different, requesting block {} from {}", my_height, peer.get_addr().ip());
                 info!("My hash: {:?}, their hash: {:?}", &my_hash, &hash);
                 State::message(Message::GetBlock { index: my_height })
