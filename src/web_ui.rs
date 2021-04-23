@@ -25,6 +25,7 @@ use alfis::miner::Miner;
 use Cmd::*;
 
 use self::web_view::{Handle, WebView};
+use alfis::blockchain::hash_utils::hash_identity;
 
 pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let file_content = include_str!("webview/index.html");
@@ -357,7 +358,7 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
     }
     let keystore = context.get_keystore().unwrap();
     let pub_key = keystore.get_public();
-    let mut data = match serde_json::from_str::<DomainData>(&data) {
+    let data = match serde_json::from_str::<DomainData>(&data) {
         Ok(data) => { data }
         Err(e) => {
             show_warning(web_view, "Something wrong with domain data. I cannot mine it.");
@@ -383,12 +384,8 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
         MineResult::Fine => {
             let zone = get_domain_zone(&name);
             let difficulty = context.chain.get_zone_difficulty(&zone);
-            let last_block = context.chain.last_block().unwrap();
-            let encrypted = keystore.encrypt(name.as_bytes(), &last_block.hash.as_slice()[..12]);
-            data.domain = encrypted;
-            let data = serde_json::to_string(&data).unwrap();
             std::mem::drop(context);
-            create_domain(c, miner, CLASS_DOMAIN, &name, &data, difficulty, &keystore);
+            create_domain(c, miner, CLASS_DOMAIN, &name, data, difficulty, &keystore);
             let _ = web_view.eval("domainMiningStarted();");
             event_info(web_view, &format!("Mining of domain \\'{}\\' has started", &name));
         }
@@ -451,12 +448,12 @@ fn action_create_zone(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, we
         let data = serde_json::to_string(&data).unwrap();
         match transaction {
             None => {
-                create_domain(Arc::clone(&context), miner.clone(), CLASS_ZONE, &name, &data, ZONE_DIFFICULTY, &keystore);
+                create_zone(Arc::clone(&context), miner.clone(), CLASS_ZONE, &name, &data, ZONE_DIFFICULTY, &keystore);
                 event_info(web_view, &format!("Mining of zone \\'{}\\' has started", &name));
             }
             Some(transaction) => {
                 if transaction.pub_key == keystore.get_public() {
-                    create_domain(Arc::clone(&context), miner.clone(), CLASS_ZONE, &name, &data, ZONE_DIFFICULTY, &keystore);
+                    create_zone(Arc::clone(&context), miner.clone(), CLASS_ZONE, &name, &data, ZONE_DIFFICULTY, &keystore);
                     event_info(web_view, &format!("Mining of zone \\'{}\\' has started", &name));
                 } else {
                     warn!("Tried to mine not owned domain!");
@@ -544,7 +541,7 @@ fn format_event_now(kind: &str, message: &str) -> String {
     format!("addEvent('{}', '{}', '{}');", kind, time.format("%d.%m.%y %X"), message)
 }
 
-fn create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, class: &str, name: &str, data: &str, difficulty: u32, keystore: &Keystore) {
+fn create_zone(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, class: &str, name: &str, data: &str, difficulty: u32, keystore: &Keystore) {
     let name = name.to_owned();
     info!("Generating domain or zone {}", &name);
     if context.lock().unwrap().x_zones.has_zone(&name) {
@@ -552,6 +549,17 @@ fn create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, class: 
         return;
     }
     let transaction = Transaction::from_str(name, class.to_owned(), data.to_owned(), keystore.get_public().clone());
+    let block = Block::new(Some(transaction), keystore.get_public(), Bytes::default(), difficulty);
+    miner.lock().unwrap().add_block(block, keystore.clone());
+}
+
+fn create_domain(_context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, class: &str, name: &str, mut data: DomainData, difficulty: u32, keystore: &Keystore) {
+    let name = name.to_owned();
+    let confirmation = hash_identity(&name, Some(&keystore.get_public()));
+    data.domain = keystore.encrypt(name.as_bytes(), &confirmation.as_slice()[..12]);
+
+    let data = serde_json::to_string(&data).unwrap();
+    let transaction = Transaction::from_str(name, class.to_owned(), data, keystore.get_public().clone());
     let block = Block::new(Some(transaction), keystore.get_public(), Bytes::default(), difficulty);
     miner.lock().unwrap().add_block(block, keystore.clone());
 }

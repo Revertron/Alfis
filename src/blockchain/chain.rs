@@ -607,11 +607,21 @@ impl Chain {
             let class = String::from("domain");
             let data = statement.read::<String>(4).unwrap();
             let pub_key = Bytes::from_bytes(&statement.read::<Vec<u8>>(5).unwrap());
-            let transaction = Transaction { identity: identity.clone(), confirmation, class, data, pub_key };
+            let transaction = Transaction { identity: identity.clone(), confirmation: confirmation.clone(), class, data, pub_key };
             //debug!("Found transaction for domain {}: {:?}", domain, &transaction);
             if let Some(data) = transaction.get_domain_data() {
-                let b = self.get_block(index - 1).unwrap();
-                let domain = keystore.decrypt(data.domain.as_slice(), &b.hash.as_slice()[..12]);
+                let mut domain = keystore.decrypt(data.domain.as_slice(), &confirmation.as_slice()[..12]);
+                if domain.is_empty() {
+                    // Legacy encryption scheme
+                    for i in 1..=10 {
+                        let b = self.get_block(index - i).unwrap();
+                        domain = keystore.decrypt(data.domain.as_slice(), &b.hash.as_slice()[..12]);
+                        if !domain.is_empty() {
+                            break;
+                        }
+                    }
+                }
+
                 let mut domain = String::from_utf8(domain.to_vec()).unwrap();
                 if domain.is_empty() {
                     domain = String::from("unknown");
