@@ -11,6 +11,8 @@ pub enum Message {
     Shake { origin: String, version: u32, ok: bool, height: u64 },
     Ping { height: u64, hash: Bytes },
     Pong { height: u64, hash: Bytes },
+    Twin,
+    Loop,
     GetPeers,
     Peers { peers: Vec<String> },
     GetBlock { index: u64 },

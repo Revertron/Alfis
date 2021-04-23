@@ -109,18 +109,10 @@ impl Network {
                                         continue;
                                     }
 
-                                    // If connection is from the same IP and not from loopback we ignore it to avoid connection loops
-                                    let local_ip = stream.local_addr().unwrap_or("0.0.0.0:0".parse().unwrap());
-                                    if !local_ip.ip().is_loopback() && local_ip.ip() == address.ip() {
-                                        peers.ignore_ip(&address.ip());
-                                        stream.shutdown(Shutdown::Both).unwrap_or_else(|e|{ warn!("Error in shutdown, {}", e); });
-                                        warn!("Detected connection loop, ignoring IP: {}", &address.ip());
-                                    } else {
-                                        //debug!("Accepted connection from: {} to local IP: {}", address, local_ip);
-                                        let token = next(&mut unique_token);
-                                        poll.registry().register(&mut stream, token, Interest::READABLE).expect("Error registering poll");
-                                        peers.add_peer(token, Peer::new(address, stream, State::Connected, true));
-                                    }
+                                    //debug!("Accepted connection from: {} to local IP: {}", address, local_ip);
+                                    let token = next(&mut unique_token);
+                                    poll.registry().register(&mut stream, token, Interest::READABLE).expect("Error registering poll");
+                                    peers.add_peer(token, Peer::new(address, stream, State::Connected, true));
                                 }
                                 Err(_) => {}
                             }
@@ -260,6 +252,18 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                         State::Offline { .. } => {
                             peer.set_state(State::offline());
                         }
+                        State::Loop => {
+                            peer.set_state(State::Loop);
+                            peers.ignore_peer(registry, &event.token());
+                        }
+                        State::SendLoop => {
+                            registry.reregister(stream, event.token(), Interest::WRITABLE).unwrap();
+                            peer.set_state(State::SendLoop);
+                        }
+                        State::Twin => {
+                            registry.reregister(stream, event.token(), Interest::WRITABLE).unwrap();
+                            peer.set_state(State::Twin);
+                        }
                     }
                 }
                 Err(_) => { return false; }
@@ -305,6 +309,15 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                     State::Error => {}
                     State::Banned => {}
                     State::Offline { .. } => {}
+                    State::Loop => {}
+                    State::SendLoop => {
+                        let data = serde_json::to_string(&Message::Loop).unwrap();
+                        send_message(peer.get_stream(), &data.into_bytes()).unwrap_or_else(|e| warn!("Error sending loop {}", e));
+                    }
+                    State::Twin => {
+                        let data = serde_json::to_string(&Message::Twin).unwrap();
+                        send_message(peer.get_stream(), &data.into_bytes()).unwrap_or_else(|e| warn!("Error sending loop {}", e));
+                    }
                 }
                 registry.reregister(peer.get_stream(), event.token(), Interest::READABLE).unwrap();
             }
@@ -378,7 +391,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
         Message::Hand { app_version, origin, version, public, rand} => {
             if peers.is_our_own_connect(&rand) {
                 warn!("Detected loop connect");
-                State::Banned
+                State::SendLoop
             } else {
                 if origin.eq(my_origin) && version == my_version {
                     let peer = peers.get_mut_peer(token).unwrap();
@@ -493,6 +506,8 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             info!("Received block {} with hash {:?}", block.index, &block.hash);
             handle_block(context, peers, token, block)
         }
+        Message::Twin => { State::Twin }
+        Message::Loop => { State::Loop }
     };
     answer
 }

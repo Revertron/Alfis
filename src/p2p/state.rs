@@ -9,6 +9,9 @@ pub enum State {
     Message { data: Vec<u8> },
     Error,
     Banned,
+    SendLoop,
+    Loop,
+    Twin,
     Offline { from: Instant },
 }
 
@@ -29,6 +32,14 @@ impl State {
     pub fn is_idle(&self) -> bool {
         match self {
             State::Idle { .. } => { true }
+            _ => { false }
+        }
+    }
+
+    pub fn is_loop(&self) -> bool {
+        match self {
+            State::Loop { .. } => { true }
+            State::SendLoop { .. } => { true }
             _ => { false }
         }
     }

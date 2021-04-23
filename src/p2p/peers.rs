@@ -75,6 +75,15 @@ impl Peers {
                     State::Offline { .. } => {
                         info!("Peer connection {} to {:?} is offline", &token.0, &peer.get_addr());
                     }
+                    State::SendLoop => {
+                        info!("Peer connection {} from {:?} is a loop", &token.0, &peer.get_addr());
+                    }
+                    State::Loop => {
+                        info!("Peer connection {} to {:?} is a loop", &token.0, &peer.get_addr());
+                    }
+                    State::Twin => {
+                        info!("Peer connection {} to {:?} is a twin", &token.0, &peer.get_addr());
+                    }
                 }
 
                 self.peers.remove(token);
@@ -182,7 +191,9 @@ impl Peers {
 
     pub fn ignore_peer(&mut self, registry: &Registry, token: &Token) {
         let peer = self.peers.get_mut(token).unwrap();
-        peer.set_state(State::Banned);
+        if !peer.get_state().is_loop() {
+            peer.set_state(State::Banned);
+        }
         let ip = peer.get_addr().ip().clone();
         self.close_peer(registry, token);
         self.ignored.insert(ip);
