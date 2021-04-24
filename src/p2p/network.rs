@@ -353,8 +353,11 @@ fn read_message(stream: &mut TcpStream) -> Result<Vec<u8>, ()> {
             }
             // Would block "errors" are the OS's way of saying that the connection is not actually ready to perform this I/O operation.
             Err(ref err) if would_block(err) => {
-                // We give every connection no more than 500ms to read a message
+                // We give every connection no more than 200ms to read a message
                 if instant.elapsed().as_millis() < MAX_READ_BLOCK_TIME {
+                    // We need to sleep a bit, otherwise it can eat CPU
+                    let delay = Duration::from_millis(10);
+                    thread::sleep(delay);
                     continue;
                 } else {
                     break;
