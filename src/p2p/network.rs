@@ -356,7 +356,7 @@ fn read_message(stream: &mut TcpStream) -> Result<Vec<u8>, ()> {
                 // We give every connection no more than 200ms to read a message
                 if instant.elapsed().as_millis() < MAX_READ_BLOCK_TIME {
                     // We need to sleep a bit, otherwise it can eat CPU
-                    let delay = Duration::from_millis(10);
+                    let delay = Duration::from_millis(2);
                     thread::sleep(delay);
                     continue;
                 } else {
