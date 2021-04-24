@@ -1,6 +1,6 @@
 [package]
 name = "alfis"
-version = "0.4.27"
+version = "0.4.28"
 authors = ["Revertron <alfis@revertron.com>"]
 edition = "2018"
 build = "build.rs"

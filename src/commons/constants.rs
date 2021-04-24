@@ -43,5 +43,5 @@ pub const LOG_REFRESH_DELAY_SEC: u64 = 60;
 
 pub const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(250));
 pub const MAX_PACKET_SIZE: usize = 1 * 1024 * 1024; // 1 Mb
-pub const MAX_READ_BLOCK_TIME: u128 = 200;
+pub const MAX_READ_BLOCK_TIME: u128 = 500;
 pub const MAX_NODES: usize = 15;

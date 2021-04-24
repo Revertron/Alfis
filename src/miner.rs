@@ -158,6 +158,7 @@ impl Miner {
                             }
                         }
                     }
+                    let _ = cond_var.wait_timeout(jobs, delay).expect("Error in wait lock!");
                 }
             } else {
                 let mut jobs = jobs.lock().unwrap();
