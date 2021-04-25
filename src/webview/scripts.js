@@ -432,8 +432,25 @@ function keystoreChanged(path, pub_key, hash) {
     new_zone_difficulty.disabled = false;
 }
 
+function closeZonesDropdown() {
+    // If we close this right on blur we loose item clicks
+    setTimeout(function(){
+        document.getElementById("zones-dropdown").className = "dropdown";
+    }, 100);
+}
+
 function refreshZonesList() {
     var buf = "";
+    availableZones.sort(function compare(rhs, lhs) {
+        if (rhs.name < lhs.name) {
+            return -1;
+        } else if (rhs.name > lhs.name) {
+            return 1;
+        } else {
+            return 0;
+        }
+    });
+
     availableZones.forEach(function(value, index, array) {
         var zone = value.name + " (" + value.difficulty + "🔥)";
         var add_class = "";
