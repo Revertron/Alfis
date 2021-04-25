@@ -363,6 +363,7 @@ fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<Atomic
                         if context.chain.get_height() >= block.index {
                             if !full {
                                 info!("Blockchain changed while mining signing block, dropping work");
+                                running.store(false, Ordering::SeqCst);
                                 return None;
                             }
                             break;
