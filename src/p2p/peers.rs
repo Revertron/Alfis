@@ -92,6 +92,14 @@ impl Peers {
         }
     }
 
+    pub fn close_all_peers(&mut self, registry: &Registry) {
+        let tokens: Vec<Token> = self.peers.keys().into_iter().cloned().collect();
+        for token in tokens.iter() {
+            self.close_peer(registry, token);
+        }
+        self.peers.clear();
+    }
+
     pub fn add_peers_from_exchange(&mut self, peers: Vec<String>) {
         let peers: HashSet<String> = peers
             .iter()

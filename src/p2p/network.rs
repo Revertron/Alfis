@@ -67,6 +67,7 @@ impl Network {
             let mut last_events_time = Instant::now();
             loop {
                 if peers.get_peers_count() == 0 && bootstrap_timer.elapsed().as_secs() > 60 {
+                    warn!("Restarting swarm connections...");
                     // Starting peer connections to bootstrap nodes
                     peers.connect_peers(&peers_addrs, &poll.registry(), &mut unique_token, yggdrasil_only);
                     bootstrap_timer = Instant::now();
@@ -135,6 +136,9 @@ impl Network {
                 }
                 if !events.is_empty() {
                     last_events_time = Instant::now();
+                } else if last_events_time.elapsed().as_secs() > MAX_IDLE_SECONDS {
+                    warn!("Something is wrong with swarm connections, closing all.");
+                    peers.close_all_peers(poll.registry());
                 }
 
                 if ui_timer.elapsed().as_millis() > UI_REFRESH_DELAY_MS {
@@ -400,7 +404,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                     let peer = peers.get_mut_peer(token).unwrap();
                     peer.set_public(public);
                     peer.set_active(true);
-                    debug!(">> v{} on {}", &app_version, peer.get_addr().ip());
+                    debug!("Incoming v{} on {}", &app_version, peer.get_addr().ip());
                     let app_version = context.lock().unwrap().app_version.clone();
                     State::message(Message::shake(&app_version, &origin, version, true, my_height))
                 } else {
@@ -416,7 +420,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
             if ok {
                 let nodes = peers.get_peers_active_count();
                 let peer = peers.get_mut_peer(token).unwrap();
-                debug!("<< v{} on {}", &app_version, peer.get_addr().ip());
+                debug!("Outgoing v{} on {}", &app_version, peer.get_addr().ip());
                 peer.set_height(height);
                 peer.set_active(true);
                 peer.reset_reconnects();
