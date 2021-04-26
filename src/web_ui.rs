@@ -117,7 +117,7 @@ fn action_check_zone(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>, 
     } else {
         let c = context.lock().unwrap();
         if let Some(keystore) = c.get_keystore() {
-            let available = c.get_chain().is_domain_available(&name, &keystore);
+            let available = c.get_chain().is_domain_available(c.get_chain().get_height(), &name, &keystore);
             web_view.eval(&format!("zoneAvailable({})", available)).expect("Error evaluating!");
         }
     }
@@ -134,7 +134,7 @@ fn action_check_domain(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>
     let c = context.lock().unwrap();
     if let Some(keystore) = c.get_keystore() {
         let name = name.to_lowercase();
-        let available = c.get_chain().is_domain_available(&name, &keystore);
+        let available = c.get_chain().is_domain_available(c.get_chain().get_height(), &name, &keystore);
         web_view.eval(&format!("domainAvailable({})", available)).expect("Error evaluating!");
     }
 }
@@ -380,7 +380,7 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
             }
         }
     }
-    match context.chain.can_mine_domain(&name, &pub_key) {
+    match context.chain.can_mine_domain(context.chain.get_height(), &name, &pub_key) {
         MineResult::Fine => {
             let zone = get_domain_zone(&name);
             let difficulty = context.chain.get_zone_difficulty(&zone);

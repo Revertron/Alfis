@@ -32,6 +32,7 @@ pub const DOMAIN_LIFETIME: i64 = 86400 * 365; // One year
 pub const ZONE_MAX_LENGTH: usize = 10;
 pub const MAX_RECONNECTS: u32 = 5;
 
+pub const DB_NAME: &str = "blockchain.db";
 pub const CLASS_ZONE: &str = "zone";
 pub const CLASS_DOMAIN: &str = "domain";
 pub const ALFIS_DEBUG: &str = "ALFIS_DEBUG";

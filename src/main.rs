@@ -16,7 +16,7 @@ use simplelog::*;
 #[cfg(windows)]
 use winapi::um::wincon::{ATTACH_PARENT_PROCESS, AttachConsole, FreeConsole};
 
-use alfis::{Block, Bytes, Chain, Miner, Context, Network, Settings, dns_utils, Keystore, ZONE_DIFFICULTY, ALFIS_DEBUG};
+use alfis::{Block, Bytes, Chain, Miner, Context, Network, Settings, dns_utils, Keystore, ZONE_DIFFICULTY, ALFIS_DEBUG, DB_NAME};
 use std::fs::OpenOptions;
 use std::process::exit;
 use std::io::{Seek, SeekFrom};
@@ -103,9 +103,9 @@ fn main() {
     info!(target: LOG_TARGET_MAIN, "Starting ALFIS {}", env!("CARGO_PKG_VERSION"));
 
     let settings = Settings::load(&config_name).expect(&format!("Cannot load settings from {}!", &config_name));
-    info!(target: LOG_TARGET_MAIN, "Loaded settings: {:?}", &settings);
+    debug!(target: LOG_TARGET_MAIN, "Loaded settings: {:?}", &settings);
     let keystore = Keystore::from_file(&settings.key_file, "");
-    let chain: Chain = Chain::new(&settings);
+    let mut chain: Chain = Chain::new(&settings, DB_NAME);
     if opt_matches.opt_present("b") {
         for i in 1..(chain.get_height() + 1) {
             if let Some(block) = chain.get_block(i) {
@@ -114,6 +114,7 @@ fn main() {
         }
         return;
     }
+    chain.check_chain(settings.check_blocks);
 
     match chain.get_block(1) {
         None => { info!(target: LOG_TARGET_MAIN, "No blocks found in DB"); }

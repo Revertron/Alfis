@@ -48,7 +48,7 @@ impl DnsFilter for BlockchainFilter {
         let zone = parts[0].to_owned();
         match data {
             None => {
-                if self.context.lock().unwrap().chain.is_zone_in_blockchain(&zone) {
+                if self.context.lock().unwrap().chain.is_zone_in_blockchain(u64::MAX, &zone) {
                     trace!("Not found data for domain {}", &search);
                     // Create DnsPacket
                     let mut packet = DnsPacket::new();
@@ -192,7 +192,7 @@ impl BlockchainFilter {
     }
 
     fn get_zone_response(&self, zone: &str, mut packet: &mut DnsPacket) -> bool {
-        let have_zone = self.context.lock().unwrap().chain.is_zone_in_blockchain(zone);
+        let have_zone = self.context.lock().unwrap().chain.is_zone_in_blockchain(i64::MAX as u64, zone);
         if have_zone {
             BlockchainFilter::add_soa_record(zone.to_owned(), &mut packet);
         }

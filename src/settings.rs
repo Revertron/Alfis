@@ -13,6 +13,8 @@ pub struct Settings {
     pub origin: String,
     #[serde(default)]
     pub key_file: String,
+    #[serde(default = "default_check_blocks")]
+    pub check_blocks: u64,
     #[serde(default)]
     pub net: Net,
     #[serde(default)]
@@ -50,8 +52,9 @@ impl Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            origin: String::from("00000102C2F9BFD2803284D93327F089D60FC72A06F19AF2384567F2646B8348"),
+            origin: String::from("0AE588D62D710422A7972EA1E8A659CC8E93DB59489ACE32C499CD279B000000"),
             key_file: String::from("default.key"),
+            check_blocks: default_check_blocks(),
             net: Net::default(),
             dns: Default::default(),
             mining: Mining::default()
@@ -121,5 +124,9 @@ fn default_listen_dns() -> String {
 }
 
 fn default_threads() -> usize {
-    20
+    100
+}
+
+fn default_check_blocks() -> u64 {
+    8
 }

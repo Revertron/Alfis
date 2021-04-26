@@ -8,7 +8,7 @@ use chrono::Utc;
 use log::{debug, error, info, trace, warn};
 use sqlite::{Connection, State, Statement};
 
-use crate::{Block, Bytes, Keystore, Transaction, check_domain, get_domain_zone, is_yggdrasil_record, from_hex};
+use crate::{Block, Bytes, Keystore, Transaction, check_domain, get_domain_zone, is_yggdrasil_record};
 use crate::commons::constants::*;
 use crate::blockchain::types::{BlockQuality, MineResult, Options};
 use crate::blockchain::types::BlockQuality::*;
@@ -20,14 +20,11 @@ use crate::blockchain::transaction::{ZoneData, DomainData};
 use std::ops::Deref;
 use crate::blockchain::types::MineResult::*;
 
-const DB_NAME: &str = "blockchain.db";
 const TEMP_DB_NAME: &str = "temp.db";
 const SQL_CREATE_TABLES: &str = include_str!("sql/create_db.sql");
 const SQL_ADD_BLOCK: &str = "INSERT INTO blocks (id, timestamp, version, difficulty, random, nonce, 'transaction',\
                           prev_block_hash, hash, pub_key, signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
 const SQL_GET_LAST_BLOCK: &str = "SELECT * FROM blocks ORDER BY id DESC LIMIT 1;";
-const SQL_GET_FIRST_BLOCK_FOR_KEY: &str = "SELECT id FROM blocks WHERE pub_key = ? LIMIT 1;";
-const SQL_DELETE_BLOCK_AND_TRANSACTIONS: &str = "DELETE FROM blocks WHERE id = ?; DELETE FROM domains WHERE id = ?; DELETE FROM zones WHERE id = ?;";
 const SQL_TRUNCATE_BLOCKS: &str = "DELETE FROM blocks WHERE id >= ?;";
 const SQL_TRUNCATE_DOMAINS: &str = "DELETE FROM domains WHERE id >= ?;";
 const SQL_TRUNCATE_ZONES: &str = "DELETE FROM zones WHERE id >= ?;";
@@ -37,8 +34,8 @@ const SQL_ADD_ZONE: &str = "INSERT INTO zones (id, timestamp, identity, confirma
 const SQL_GET_BLOCK_BY_ID: &str = "SELECT * FROM blocks WHERE id=? LIMIT 1;";
 const SQL_GET_LAST_FULL_BLOCK: &str = "SELECT * FROM blocks WHERE id < ? AND `transaction`<>'' ORDER BY id DESC LIMIT 1;";
 const SQL_GET_LAST_FULL_BLOCK_FOR_KEY: &str = "SELECT * FROM blocks WHERE id < ? AND `transaction`<>'' AND pub_key = ? ORDER BY id DESC LIMIT 1;";
-const SQL_GET_DOMAIN_PUBLIC_KEY_BY_ID: &str = "SELECT pub_key FROM domains WHERE identity = ? ORDER BY id DESC LIMIT 1;";
-const SQL_GET_ZONE_PUBLIC_KEY_BY_ID: &str = "SELECT pub_key FROM zones WHERE identity = ? ORDER BY id DESC LIMIT 1;";
+const SQL_GET_DOMAIN_PUBLIC_KEY_BY_ID: &str = "SELECT pub_key FROM domains WHERE id < ? AND identity = ? LIMIT 1;";
+const SQL_GET_ZONE_PUBLIC_KEY_BY_ID: &str = "SELECT pub_key FROM zones WHERE id < ? AND identity = ? LIMIT 1;";
 const SQL_GET_DOMAIN_BY_ID: &str = "SELECT * FROM domains WHERE identity = ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_DOMAINS_BY_KEY: &str = "SELECT * FROM domains WHERE pub_key = ?;";
 const SQL_GET_ZONES: &str = "SELECT data FROM zones;";
@@ -59,10 +56,10 @@ pub struct Chain {
 }
 
 impl Chain {
-    pub fn new(settings: &Settings) -> Self {
+    pub fn new(settings: &Settings, db_name: &str) -> Self {
         let origin = settings.get_origin();
 
-        let db = sqlite::open(DB_NAME).expect("Unable to open blockchain DB");
+        let db = sqlite::open(db_name).expect("Unable to open blockchain DB");
         let zones = RefCell::new(HashSet::new());
         let mut chain = Chain { origin, last_block: None, last_full_block: None, max_height: 0, db, zones, signers: SignersCache::new() };
         chain.init_db();
@@ -90,17 +87,33 @@ impl Chain {
                 self.last_full_block = self.get_last_full_block(MAX, None);
             }
         }
-        // TODO Add env-var and commandline switches for full check
-        //self.check_chain();
     }
 
-    #[allow(dead_code)]
-    fn check_chain(&mut self) {
+    pub fn check_chain(&mut self, count: u64) {
         let height = self.get_height();
-        info!("Local blockchain height is {}, starting full blockchain check...", height);
-        for id in 1..=height {
-            info!("Checking block {}", id);
-            match self.get_block(id) {
+        let start = if height > count {
+            info!("Checking last {} blocks...", count);
+            height - count + 1
+        } else {
+            info!("Local blockchain height is {}, starting full blockchain check...", height);
+            1
+        };
+        let mut last_block: Option<Block> = None;
+        let mut last_full_block: Option<Block> = None;
+        if start > 1 {
+            last_block = self.get_block(start - 1);
+            if let Some(last) = &last_block {
+                last_full_block = match &last.transaction {
+                    None => { self.get_last_full_block(last.index, None) }
+                    Some(_) => { Some(last.clone()) }
+                };
+            }
+        }
+
+        for id in start..=height {
+            debug!("Checking block {}", id);
+            let block = self.get_block(id);
+            match block {
                 None => {
                     panic!("Blockchain is corrupted! Please, delete 'blockchain.db' and restart.");
                 }
@@ -109,12 +122,13 @@ impl Chain {
                         if block.hash != self.origin {
                             panic!("Loaded DB is not of origin {:?}! Please, delete 'blockchain.db' and restart.", &self.origin);
                         }
-                        self.last_block = Some(block);
+                        debug!("Block {} with hash {:?} is good!", block.index, &block.hash);
+                        last_block = Some(block);
                         continue;
                     }
 
                     //let last = self.last_block.clone().unwrap();
-                    if self.check_new_block(&block) != BlockQuality::Good {
+                    if self.check_block(&block, &last_block, &last_full_block) != BlockQuality::Good {
                         error!("Block {} is bad:\n{:?}", block.index, &block);
                         info!("Truncating database from block {}...", block.index);
                         match self.truncate_db_from_block(block.index) {
@@ -126,29 +140,22 @@ impl Chain {
                         }
                         break;
                     }
-                    info!("Block {} with hash {:?} is good!", block.index, &block.hash);
+                    debug!("Block {} with hash {:?} is good!", block.index, &block.hash);
                     if block.transaction.is_some() {
                         self.last_full_block = Some(block.clone());
                     }
-                    self.last_block = Some(block);
+                    if block.transaction.is_some() {
+                        last_full_block = Some(block.clone());
+                    }
+                    last_block = Some(block);
                 }
             }
         }
         self.last_block = self.load_last_block();
         self.last_full_block = self.get_last_full_block(MAX, None);
-        info!("Last block after chain check: {:?}", &self.last_block);
+        debug!("Last block after chain check: {:?}", &self.last_block);
     }
 
-    #[allow(dead_code)]
-    fn delete_block(&mut self, index: u64) -> sqlite::Result<State> {
-        let mut statement = self.db.prepare(SQL_DELETE_BLOCK_AND_TRANSACTIONS)?;
-        statement.bind(1, index as i64)?;
-        statement.bind(2, index as i64)?;
-        statement.bind(3, index as i64)?;
-        statement.next()
-    }
-
-    #[allow(dead_code)]
     fn truncate_db_from_block(&mut self, index: u64) -> sqlite::Result<State> {
         let mut statement = self.db.prepare(SQL_TRUNCATE_BLOCKS)?;
         statement.bind(1, index as i64)?;
@@ -396,13 +403,15 @@ impl Chain {
     }
 
     /// Gets last block that has a Transaction within
-    pub fn get_last_full_block(&self, index: u64, pub_key: Option<&[u8]>) -> Option<Block> {
+    pub fn get_last_full_block(&self, before: u64, pub_key: Option<&[u8]>) -> Option<Block> {
         if let Some(block) = &self.last_full_block {
-            match pub_key {
-                None => { return Some(block.clone()); }
-                Some(key) => {
-                    if block.pub_key.deref().eq(key) {
-                        return Some(block.clone());
+            if block.index < before {
+                match pub_key {
+                    None => { return Some(block.clone()); }
+                    Some(key) => {
+                        if block.pub_key.deref().eq(key) {
+                            return Some(block.clone());
+                        }
                     }
                 }
             }
@@ -411,12 +420,12 @@ impl Chain {
         let mut statement = match pub_key {
             None => {
                 let mut statement = self.db.prepare(SQL_GET_LAST_FULL_BLOCK).expect("Unable to prepare");
-                statement.bind(1, index as i64).expect("Unable to bind");
+                statement.bind(1, before as i64).expect("Unable to bind");
                 statement
             }
             Some(pub_key) => {
                 let mut statement = self.db.prepare(SQL_GET_LAST_FULL_BLOCK_FOR_KEY).expect("Unable to prepare");
-                statement.bind(1, index as i64).expect("Unable to bind");
+                statement.bind(1, before as i64).expect("Unable to bind");
                 statement.bind(2, pub_key).expect("Unable to bind");
                 statement
             }
@@ -437,12 +446,12 @@ impl Chain {
     }
 
     /// Checks if any domain is available to mine for this client (pub_key)
-    pub fn is_domain_available(&self, domain: &str, keystore: &Keystore) -> bool {
+    pub fn is_domain_available(&self, height: u64, domain: &str, keystore: &Keystore) -> bool {
         if domain.is_empty() {
             return false;
         }
         let identity_hash = hash_identity(domain, None);
-        if !self.is_id_available(&identity_hash, &keystore.get_public(), false) {
+        if !self.is_id_available(height, &identity_hash, &keystore.get_public(), false) {
             return false;
         }
 
@@ -452,20 +461,21 @@ impl Chain {
             if parts.last().unwrap().contains(".") {
                 return false;
             }
-            return self.is_zone_in_blockchain(parts.first().unwrap());
+            return self.is_zone_in_blockchain(height, parts.first().unwrap());
         }
         true
     }
 
     /// Checks if this identity is free or is owned by the same pub_key
-    pub fn is_id_available(&self, identity: &Bytes, public_key: &Bytes, zone: bool) -> bool {
+    pub fn is_id_available(&self, height: u64, identity: &Bytes, public_key: &Bytes, zone: bool) -> bool {
         let sql = match zone {
             true => { SQL_GET_ZONE_PUBLIC_KEY_BY_ID }
             false => { SQL_GET_DOMAIN_PUBLIC_KEY_BY_ID }
         };
 
         let mut statement = self.db.prepare(sql).unwrap();
-        statement.bind(1, &***identity).expect("Error in bind");
+        statement.bind(1, height as i64).expect("Error in bind");
+        statement.bind(2, &***identity).expect("Error in bind");
         while let State::Row = statement.next().unwrap() {
             let pub_key = Bytes::from_bytes(&statement.read::<Vec<u8>>(0).unwrap());
             if !pub_key.eq(public_key) {
@@ -496,14 +506,14 @@ impl Chain {
     }
 
     /// Checks if some zone exists in our blockchain
-    pub fn is_zone_in_blockchain(&self, zone: &str) -> bool {
+    pub fn is_zone_in_blockchain(&self, height: u64, zone: &str) -> bool {
         if self.zones.borrow().contains(zone) {
             return true;
         }
 
         // Checking for existing zone in DB
         let identity_hash = hash_identity(zone, None);
-        if self.is_id_in_blockchain(&identity_hash, true) {
+        if self.is_id_in_blockchain(height, &identity_hash, true) {
             // If there is such a zone
             self.zones.borrow_mut().insert(zone.to_owned());
             return true;
@@ -512,14 +522,15 @@ impl Chain {
     }
 
     /// Checks if some id exists in our blockchain
-    pub fn is_id_in_blockchain(&self, id: &Bytes, zone: bool) -> bool {
+    pub fn is_id_in_blockchain(&self, height: u64, id: &Bytes, zone: bool) -> bool {
         let sql = match zone {
             true => { SQL_GET_ZONE_PUBLIC_KEY_BY_ID }
             false => { SQL_GET_DOMAIN_PUBLIC_KEY_BY_ID }
         };
         // Checking for existing zone in DB
         let mut statement = self.db.prepare(sql).unwrap();
-        statement.bind(1, &***id).expect("Error in bind");
+        statement.bind(1, height as i64).expect("Error in bind");
+        statement.bind(2, &***id).expect("Error in bind");
         while let State::Row = statement.next().unwrap() {
             // If there is such a zone
             return true;
@@ -527,13 +538,13 @@ impl Chain {
         false
     }
 
-    pub fn can_mine_domain(&self, domain: &str, pub_key: &Bytes) -> MineResult {
+    pub fn can_mine_domain(&self, height: u64, domain: &str, pub_key: &Bytes) -> MineResult {
         let name = domain.to_lowercase();
         if !check_domain(&name, true) {
             return WrongName;
         }
         let zone = get_domain_zone(&name);
-        if !self.is_zone_in_blockchain(&zone) {
+        if !self.is_zone_in_blockchain(height, &zone) {
             return WrongZone;
         }
         if let Some(transaction) = self.get_domain_transaction(&name) {
@@ -543,7 +554,7 @@ impl Chain {
         }
         let identity_hash = hash_identity(&name, None);
         if let Some(last) = self.get_last_full_block(MAX, Some(&pub_key)) {
-            let new_id = !self.is_id_in_blockchain(&identity_hash, false);
+            let new_id = !self.is_id_in_blockchain(height, &identity_hash, false);
             let time = last.timestamp + NEW_DOMAINS_INTERVAL - Utc::now().timestamp();
             if new_id && time > 0 {
                 return Cooldown { time }
@@ -684,8 +695,12 @@ impl Chain {
         self.max_height = height;
     }
 
-    /// Check if this block can be added to our blockchain
     pub fn check_new_block(&self, block: &Block) -> BlockQuality {
+        self.check_block(block, &self.last_block, &self.last_full_block)
+    }
+
+    /// Check if this block can be added to our blockchain
+    pub fn check_block(&self, block: &Block, last_block: &Option<Block>, last_full_block: &Option<Block>) -> BlockQuality {
         if block.version > CHAIN_VERSION {
             warn!("Ignoring block from unsupported version:\n{:?}", &block);
             return Bad;
@@ -695,9 +710,11 @@ impl Chain {
             warn!("Ignoring block from the future:\n{:?}", &block);
             return Bad;
         }
-        if block.index > self.get_height() + 1 {
-            info!("Ignoring future block:\n{:?}", &block);
-            return Future;
+        if let Some(last) = last_block {
+            if block.index > last.index + 1 {
+                info!("Ignoring future block:\n{:?}", &block);
+                return Future;
+            }
         }
         if !check_public_key_strength(&block.pub_key, KEYSTORE_DIFFICULTY) {
             warn!("Ignoring block with weak public key:\n{:?}", &block);
@@ -736,36 +753,28 @@ impl Chain {
             }
         }
 
-        let faulty_blocks = vec![
-            "0000133B790B61460D757E1F1F2D04480C8340D28CA73AE5AF27DBBF60548D00",
-            "8564E56AB50AE8473C3A26D7F5FF768A0238D463FAAE4A2049B2A6052F140000",
-            "0000FD8442CE01D9F25A4F53BE21A8552E83182184F2FF75E2A77718CF87483E",
-            "000CF01FA8E538A5AEA1E0E7B5FAB14914A4407B1CBE93CBB0F2129782661160",
-        ];
-        for hash in faulty_blocks {
-            let bytes = Bytes::from_bytes(&from_hex(hash).unwrap());
-            if block.hash == bytes {
-                warn!("Block {:?} is faulty! Ignoring!", &block);
-                return Bad;
-            }
-        }
-
         if let Some(transaction) = &block.transaction {
+            let current_height = match last_block {
+                None => { 0 }
+                Some(block) => { block.index }
+            };
             // TODO check for zone transaction
-            if !self.is_id_available(&transaction.identity, &block.pub_key, false) || !self.is_id_available(&transaction.identity, &block.pub_key, true) {
+            let is_domain_available = self.is_id_available(current_height, &transaction.identity, &block.pub_key, false);
+            let is_zone_available = self.is_id_available(current_height, &transaction.identity, &block.pub_key, true);
+            if !is_domain_available || !is_zone_available {
                 warn!("Block {:?} is trying to spoof an identity!", &block);
                 return Bad;
             }
             if let Some(last) = self.get_last_full_block(block.index, Some(&block.pub_key)) {
                 if last.index < block.index {
-                    let new_id = !self.is_id_in_blockchain(&transaction.identity, false);
+                    let new_id = !self.is_id_in_blockchain(block.index, &transaction.identity, false);
                     if new_id && last.timestamp + NEW_DOMAINS_INTERVAL > block.timestamp {
                         warn!("Block {:?} is mined too early!", &block);
                         return Bad;
                     }
                 }
             }
-            // Check if yggdrasil only quality of zone is not violated
+            // Check if yggdrasil only property of zone is not violated
             if let Some(block_data) = transaction.get_domain_data() {
                 let zones = self.get_zones();
                 for z in &zones {
@@ -782,7 +791,7 @@ impl Chain {
                 }
             }
         }
-        match &self.last_block {
+        match last_block {
             None => {
                 if !block.is_genesis() {
                     warn!("Block is from the future, how is this possible?");
@@ -804,7 +813,7 @@ impl Chain {
                 }
                 if block.index > BLOCK_SIGNERS_START {
                     // If this block is main, signed part of blockchain
-                    if !self.is_good_sign_block(&block) {
+                    if !self.is_good_sign_block(&block, last_full_block) {
                         return Bad;
                     }
                 }
@@ -834,12 +843,12 @@ impl Chain {
     }
 
     /// Checks if this block is a good signature block
-    fn is_good_sign_block(&self, block: &Block) -> bool {
+    fn is_good_sign_block(&self, block: &Block, last_full_block: &Option<Block>) -> bool {
         // If this is not a signing block
         if block.transaction.is_some() {
             return true;
         }
-        if let Some(full_block) = &self.last_full_block {
+        if let Some(full_block) = &last_full_block {
             let sign_count = self.get_height() - full_block.index;
             if sign_count < BLOCK_SIGNERS_MIN {
                 // Last full block is not locked enough
@@ -847,12 +856,12 @@ impl Chain {
                     warn!("Not enough signing blocks over full {} block!", full_block.index);
                     return false;
                 } else {
-                    if !self.is_good_signer_for_block(&block, full_block, sign_count) {
+                    if !self.is_good_signer_for_block(&block, full_block) {
                         return false;
                     }
                 }
             } else if sign_count < BLOCK_SIGNERS_ALL && block.transaction.is_none() {
-                if !self.is_good_signer_for_block(&block, full_block, sign_count) {
+                if !self.is_good_signer_for_block(&block, full_block) {
                     return false;
                 }
             }
@@ -861,11 +870,7 @@ impl Chain {
     }
 
     /// Check if this block's owner is a good candidate to sign last full block
-    fn is_good_signer_for_block(&self, block: &Block, full_block: &Block, sign_count: u64) -> bool {
-        // If the time for chosen signers is up
-        if self.can_sign_by_pos(sign_count, full_block.timestamp, block.timestamp, &block.pub_key) {
-            return true;
-        }
+    fn is_good_signer_for_block(&self, block: &Block, full_block: &Block) -> bool {
         // If we got a signing block
         let signers: HashSet<Bytes> = self.get_block_signers(full_block).into_iter().collect();
         if !signers.contains(&block.pub_key) {
@@ -881,33 +886,6 @@ impl Chain {
             }
         }
         true
-    }
-
-    /// Gets an id of first block of this public key
-    fn get_first_block_id_for_key(&self, key: &Bytes) -> u64 {
-        match self.db.prepare(SQL_GET_FIRST_BLOCK_FOR_KEY) {
-            Ok(mut statement) => {
-                statement.bind(1, &***key).expect("Error in bind");
-                while statement.next().unwrap() == State::Row {
-                    return statement.read::<i64>(0).unwrap() as u64;
-                }
-                0
-            }
-            Err(_) => {
-                0
-            }
-        }
-    }
-
-    /// Check if an owner of this public key can sign full block by PoS scheme (be in first 1000 users)
-    fn can_sign_by_pos(&self, sign_count: u64, block_time: i64, now: i64, pub_key: &Bytes) -> bool {
-        if sign_count < BLOCK_SIGNERS_MIN && block_time - now > BLOCK_SIGNERS_TIME {
-            let index = self.get_first_block_id_for_key(&pub_key);
-            if index > 0 && index <= BLOCK_POS_SIGNERS {
-                return true;
-            }
-        }
-        false
     }
 
     fn get_difficulty_for_transaction(&self, transaction: &Transaction) -> u32 {
@@ -996,5 +974,35 @@ impl SignersCache {
 
     pub fn has_signers_for(&self, index: u64) -> bool {
         self.index == index && !self.signers.is_empty()
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use crate::{Chain, Settings};
+    use simplelog::{ConfigBuilder, TermLogger, TerminalMode, ColorChoice};
+    use log::LevelFilter;
+
+    fn init_logger() {
+        let config = ConfigBuilder::new()
+            .add_filter_ignore_str("mio::poll")
+            .set_thread_level(LevelFilter::Off)
+            .set_location_level(LevelFilter::Off)
+            .set_target_level(LevelFilter::Error)
+            .set_time_level(LevelFilter::Error)
+            .set_time_to_local(true)
+            .build();
+        if let Err(e) = TermLogger::init(LevelFilter::Trace, config, TerminalMode::Stdout, ColorChoice::Auto) {
+            println!("Unable to initialize logger!\n{}", e);
+        }
+    }
+
+    #[test]
+    pub fn load_and_check() {
+        init_logger();
+        let settings = Settings::default();
+        let mut chain = Chain::new(&settings, "./tests/blockchain.db");
+        chain.check_chain(u64::MAX);
+        assert_eq!(chain.get_height(), 214);
     }
 }

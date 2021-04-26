@@ -147,7 +147,7 @@ impl Miner {
                     }
 
                     if !signing_waits {
-                        if let Ok(context) = context.try_lock() {
+                        if let Ok(context) = context.lock() {
                             let keystore = context.get_keystore();
                             // Ask the blockchain if we have to sign something
                             if let Some(block) = context.chain.get_sign_block(&keystore) {
@@ -175,7 +175,7 @@ impl Miner {
                     }
                 } else {
                     // If our queue is empty
-                    if let Ok(context) = context.try_lock() {
+                    if let Ok(context) = context.lock() {
                         let keystore = context.get_keystore();
                         // Ask the blockchain if we have to sign something
                         if let Some(block) = context.chain.get_sign_block(&keystore) {
