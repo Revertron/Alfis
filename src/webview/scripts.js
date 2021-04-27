@@ -215,6 +215,10 @@ function recordOkay(okay) {
 }
 
 function createDomain() {
+    if (typeof currentZone == 'undefined') {
+        showWarning("Select a domain zone first");
+        return;
+    }
     var new_domain = document.getElementById("new_domain").value.toLowerCase();
     var domain = new_domain + "." + currentZone.name;
     var data = {};
