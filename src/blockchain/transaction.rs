@@ -63,6 +63,22 @@ impl Transaction {
         }
         None
     }
+
+    /// Gets a type of transaction
+    pub fn get_type(what: &Option<Transaction>) -> TransactionType {
+        match what {
+            None => { TransactionType::Signing }
+            Some(transaction) => {
+                if let Some(_) = transaction.get_domain_data() {
+                    return TransactionType::Domain;
+                }
+                if let Ok(_) = serde_json::from_str::<ZoneData>(&transaction.data) {
+                    return TransactionType::Zone;
+                }
+                TransactionType::Unknown
+            }
+        }
+    }
 }
 
 impl fmt::Debug for Transaction {
@@ -87,6 +103,13 @@ impl Serialize for Transaction {
         structure.serialize_field("pub_key", &self.pub_key)?;
         structure.end()
     }
+}
+
+pub enum TransactionType {
+    Unknown,
+    Signing,
+    Domain,
+    Zone,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

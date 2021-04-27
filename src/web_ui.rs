@@ -292,14 +292,18 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                         format!("setLeftStatusBarText('Idle'); setRightStatusBarText('Nodes: {}, Blocks: {}')", nodes, blocks)
                     }
                 }
-                Event::BlockchainChanged {index} => {
-                    debug!("Current blockchain height is {}", index);
-                    event_handle_info(&handle, &format!("Blockchain changed, current block count is {} now.", index));
+                Event::ZonesChanged => {
+                    info!("New zone arrived");
                     if let Ok(zones) = serde_json::to_string(&context.chain.get_zones()) {
                         let _ = handle.dispatch(move |web_view|{
                             web_view.eval(&format!("zonesChanged('{}');", &zones))
                         });
                     }
+                    String::new() // Nothing
+                }
+                Event::BlockchainChanged {index} => {
+                    debug!("Current blockchain height is {}", index);
+                    event_handle_info(&handle, &format!("Blockchain changed, current block count is {} now.", index));
                     String::new() // Nothing
                 }
                 _ => { String::new() }
@@ -322,6 +326,9 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
     }
     let index = c.chain.get_height();
     c.bus.post(Event::BlockchainChanged { index });
+    if let Ok(zones) = serde_json::to_string(&c.chain.get_zones()) {
+        let _ = web_view.eval(&format!("zonesChanged('{}');", &zones));
+    }
     event_info(web_view, "Application loaded");
 }
 
