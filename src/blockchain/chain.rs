@@ -250,6 +250,7 @@ impl Chain {
 
     pub fn replace_block(&mut self, block: Block) -> sqlite::Result<()> {
         warn!("Replacing block {} with:\n{:?}", block.index, &block);
+        self.signers.borrow_mut().clear();
         self.truncate_db_from_block(block.index)?;
         self.add_block(block);
         Ok(())
@@ -974,6 +975,11 @@ impl SignersCache {
 
     pub fn has_signers_for(&self, index: u64) -> bool {
         self.index == index && !self.signers.is_empty()
+    }
+
+    pub fn clear(&mut self) {
+        self.index = 0;
+        self.signers.clear();
     }
 }
 
