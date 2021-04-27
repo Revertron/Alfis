@@ -235,6 +235,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                     if full {
                         match success {
                             true => {
+                                load_domains(&mut context, &handle);
                                 event_handle_luck(&handle, "Mining is successful!");
                                 s.push_str(" showSuccess('Block successfully mined!')");
                             }
@@ -266,10 +267,12 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                     }
                 }
                 Event::Syncing { have, height } => {
-                    event_handle_info(&handle, "Syncing started...");
                     status.syncing = true;
                     status.synced_blocks = have;
-                    status.sync_height = height;
+                    if height != status.sync_height {
+                        event_handle_info(&handle, "Syncing started...");
+                        status.sync_height = height;
+                    }
                     if status.mining {
                         String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
                     } else {
@@ -277,6 +280,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                     }
                 }
                 Event::SyncFinished => {
+                    load_domains(&mut context, &handle);
                     event_handle_info(&handle, "Syncing finished.");
                     status.syncing = false;
                     if status.mining {
@@ -325,9 +329,11 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
         c.bus.post(Event::KeyLoaded { path, public, hash });
     }
     let index = c.chain.get_height();
-    c.bus.post(Event::BlockchainChanged { index });
-    if let Ok(zones) = serde_json::to_string(&c.chain.get_zones()) {
-        let _ = web_view.eval(&format!("zonesChanged('{}');", &zones));
+    if index > 0 {
+        c.bus.post(Event::BlockchainChanged { index });
+        if let Ok(zones) = serde_json::to_string(&c.chain.get_zones()) {
+            let _ = web_view.eval(&format!("zonesChanged('{}');", &zones));
+        }
     }
     event_info(web_view, "Application loaded");
 }
