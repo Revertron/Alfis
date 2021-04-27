@@ -282,6 +282,7 @@ impl Miner {
                                 error!("To mine genesis block you need to make 'origin' an empty string in config.");
                             }
                         } else {
+                            info!("Mined good block!");
                             if block.index == 1 {
                                 context.settings.origin = block.hash.to_string();
                             }
