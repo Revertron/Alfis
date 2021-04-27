@@ -46,6 +46,10 @@ body {
   margin: 10pt;
 }
 
+.textarea {
+  overflow-y: auto;
+}
+
 .message {
   min-height: 2rem;
 }

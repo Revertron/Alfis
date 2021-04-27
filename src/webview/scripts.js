@@ -1,4 +1,5 @@
 var recordsBuffer = [];
+var ownersBuffer = [];
 var availableZones = [];
 var myDomains = [];
 var currentZone;
@@ -331,6 +332,49 @@ function showModalDialog(text, callback) {
     dialog.className = "modal is-active";
 }
 
+function showOwnersDialog() {
+    var dialog = document.getElementById("owners_dialog");
+    dialog.className = "modal is-active";
+}
+
+function isValidOwner(text) {
+    if (text.length != 64) {
+        return false;
+    }
+    var regexp = /^[0-9A-F]{64}$/i;
+    return regexp.test(text);
+}
+
+function ownersPositiveButton() {
+    var text = document.getElementById("owners_text").value;
+    if (text != "") {
+        ownersBuffer = [];
+        var wrong = false;
+        var lines = text.split("\n");
+        lines.forEach(function(value, index, array) {
+            if (wrong) {
+                return;
+            }
+            if (isValidOwner(value)) {
+                ownersBuffer.push(value);
+            } else {
+                alert("Wrong owner '{}'!".replace("{}", value));
+                wrong = true;
+                return;
+            }
+        });
+    }
+    if (!wrong) {
+        var dialog = document.getElementById("owners_dialog");
+        dialog.className = "modal";
+    }
+}
+
+function ownersCancelButton() {
+    var dialog = document.getElementById("owners_dialog");
+    dialog.className = "modal";
+}
+
 function showWarning(text) {
     var warning = document.getElementById("notification_warning");
     var message = document.getElementById("warning_text");
@@ -433,10 +477,10 @@ function keystoreChanged(path, pub_key, hash) {
 }
 
 function closeZonesDropdown() {
-    // If we close this right on blur we loose item clicks
-    setTimeout(function(){
+    var active = document.activeElement;
+    if (active == null || active.id != 'zones-menu') {
         document.getElementById("zones-dropdown").className = "dropdown";
-    }, 100);
+    }
 }
 
 function refreshZonesList() {
@@ -473,7 +517,6 @@ function refreshZonesList() {
 
 function zonesChanged(text) {
     availableZones = JSON.parse(text);
-    currentZone = availableZones[0];
     refreshZonesList();
 }
 

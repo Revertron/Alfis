@@ -107,6 +107,9 @@
             <div class="control">
                 <div class="buttons has-addons">
                     <button id="add_record_button" class="button is-info is-light" onclick="showNewRecordDialog();" title="Domain is nothing without good DNS records">Add record</button>
+                    <button disabled id="owners_button" class="button is-info is-light" onclick="showOwnersDialog();" title="You can change domain owners. Leave empty to be yours only.">
+                        <span>Set owners</span><span id="owners_count" class="tag is-info is-hidden ml-2">0</span>
+                    </button>
                     <button id="new_domain_button" class="button is-info" onclick="createDomain();" title="Start mining">Mine domain</button>
                 </div>
             </div>
@@ -211,6 +214,28 @@
             <div class="buttons is-grouped is-centered">
                 <button class="button is-link" id="modal_positive_button" onclick="positiveButton();">Ok</button>
                 <button class="button is-link is-light" id="modal_negative_button" onclick="cancelButton();">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="owners_dialog" class="modal">
+    <div class="modal-background"></div>
+    <div class="modal-content">
+        <div class="box">
+            <div class="field">
+                <label class="label">Public keys</label>
+                <div class="control">
+                    <textarea class="textarea" id="owners_text"></textarea>
+                </div>
+            </div>
+            <p class="help mb-3">Domains can be owned by several people.
+                You need to add their public keys in this text field, separated by new line.
+                If you don't include your own key, then domain will be completely transferred to entered owners.
+                If you wish to own domain by yourself, just leave this space empty.</p>
+            <div class="buttons is-grouped is-centered">
+                <button class="button is-link" id="owners_positive_button" onclick="ownersPositiveButton();">Ok</button>
+                <button class="button is-link is-light" id="owners_negative_button" onclick="ownersCancelButton();">Cancel</button>
             </div>
         </div>
     </div>
