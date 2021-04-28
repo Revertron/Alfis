@@ -75,55 +75,11 @@
     </div>
 
     <!-- Domain mining -->
-    <div class="tab row page is-hidden" id="tab_domains">
-        <div class="field is-grouped is-fullwidth">
-            <div class="control field has-addons is-expanded">
-                <div class="control is-expanded has-icons-left">
-                    <input class="input is-expanded" type="text" placeholder="domain" id="new_domain" oninput="onDomainChange(this)" title="Just a name of desired domain, like mail, facehook, etc.">
-                    <span class="icon is-small is-left">
-                        <svg viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path d="M17.9,17.39C17.64,16.59 16.89,16 16,16H15V13A1,1 0 0,0 14,12H8V10H10A1,1 0 0,0 11,9V7H13A2,2 0 0,0 15,5V4.59C17.93,5.77 20,8.64 20,12C20,14.08 19.2,15.97 17.9,17.39M11,19.93C7.05,19.44 4,16.08 4,12C4,11.38 4.08,10.78 4.21,10.21L9,15V16A2,2 0 0,0 11,18M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"></path></svg>
-                    </span>
-                </div>
-
-                <!-- Zones -->
-                <div class="control">
-                    <div class="dropdown" id="zones-dropdown" onclick="toggle(this, event);" title="Select your TLD - Top Level Domain">
-                        <div class="dropdown-trigger">
-                            <button class="button" aria-haspopup="true" aria-controls="zones-menu" onblur="closeZonesDropdown()">
-                                <span id="zones-current-name">Select zone</span>
-                                <span class="icon is-small">
-                                    <svg viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"></path></svg>
-                                </span>
-                            </button>
-                        </div>
-                        <div class="dropdown-menu" id="zones-menu" role="menu">
-                            <div class="dropdown-content" id="zones-links">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="control">
-                <div class="buttons has-addons">
-                    <button id="add_record_button" class="button is-info is-light" onclick="showNewRecordDialog();" title="Domain is nothing without good DNS records">Add record</button>
-                    <button disabled id="owners_button" class="button is-info is-light" onclick="showOwnersDialog();" title="You can change domain owners. Leave empty to be yours only.">
-                        <span>Set owners</span><span id="owners_count" class="tag is-info is-hidden ml-2">0</span>
-                    </button>
-                    <button disabled id="add_contacts_button" class="button is-info is-light" onclick="showContactsDialog();" title="You can add contact information to your domain, if you wish">Set contacts</button>
-                    <button id="new_domain_button" class="button is-info" onclick="createDomain();" title="Start mining">Mine domain</button>
-                </div>
-            </div>
-        </div>
-        <p class="help">Enter domain name, add some DNS-records, then hit the "Mine domain" button!</p>
-
-        <div class="list pb-3" id="domain_records">
-            <!-- Here will be our domain records, added by dialog -->
-        </div>
-
-        <div id="my_domains" class="container is-fluid cards-container">
+    <div class="tab row page is-hidden" id="tab_domains" style="align-items: center;">
+        <div id="my_domains" class="container is-fluid cards-container mt-0">
             <!-- Here will be our domains -->
         </div>
+        <button class="button is-info mt-2" onclick="showNewDomainDialog()" style="max-width: 200px;">New domain</button>
     </div>
 
     <!-- Zone mining -->
@@ -215,6 +171,60 @@
             <div class="buttons is-grouped is-centered">
                 <button class="button is-link" id="modal_positive_button" onclick="positiveButton();">Ok</button>
                 <button class="button is-link is-light" id="modal_negative_button" onclick="cancelButton();">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="new_domain_dialog" class="modal">
+    <div class="modal-background"></div>
+    <div class="modal-content">
+        <div class="box" id="new_domain_dialog_box">
+            <button class="delete" aria-label="close" onclick="closeDialog('new_domain_dialog')"></button>
+            <label class="label">New domain:</label>
+            <div class="field is-grouped is-fullwidth">
+                <div class="control field has-addons is-expanded">
+                    <div class="control is-expanded has-icons-left">
+                        <input class="input is-expanded" type="text" placeholder="domain" id="new_domain" oninput="onDomainChange(this)" title="Just a name of desired domain, like mail, facehook, etc.">
+                        <span class="icon is-small is-left">
+                            <svg viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path d="M17.9,17.39C17.64,16.59 16.89,16 16,16H15V13A1,1 0 0,0 14,12H8V10H10A1,1 0 0,0 11,9V7H13A2,2 0 0,0 15,5V4.59C17.93,5.77 20,8.64 20,12C20,14.08 19.2,15.97 17.9,17.39M11,19.93C7.05,19.44 4,16.08 4,12C4,11.38 4.08,10.78 4.21,10.21L9,15V16A2,2 0 0,0 11,18M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"></path></svg>
+                        </span>
+                    </div>
+
+                    <!-- Zones -->
+                    <div class="control">
+                        <div class="dropdown" id="zones-dropdown" onclick="toggle(this, event);" title="Select your TLD - Top Level Domain">
+                            <div class="dropdown-trigger">
+                                <button class="button" aria-haspopup="true" aria-controls="zones-menu" onblur="closeZonesDropdown()">
+                                    <span id="zones-current-name">Select zone</span>
+                                    <span class="icon is-small">
+                                        <svg viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"></path></svg>
+                                    </span>
+                                </button>
+                            </div>
+                            <div class="dropdown-menu" id="zones-menu" role="menu">
+                                <div class="dropdown-content" id="zones-links">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control">
+                    <div class="buttons has-addons">
+                        <button id="add_record_button" class="button is-info is-light" onclick="showNewRecordDialog();" title="Domain is nothing without good DNS records">Add record</button>
+                        <button disabled id="owners_button" class="button is-info is-light" onclick="showOwnersDialog();" title="You can change domain owners. Leave empty to be yours only.">
+                            <span>Set owners</span><span id="owners_count" class="tag is-info is-hidden ml-2">0</span>
+                        </button>
+                        <button disabled id="add_contacts_button" class="button is-info is-light" onclick="showContactsDialog();" title="You can add contact information to your domain, if you wish">Set contacts</button>
+                        <button id="new_domain_button" class="button is-info" onclick="createDomain();" title="Start mining">Mine domain</button>
+                    </div>
+                </div>
+            </div>
+            <p class="help">Enter domain name, add some DNS-records, then hit the "Mine domain" button!</p>
+
+            <div class="list mt-2" id="domain_records">
+                <!-- Here will be our domain records, added by dialog -->
             </div>
         </div>
     </div>
@@ -317,7 +327,7 @@
             <br/>
             <div class="buttons is-grouped is-centered">
                 <button class="button is-info" id="new_record_positive_button">Add</button>
-                <button class="button is-link is-light" id="new_record_negative_button">Cancel</button>
+                <button class="button is-info is-light" id="new_record_negative_button">Cancel</button>
             </div>
         </div>
     </div>

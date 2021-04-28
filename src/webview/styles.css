@@ -42,6 +42,28 @@ body {
 
 /* ========================================== */
 
+@media screen and (min-width: 769px) {
+  .modal-content,
+  .modal-card {
+    width: 100%;
+    max-width: calc(100vw - 60px);
+  }
+}
+
+.modal-background {
+  background-color: rgba(10, 10, 10, 0.76);
+}
+
+#new_domain_dialog_box {
+  min-height: 380px;
+}
+
+.delete {
+  position: absolute;
+  top: 1.0rem;
+  right: 1.25rem;
+}
+
 .container {
   margin: 10pt;
 }
