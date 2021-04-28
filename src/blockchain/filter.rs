@@ -48,7 +48,7 @@ impl DnsFilter for BlockchainFilter {
         let zone = parts[0].to_owned();
         match data {
             None => {
-                if self.context.lock().unwrap().chain.is_zone_in_blockchain(u64::MAX, &zone) {
+                if self.context.lock().unwrap().chain.is_zone_in_blockchain(i64::MAX as u64, &zone) {
                     trace!("Not found data for domain {}", &search);
                     // Create DnsPacket
                     let mut packet = DnsPacket::new();
