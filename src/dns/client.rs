@@ -145,8 +145,7 @@ impl DnsNetworkClient {
 
         packet.questions.push(DnsQuestion::new(qname.to_string(), qtype));
 
-        // Create a return channel, and add a `PendingQuery` to the list of lookups
-        // in progress
+        // Create a return channel, and add a `PendingQuery` to the list of lookups in progress
         let (tx, rx) = channel();
         {
             let mut pending_queries = self.pending_queries.lock().map_err(|_| ClientError::PoisonedLock)?;

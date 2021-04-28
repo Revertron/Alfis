@@ -5,7 +5,6 @@ use crate::dns::protocol::{DnsPacket, QueryType, DnsRecord, DnsQuestion, ResultC
 #[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
 use crate::blockchain::transaction::DomainData;
-use chrono::Utc;
 
 pub struct BlockchainFilter {
     context: Arc<Mutex<Context>>
@@ -28,7 +27,8 @@ impl DnsFilter for BlockchainFilter {
         match parts.len() {
             1 => {
                 let mut packet = DnsPacket::new();
-                if self.get_zone_response(parts[0], &mut packet) {
+                let serial = self.context.lock().unwrap().chain.get_soa_serial();
+                if self.get_zone_response(parts[0], serial, &mut packet) {
                     return Some(packet);
                 }
                 return None;
@@ -55,7 +55,8 @@ impl DnsFilter for BlockchainFilter {
                     packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
                     packet.header.rescode = ResultCode::NXDOMAIN;
                     packet.header.authoritative_answer = true;
-                    BlockchainFilter::add_soa_record(zone, &mut packet);
+                    let serial = self.context.lock().unwrap().chain.get_soa_serial();
+                    BlockchainFilter::add_soa_record(zone, serial, &mut packet);
                     //trace!("Returning packet: {:?}", &packet);
                     return Some(packet);
                 }
@@ -165,7 +166,8 @@ impl DnsFilter for BlockchainFilter {
                     packet.header.authoritative_answer = true;
                     packet.header.rescode = ResultCode::NOERROR;
                     packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
-                    BlockchainFilter::add_soa_record(zone, &mut packet);
+                    let serial = self.context.lock().unwrap().chain.get_soa_serial();
+                    BlockchainFilter::add_soa_record(zone, serial, &mut packet);
                     //trace!("Returning packet: {:?}", &packet);
                     Some(packet)
                 }
@@ -177,12 +179,12 @@ impl DnsFilter for BlockchainFilter {
 }
 
 impl BlockchainFilter {
-    fn add_soa_record(zone: String, packet: &mut DnsPacket) {
+    fn add_soa_record(zone: String, serial: u32, packet: &mut DnsPacket) {
         packet.authorities.push(DnsRecord::SOA {
             domain: zone,
             m_name: String::from(NAME_SERVER),
             r_name: String::from(SERVER_ADMIN),
-            serial: Utc::now().timestamp() as u32,
+            serial,
             refresh: 3600,
             retry: 300,
             expire: 604800,
@@ -191,11 +193,16 @@ impl BlockchainFilter {
         });
     }
 
-    fn get_zone_response(&self, zone: &str, mut packet: &mut DnsPacket) -> bool {
+    fn get_zone_response(&self, zone: &str, serial: u32, mut packet: &mut DnsPacket) -> bool {
         let have_zone = self.context.lock().unwrap().chain.is_zone_in_blockchain(i64::MAX as u64, zone);
         if have_zone {
-            BlockchainFilter::add_soa_record(zone.to_owned(), &mut packet);
+            BlockchainFilter::add_soa_record(zone.to_owned(), serial, &mut packet);
         }
         have_zone
     }
+}
+
+#[cfg(test)]
+mod tests {
+    // TODO write tests for this filter
 }

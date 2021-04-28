@@ -675,6 +675,13 @@ impl Chain {
         }
     }
 
+    pub fn get_soa_serial(&self) -> u32 {
+        match &self.last_full_block {
+            None => { 0 }
+            Some(block) => { block.timestamp as u32 }
+        }
+    }
+
     pub fn next_allowed_full_block(&self) -> u64 {
         match self.last_full_block {
             None => { self.get_height() + 1 }
