@@ -66,9 +66,9 @@
                 </span>
             </div>
             <div class="buttons has-addons">
-                <button class="button is-info is-light" onclick="loadKey();" title="Load keypair from file">Load key</button>
-                <button class="button is-info is-light" id="save_key" onclick="saveKey();" disabled title="Save current keypair to file">Save key</button>
-                <button class="button is-info" id="new_key_button" onclick="createKey();" title="Generate new keypair, suitable to mine domains">Mine new key</button>
+                <button class="button is-link is-light" onclick="loadKey();" title="Load keypair from file">Load key</button>
+                <button class="button is-link is-light" id="save_key" onclick="saveKey();" disabled title="Save current keypair to file">Save key</button>
+                <button class="button is-link" id="new_key_button" onclick="createKey();" title="Generate new keypair, suitable to mine domains">Mine new key</button>
             </div>
         </div>
         <p class="help">To mine domains (or zones) you need to mine a strong pair of keys.</p>
@@ -79,7 +79,7 @@
         <div id="my_domains" class="container is-fluid cards-container mt-0">
             <!-- Here will be our domains -->
         </div>
-        <button class="button is-info mt-2" onclick="showNewDomainDialog()" style="max-width: 200px;">New domain</button>
+        <button class="button is-link mt-2" onclick="showNewDomainDialog()" style="max-width: 200px;">New domain</button>
     </div>
 
     <!-- Zone mining -->
@@ -98,7 +98,7 @@
                 </span>
             </div>
             <div class="buttons has-addons">
-                <button class="button is-info" id="new_zone_button" onclick="createZone();" title="Start mining">Mine zone</button>
+                <button class="button is-link" id="new_zone_button" onclick="createZone();" title="Start mining">Mine zone</button>
             </div>
         </div>
         <label class="checkbox mb-1" style="align-self: flex-start;" title="This zone's domains will have only IPv6 addresses from Yggdrasil network (200::/7).">
@@ -212,12 +212,12 @@
 
                 <div class="control">
                     <div class="buttons has-addons">
-                        <button id="add_record_button" class="button is-info is-light" onclick="showNewRecordDialog();" title="Domain is nothing without good DNS records">Add record</button>
-                        <button disabled id="owners_button" class="button is-info is-light" onclick="showOwnersDialog();" title="You can change domain owners. Leave empty to be yours only.">
+                        <button id="add_record_button" class="button is-link is-light" onclick="showNewRecordDialog();" title="Domain is nothing without good DNS records">Add record</button>
+                        <button disabled id="owners_button" class="button is-link is-light" onclick="showOwnersDialog();" title="You can change domain owners. Leave empty to be yours only.">
                             <span>Set owners</span><span id="owners_count" class="tag is-info is-hidden ml-2">0</span>
                         </button>
-                        <button disabled id="add_contacts_button" class="button is-info is-light" onclick="showContactsDialog();" title="You can add contact information to your domain, if you wish">Set contacts</button>
-                        <button id="new_domain_button" class="button is-info" onclick="createDomain();" title="Start mining">Mine domain</button>
+                        <button disabled id="add_contacts_button" class="button is-link is-light" onclick="showContactsDialog();" title="You can add contact information to your domain, if you wish">Set contacts</button>
+                        <button id="new_domain_button" class="button is-link" onclick="createDomain();" title="Start mining">Mine domain</button>
                     </div>
                 </div>
             </div>
@@ -326,8 +326,8 @@
             </div>
             <br/>
             <div class="buttons is-grouped is-centered">
-                <button class="button is-info" id="new_record_positive_button">Add</button>
-                <button class="button is-info is-light" id="new_record_negative_button">Cancel</button>
+                <button class="button is-link" id="new_record_positive_button">Add</button>
+                <button class="button is-link is-light" id="new_record_negative_button">Cancel</button>
             </div>
         </div>
     </div>

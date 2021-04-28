@@ -64,6 +64,11 @@ body {
   right: 1.25rem;
 }
 
+/*.tabs li.is-active a {
+  border-bottom-color: #3298dc;
+  color: #3298dc;
+}*/
+
 .container {
   margin: 10pt;
 }
@@ -131,10 +136,4 @@ path {
 
 .is-danger:hover > span.icon > svg > path {
   fill: #ffffff;
-}
-
-svg.tag-button {
-  width: 24px;
-  height: 24px;
-  margin-bottom: .5rem;
 }
