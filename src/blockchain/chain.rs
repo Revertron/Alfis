@@ -9,6 +9,7 @@ use log::{debug, error, info, trace, warn};
 use sqlite::{Connection, State, Statement};
 
 use crate::{Block, Bytes, Keystore, Transaction, check_domain, get_domain_zone, is_yggdrasil_record};
+use crate::blockchain::transaction::TransactionType;
 use crate::commons::constants::*;
 use crate::blockchain::types::{BlockQuality, MineResult, Options};
 use crate::blockchain::types::BlockQuality::*;
@@ -758,6 +759,12 @@ impl Chain {
             if block.prev_block_hash.ne(&prev_block.hash) {
                 warn!("Ignoring block with wrong previous hash:\n{:?}", &block);
                 return Rewind;
+            }
+        }
+        if matches!(Transaction::get_type(&block.transaction), TransactionType::Zone) {
+            if self.get_zones().len() >= 10 {
+                warn!("Ignoring excess zone block");
+                return Bad;
             }
         }
 
