@@ -73,8 +73,11 @@ impl Block {
         if self.transaction.is_some() && other.transaction.is_none() {
             return true;
         }
-        let my_diff = hash_difficulty(self.hash.as_slice()) + key_hash_difficulty(self.hash.as_slice());
-        let it_diff = hash_difficulty(other.hash.as_slice()) + key_hash_difficulty(other.hash.as_slice());
+        let hash_diff = hash_difficulty(self.hash.as_slice()) + key_hash_difficulty(self.hash.as_slice());
+        let my_diff = (hash_diff << 16) + (self.hash.get_tail_u64() % 0xFFFF) as u32;
+        let hash_diff = hash_difficulty(other.hash.as_slice()) + key_hash_difficulty(other.hash.as_slice());
+        let it_diff = (hash_diff << 16) + (other.hash.get_tail_u64() % 0xFFFF) as u32;
+
         if my_diff > it_diff {
             return true;
         }

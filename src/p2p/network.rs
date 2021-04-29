@@ -580,6 +580,8 @@ fn handle_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &Token, 
                 if zone {
                     context.bus.post(crate::event::Event::ZonesChanged);
                 }
+            } else {
+                debug!("Fork in not better than our block, dropping.");
             }
             let height = context.chain.get_height();
             context.chain.update_max_height(height);
