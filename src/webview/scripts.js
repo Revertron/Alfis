@@ -490,7 +490,7 @@ function keystoreChanged(path, pub_key, hash) {
 
 function closeZonesDropdown() {
     var active = document.activeElement;
-    if (active == null || active.id != 'zones-menu') {
+    if (active == null || (active.id != 'zones-menu' && active.tagName != 'BODY')) {
         document.getElementById("zones-dropdown").className = "dropdown";
     }
 }
