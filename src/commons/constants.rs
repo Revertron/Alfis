@@ -20,11 +20,15 @@ pub const BLOCK_SIGNERS_MIN: u64 = 4;
 /// Signers have 30 minutes to sign, after that time any owner of first 1000 block can add needed signature
 pub const BLOCK_SIGNERS_TIME: i64 = 1800;
 
-/// PoS signers, that sign blocks when chosen signers didn't sign
-pub const BLOCK_POS_SIGNERS: u64 = 1000;
+/// Limited Confidence depth
+/// https://en.bitcoinwiki.org/wiki/Limited_Confidence_Proof-of-Activity
+pub const LIMITED_CONFIDENCE_DEPTH: u64 = 4;
 
 /// We start mining signing blocks after random delay, this is the max delay
 pub const BLOCK_SIGNERS_START_RANDOM: i64 = 180;
+
+/// Maximum zones in blockchain
+pub const MAXIMUM_ZONES: usize = 10;
 
 pub const NEW_DOMAINS_INTERVAL: i64 = 86400; // One day in seconds
 pub const DOMAIN_LIFETIME: i64 = 86400 * 365; // One year

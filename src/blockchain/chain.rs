@@ -748,21 +748,27 @@ impl Chain {
             return Bad;
         }
         if !check_block_hash(block) {
-            warn!("Block {:?} has wrong hash! Ignoring!", &block);
+            warn!("Ignoring block with wrong hash:\n{:?}", &block);
             return Bad;
         }
         if !check_block_signature(&block) {
-            warn!("Block {:?} has wrong signature! Ignoring!", &block);
+            warn!("Ignoring block with wrong signature:\n{:?}", &block);
             return Bad;
         }
         if let Some(prev_block) = self.get_block(block.index - 1) {
+            // https://en.bitcoinwiki.org/wiki/Limited_Confidence_Proof-of-Activity
             if block.prev_block_hash.ne(&prev_block.hash) {
-                warn!("Ignoring block with wrong previous hash:\n{:?}", &block);
-                return Rewind;
+                if block.index < self.get_height() - LIMITED_CONFIDENCE_DEPTH {
+                    warn!("Ignoring block from shorter chain:\n{:?}", &block);
+                    return Bad;
+                } else {
+                    warn!("Rewinding chain of block with wrong previous hash:\n{:?}", &block);
+                    return Rewind;
+                }
             }
         }
         if matches!(Transaction::get_type(&block.transaction), TransactionType::Zone) {
-            if self.get_zones().len() >= 10 {
+            if self.get_zones().len() >= MAXIMUM_ZONES {
                 warn!("Ignoring excess zone block");
                 return Bad;
             }
