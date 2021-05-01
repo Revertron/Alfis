@@ -250,6 +250,18 @@ function domainMiningStarted() {
     document.getElementById("new_key_button").disabled = true;
 }
 
+function domainMiningUnavailable() {
+    //recordsBuffer = [];
+    //refreshRecordsList();
+    document.getElementById("new_domain_dialog").className = "modal";
+    document.getElementById("tab_domains").disabled = true;
+    document.getElementById("domain_records").disabled = true;
+    document.getElementById("add_record_button").disabled = true;
+    document.getElementById("new_domain_button").disabled = true;
+    document.getElementById("new_zone_button").disabled = true;
+    document.getElementById("new_key_button").disabled = true;
+}
+
 function createZone() {
     var new_zone = document.getElementById("new_zone").value;
     var difficulty = document.getElementById("new_zone_difficulty").value;

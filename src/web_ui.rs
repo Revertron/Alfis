@@ -362,10 +362,12 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
     let context = context.lock().unwrap();
     if context.get_keystore().is_none() {
         show_warning(web_view, "You don't have keys loaded!<br>Load or mine the keys and try again.");
+        let _ = web_view.eval("domainMiningUnavailable();");
         return;
     }
     if context.chain.is_waiting_signers() {
         show_warning(web_view, "Waiting for last full block to be signed. Try again later.");
+        let _ = web_view.eval("domainMiningUnavailable();");
         info!("Waiting for last full block to be signed. Try again later.");
         return;
     }
@@ -375,6 +377,7 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
         Ok(data) => { data }
         Err(e) => {
             show_warning(web_view, "Something wrong with domain data. I cannot mine it.");
+            let _ = web_view.eval("domainMiningUnavailable();");
             warn!("Error parsing data: {}", e);
             return;
         }
@@ -387,6 +390,7 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
                 for record in &data.records {
                     if !is_yggdrasil_record(record) {
                         show_warning(web_view, &format!("Zone {} is Yggdrasil only, you cannot use IPs from clearnet!", &data.zone));
+                        let _ = web_view.eval("domainMiningUnavailable();");
                         return;
                     }
                 }
@@ -402,14 +406,30 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
             let _ = web_view.eval("domainMiningStarted();");
             event_info(web_view, &format!("Mining of domain \\'{}\\' has started", &name));
         }
-        MineResult::WrongName => { show_warning(web_view, "You can't mine this domain!"); }
-        MineResult::WrongData => { show_warning(web_view, "You have an error in records!"); }
-        MineResult::WrongKey => { show_warning(web_view, "You can't mine with current key!"); }
-        MineResult::WrongZone => { show_warning(web_view, "You can't mine domain in this zone!"); }
-        MineResult::NotOwned => { show_warning(web_view, "This domain is already taken, and it is not yours!"); }
+        MineResult::WrongName => {
+            show_warning(web_view, "You can't mine this domain!");
+            let _ = web_view.eval("domainMiningUnavailable();");
+        }
+        MineResult::WrongData => {
+            show_warning(web_view, "You have an error in records!");
+            let _ = web_view.eval("domainMiningUnavailable();");
+        }
+        MineResult::WrongKey => {
+            show_warning(web_view, "You can't mine with current key!");
+            let _ = web_view.eval("domainMiningUnavailable();");
+        }
+        MineResult::WrongZone => {
+            show_warning(web_view, "You can't mine domain in this zone!");
+            let _ = web_view.eval("domainMiningUnavailable();");
+        }
+        MineResult::NotOwned => {
+            show_warning(web_view, "This domain is already taken, and it is not yours!");
+            let _ = web_view.eval("domainMiningUnavailable();");
+        }
         MineResult::Cooldown { time } => {
             event_info(web_view, &format!("You have cooldown, just {} more minutes!", time / 60));
             show_warning(web_view, &format!("You have cooldown, just {} more minutes!", time / 60));
+            let _ = web_view.eval("domainMiningUnavailable();");
         }
     }
 }
