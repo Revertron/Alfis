@@ -17,9 +17,6 @@ pub const BLOCK_SIGNERS_ALL: u64 = 7;
 /// Minimal signatures needed
 pub const BLOCK_SIGNERS_MIN: u64 = 4;
 
-/// Signers have 30 minutes to sign, after that time any owner of first 1000 block can add needed signature
-pub const BLOCK_SIGNERS_TIME: i64 = 1800;
-
 /// Limited Confidence depth
 /// https://en.bitcoinwiki.org/wiki/Limited_Confidence_Proof-of-Activity
 pub const LIMITED_CONFIDENCE_DEPTH: u64 = 4;
@@ -27,14 +24,8 @@ pub const LIMITED_CONFIDENCE_DEPTH: u64 = 4;
 /// We start mining signing blocks after random delay, this is the max delay
 pub const BLOCK_SIGNERS_START_RANDOM: i64 = 180;
 
-/// Maximum zones in blockchain
-pub const MAXIMUM_ZONES: usize = 10;
-
 pub const NEW_DOMAINS_INTERVAL: i64 = 86400; // One day in seconds
 pub const DOMAIN_LIFETIME: i64 = 86400 * 365; // One year
-
-pub const ZONE_MAX_LENGTH: usize = 10;
-pub const MAX_RECONNECTS: u32 = 5;
 
 pub const DB_NAME: &str = "blockchain.db";
 pub const CLASS_ORIGIN: &str = "origin";
@@ -49,5 +40,6 @@ pub const LOG_REFRESH_DELAY_SEC: u64 = 60;
 pub const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(25000));
 pub const MAX_PACKET_SIZE: usize = 1 * 1024 * 1024; // 1 Mb
 pub const MAX_READ_BLOCK_TIME: u128 = 500;
+pub const MAX_RECONNECTS: u32 = 5;
 pub const MAX_IDLE_SECONDS: u64 = 180;
 pub const MAX_NODES: usize = 15;
