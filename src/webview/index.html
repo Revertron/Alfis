@@ -30,14 +30,6 @@
                 </a>
             </li>
             <li class="tab">
-                <a onclick="openTab(this, 'tab_zones')">
-                    <span class="icon">
-                        <svg viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path d="M18.25,22L15.5,19L16.66,17.82L18.25,19.41L21.84,15.82L23,17.23M20.5,3A0.5,0.5 0 0,1 21,3.5V13.36C20.36,13.13 19.69,13 19,13C17.46,13 16.06,13.6 15,14.56V7.1L9,5V16.9L13.04,18.3C13,18.54 13,18.77 13,19C13,19.46 13.06,19.92 13.16,20.36L9,18.9L3.66,20.97C3.59,21 3.55,21 3.5,21A0.5,0.5 0 0,1 3,20.5V5.38C3,5.15 3.16,4.97 3.35,4.9L9,3L15,5.1L20.33,3"></path></svg>
-                    </span>
-                    <span>Zones</span>
-                </a>
-            </li>
-            <li class="tab">
                 <a onclick="openTab(this, 'tab_events')">
                     <span class="icon">
                         <svg viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path d="M4,2H20A2,2 0 0,1 22,4V16A2,2 0 0,1 20,18H16L12,22L8,18H4A2,2 0 0,1 2,16V4A2,2 0 0,1 4,2M4,4V16H8.83L12,19.17L15.17,16H20V4H4M6,7H18V9H6V7M6,11H16V13H6V11Z"></path></svg>
@@ -71,7 +63,7 @@
                 <button class="button is-link" id="new_key_button" onclick="createKey();" title="Generate new keypair, suitable to mine domains">Mine new key</button>
             </div>
         </div>
-        <p class="help">To mine domains (or zones) you need to mine a strong pair of keys.</p>
+        <p class="help">To mine domains you need to mine a strong pair of keys.</p>
     </div>
 
     <!-- Domain mining -->
@@ -80,32 +72,6 @@
             <!-- Here will be our domains -->
         </div>
         <button class="button is-link mt-2" onclick="showNewDomainDialog()" style="max-width: 200px;">New domain</button>
-    </div>
-
-    <!-- Zone mining -->
-    <div class="tab row page is-hidden" id="tab_zones">
-        <div class="field is-grouped">
-            <div class="control is-expanded has-icons-left">
-                <input class="input" type="text" placeholder="ygg" id="new_zone" oninput="onZoneChange()" title="The name of your zone, like com, net or 007, who knows?">
-                <span class="icon is-small is-left">
-                    <svg viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path d="M18.25,22L15.5,19L16.66,17.82L18.25,19.41L21.84,15.82L23,17.23M20.5,3A0.5,0.5 0 0,1 21,3.5V13.36C20.36,13.13 19.69,13 19,13C17.46,13 16.06,13.6 15,14.56V7.1L9,5V16.9L13.04,18.3C13,18.54 13,18.77 13,19C13,19.46 13.06,19.92 13.16,20.36L9,18.9L3.66,20.97C3.59,21 3.55,21 3.5,21A0.5,0.5 0 0,1 3,20.5V5.38C3,5.15 3.16,4.97 3.35,4.9L9,3L15,5.1L20.33,3"></path></svg>
-                </span>
-            </div>
-            <div class="control has-icons-left">
-                <input class="input" type="number" placeholder="Difficulty: 22-28" id="new_zone_difficulty" oninput="onZoneChange()" title="How difficult it will be to mine domains in this zone? Good numbers are 20-28.">
-                <span class="icon is-small is-left">
-                    <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;"><path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2M14.5 17.5C14.22 17.74 13.76 18 13.4 18.1C12.28 18.5 11.16 17.94 10.5 17.28C11.69 17 12.4 16.12 12.61 15.23C12.78 14.43 12.46 13.77 12.33 13C12.21 12.26 12.23 11.63 12.5 10.94C12.69 11.32 12.89 11.7 13.13 12C13.9 13 15.11 13.44 15.37 14.8C15.41 14.94 15.43 15.08 15.43 15.23C15.46 16.05 15.1 16.95 14.5 17.5H14.5Z"></path></svg>
-                </span>
-            </div>
-            <div class="buttons has-addons">
-                <button class="button is-link" id="new_zone_button" onclick="createZone();" title="Start mining">Mine zone</button>
-            </div>
-        </div>
-        <label class="checkbox mb-1" style="align-self: flex-start;" title="This zone's domains will have only IPv6 addresses from Yggdrasil network (200::/7).">
-            <input type="checkbox" id="yggdrasil_only">
-            Restrict this zone to <a onclick="open_link('https://yggdrasil-network.github.io');">Yggdrasil</a> only.
-        </label>
-        <p class="help">If you feel that we need another zone you can mine that too. Just select a name, a difficulty for domains in that zone, and hit "Mine zone".</p>
     </div>
 
     <!-- Events and notifications -->
@@ -221,7 +187,7 @@
                     </div>
                 </div>
             </div>
-            <p class="help">Enter domain name, add some DNS-records, then hit the "Mine domain" button!</p>
+            <p class="help">Enter domain name, choose domain zone, add some DNS-records, then hit the "Mine domain" button! Note: zones with * are restricted to <a onclick="open_link('https://yggdrasil-network.github.io');">Yggdrasil</a> only.</p>
 
             <div class="list mt-2" id="domain_records">
                 <!-- Here will be our domain records, added by dialog -->

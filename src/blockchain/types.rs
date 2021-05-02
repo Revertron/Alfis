@@ -1,3 +1,6 @@
+use std::fmt::{Display, Formatter};
+use serde::{Deserialize, Serialize};
+
 /// Represents a result of block check on block's arrival
 #[derive(PartialEq)]
 pub enum BlockQuality {
@@ -33,5 +36,17 @@ impl Options {
 
     pub fn empty() -> Self {
         Options { origin: String::new(), version: 0 }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct ZoneData {
+    pub name: String,
+    pub yggdrasil: bool,
+}
+
+impl Display for ZoneData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.write_str(&format!("{}, yggdrasil: {}", self.name, self.yggdrasil))
     }
 }

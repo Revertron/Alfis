@@ -20,17 +20,8 @@ CREATE TABLE domains (
     'identity' BINARY,
     'confirmation' BINARY,
     'data' TEXT,
-    'pub_key' BINARY
+    'owner' BINARY
 );
 CREATE INDEX ids ON domains ('identity');
-
-CREATE TABLE zones (
-    'id' BIGINT NOT NULL PRIMARY KEY,
-    'timestamp' BIGINT NOT NULL,
-    'identity' BINARY,
-    'confirmation' BINARY,
-    'data' TEXT,
-    'pub_key' BINARY
-);
 
 CREATE TABLE options ('name' TEXT NOT NULL, 'value' TEXT NOT NULL);

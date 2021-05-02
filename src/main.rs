@@ -16,7 +16,7 @@ use simplelog::*;
 #[cfg(windows)]
 use winapi::um::wincon::{ATTACH_PARENT_PROCESS, AttachConsole, FreeConsole};
 
-use alfis::{Block, Bytes, Chain, Miner, Context, Network, Settings, dns_utils, Keystore, ZONE_DIFFICULTY, ALFIS_DEBUG, DB_NAME};
+use alfis::{Block, Bytes, Chain, Miner, Context, Network, Settings, dns_utils, Keystore, ORIGIN_DIFFICULTY, ALFIS_DEBUG, DB_NAME, Transaction};
 use std::fs::OpenOptions;
 use std::process::exit;
 use std::io::{Seek, SeekFrom};
@@ -208,7 +208,8 @@ fn create_genesis_if_needed(context: &Arc<Mutex<Context>>, miner: &Arc<Mutex<Min
     if origin.is_empty() && last_block.is_none() {
         if let Some(keystore) = &context.keystore {
             // If blockchain is empty, we are going to mine a Genesis block
-            let block = Block::new(None, context.get_keystore().unwrap().get_public(), Bytes::default(), ZONE_DIFFICULTY);
+            let transaction = Transaction::origin(Chain::get_zones_hash(), context.get_keystore().unwrap().get_public());
+            let block = Block::new(Some(transaction), context.get_keystore().unwrap().get_public(), Bytes::default(), ORIGIN_DIFFICULTY);
             miner.lock().unwrap().add_block(block, keystore.clone());
         }
     }

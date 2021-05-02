@@ -246,7 +246,6 @@ function domainMiningStarted() {
     document.getElementById("domain_records").disabled = true;
     document.getElementById("add_record_button").disabled = true;
     document.getElementById("new_domain_button").disabled = true;
-    document.getElementById("new_zone_button").disabled = true;
     document.getElementById("new_key_button").disabled = true;
 }
 
@@ -258,21 +257,7 @@ function domainMiningUnavailable() {
     document.getElementById("domain_records").disabled = true;
     document.getElementById("add_record_button").disabled = true;
     document.getElementById("new_domain_button").disabled = true;
-    document.getElementById("new_zone_button").disabled = true;
     document.getElementById("new_key_button").disabled = true;
-}
-
-function createZone() {
-    var new_zone = document.getElementById("new_zone").value;
-    var difficulty = document.getElementById("new_zone_difficulty").value;
-    var yggdrasil = document.getElementById("yggdrasil_only").checked;
-    var obj = {};
-    obj.name = new_zone;
-    obj.difficulty = parseInt(difficulty);
-    obj.yggdrasil = yggdrasil;
-    obj.owners = []; // TODO make a dialog to fill them
-    data = JSON.stringify(obj);
-    external.invoke(JSON.stringify({cmd: 'mineZone', name: new_zone, data: data}));
 }
 
 function sendAction(param) {
@@ -298,40 +283,6 @@ function domainAvailable(available) {
         input.className = "input is-danger";
         button.disabled = true
         button2.disabled = true
-    }
-}
-
-function onZoneChange() {
-    var button = document.getElementById("new_zone_button");
-    var diff = document.getElementById("new_zone_difficulty");
-    d = parseInt(diff.value);
-    // Checking for NaN first
-    if (d != d || d < 15 || d > 30) {
-        button.disabled = true;
-        diff.className = "input is-danger";
-    } else {
-        diff.className = "input";
-        var input = document.getElementById("new_zone");
-        external.invoke(JSON.stringify({cmd: 'checkZone', name: input.value}));
-    }
-}
-
-function zoneAvailable(available) {
-    var input = document.getElementById("new_zone");
-    var button = document.getElementById("new_zone_button");
-    if (available) {
-        input.className = "input";
-        button.disabled = false;
-        var diff = document.getElementById("new_zone_difficulty");
-        d = parseInt(diff.value);
-        // Checking for NaN first
-        if (d != d || d < 15 || d > 30) {
-            button.disabled = true;
-            diff.className = "input is-danger";
-        }
-    } else {
-        input.className = "input is-danger";
-        button.disabled = true;
     }
 }
 
@@ -443,7 +394,6 @@ function showMiningIndicator(visible, blue) {
         document.getElementById("domain_records").disabled = false;
         document.getElementById("add_record_button").disabled = false;
         document.getElementById("new_domain_button").disabled = false;
-        document.getElementById("new_zone_button").disabled = false;
         document.getElementById("new_key_button").disabled = false;
     }
 }
@@ -493,11 +443,6 @@ function keystoreChanged(path, pub_key, hash) {
 
     var new_domain = document.getElementById("new_domain");
     new_domain.disabled = false;
-
-    var new_zone = document.getElementById("new_zone");
-    new_zone.disabled = false;
-    var new_zone_difficulty = document.getElementById("new_zone_difficulty");
-    new_zone_difficulty.disabled = false;
 }
 
 function closeZonesDropdown() {
@@ -520,7 +465,11 @@ function refreshZonesList() {
     });
 
     availableZones.forEach(function(value, index, array) {
-        var zone = value.name + " (" + value.difficulty + "🔥)";
+        var note = "";
+        if (value.yggdrasil) {
+            note = "*";
+        }
+        var zone = value.name + note;
         var add_class = "";
         if (typeof currentZone !== 'undefined' && currentZone.name == value.name) {
             add_class = "is-active";
@@ -535,7 +484,11 @@ function refreshZonesList() {
     links.innerHTML = buf;
     if (typeof currentZone !== 'undefined') {
         var cur_name = document.getElementById("zones-current-name");
-        cur_name.innerHTML = "." + currentZone.name + " (" + currentZone.difficulty + "🔥)";
+        var name = "." + currentZone.name;
+        if (currentZone.yggdrasil) {
+            name = name + "*";
+        }
+        cur_name.innerHTML = name;
     }
 }
 

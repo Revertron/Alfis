@@ -17,8 +17,7 @@ use mio::event::Event;
 use mio::net::{TcpListener, TcpStream};
 use rand::random;
 
-use crate::{Block, Context, p2p::Message, p2p::Peer, p2p::Peers, p2p::State, Transaction};
-use crate::blockchain::transaction::TransactionType;
+use crate::{Block, Context, p2p::Message, p2p::Peer, p2p::Peers, p2p::State};
 use crate::blockchain::types::BlockQuality;
 use crate::commons::*;
 
@@ -539,13 +538,9 @@ fn handle_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &Token, 
     let max_height = context.chain.max_height();
     match context.chain.check_new_block(&block) {
         BlockQuality::Good => {
-            let zone = matches!(Transaction::get_type(&block.transaction), TransactionType::Zone);
             context.chain.add_block(block);
             let my_height = context.chain.get_height();
             context.bus.post(crate::event::Event::BlockchainChanged { index: my_height });
-            if zone {
-                context.bus.post(crate::event::Event::ZonesChanged);
-            }
             // If it was the last block to sync
             if my_height == max_height {
                 context.bus.post(crate::event::Event::SyncFinished);
@@ -573,13 +568,9 @@ fn handle_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &Token, 
             debug!("Got forked block {} with hash {:?}", block.index, block.hash);
             let last_block = context.chain.last_block().unwrap();
             if block.is_better_than(&last_block) {
-                let zone = matches!(Transaction::get_type(&block.transaction), TransactionType::Zone);
                 context.chain.replace_block(block).expect("Error replacing block with fork");
                 let index = context.chain.get_height();
                 context.bus.post(crate::event::Event::BlockchainChanged { index });
-                if zone {
-                    context.bus.post(crate::event::Event::ZonesChanged);
-                }
             } else {
                 debug!("Fork in not better than our block, dropping.");
             }

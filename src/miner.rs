@@ -349,7 +349,7 @@ fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<Atomic
             let elapsed = time.elapsed().as_millis();
             if elapsed >= 1000 {
                 block.timestamp = Utc::now().timestamp();
-                if elapsed > 5000 {
+                if elapsed > 10000 {
                     let speed = (nonce - prev_nonce) / (elapsed as u64 / 1000);
                     //debug!("Mining speed {} H/s, max difficulty {}", speed, max_diff);
                     if let Ok(mut context) = context.try_lock() {

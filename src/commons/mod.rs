@@ -32,6 +32,13 @@ pub fn check_domain(name: &str, allow_dots: bool) -> bool {
     if name.starts_with('.') || name.starts_with('-') || name.ends_with('.') || name.ends_with('-') {
         return false;
     }
+    let parts: Vec<&str> = name.rsplitn(2, ".").collect();
+    if parts.len() == 2 {
+        if parts[1].len() < 3 && is_numeric(parts[1]) {
+            return false;
+        }
+    }
+
     let mut last_dot = false;
     let mut last_hyphen = false;
     for char in name.chars() {
@@ -54,6 +61,15 @@ pub fn check_domain(name: &str, allow_dots: bool) -> bool {
         last_dot = false;
         last_hyphen = false;
         if !char.is_ascii_alphanumeric() {
+            return false;
+        }
+    }
+    true
+}
+
+pub fn is_numeric(str: &str) -> bool {
+    for char in str.chars() {
+        if !char.is_numeric() {
             return false;
         }
     }
@@ -160,6 +176,9 @@ mod test {
         assert!(!check_domain("ab.c-", true));
         assert!(!check_domain(".ab.c", true));
         assert!(!check_domain("ab.c-", true));
+        assert!(check_domain("777.com", true));
+        assert!(!check_domain("77.com", true));
+        assert!(!check_domain("7.com", true));
     }
 
     #[test]

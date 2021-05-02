@@ -32,4 +32,5 @@ onion
 i2p
 meshname
 meship
+mem
 test

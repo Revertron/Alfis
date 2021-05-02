@@ -14,18 +14,18 @@ use log::{debug, error, info, LevelFilter, trace, warn};
 use serde::Deserialize;
 use web_view::Content;
 
-use alfis::{Block, Bytes, Context, get_domain_zone, Keystore, Transaction, ZONE_MIN_DIFFICULTY, is_yggdrasil_record};
-use alfis::{check_domain, keys};
-use alfis::blockchain::transaction::{DomainData, ZoneData};
+use alfis::{Block, Bytes, Context, Keystore, Transaction};
+use alfis::keys;
+use alfis::blockchain::hash_utils::hash_identity;
+use alfis::blockchain::transaction::DomainData;
 use alfis::blockchain::types::MineResult;
-use alfis::commons::{ZONE_DIFFICULTY, ZONE_MAX_LENGTH, CLASS_DOMAIN, CLASS_ZONE};
+use alfis::commons::*;
 use alfis::dns::protocol::DnsRecord;
 use alfis::event::Event;
 use alfis::miner::Miner;
 use Cmd::*;
 
 use self::web_view::{Handle, WebView};
-use alfis::blockchain::hash_utils::hash_identity;
 
 pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let file_content = include_str!("webview/index.html");
@@ -57,10 +57,6 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                     action_create_domain(Arc::clone(&context), Arc::clone(&miner), web_view, name, data);
                 }
                 TransferDomain { .. } => {}
-                CheckZone { name } => { action_check_zone(&context, web_view, name); }
-                MineZone { name, data } => {
-                    action_create_zone(Arc::clone(&context), Arc::clone(&miner), web_view, name, data);
-                }
                 StopMining => { context.lock().unwrap().bus.post(Event::ActionStopMining); }
                 Open { link } => {
                     if open::that(&link).is_err() {
@@ -106,19 +102,6 @@ fn run_interface_loop(context: &mut Arc<Mutex<Context>>, interface: &mut WebView
         if start.elapsed().as_millis() > 1 {
             thread::sleep(pause);
             start = Instant::now();
-        }
-    }
-}
-
-fn action_check_zone(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>, name: String) {
-    let name = name.to_lowercase();
-    if name.len() > ZONE_MAX_LENGTH || !check_domain(&name, false) || context.lock().unwrap().x_zones.has_zone(&name) {
-        web_view.eval("zoneAvailable(false)").expect("Error evaluating!");
-    } else {
-        let c = context.lock().unwrap();
-        if let Some(keystore) = c.get_keystore() {
-            let available = c.get_chain().is_domain_available(c.get_chain().get_height(), &name, &keystore);
-            web_view.eval(&format!("zoneAvailable({})", available)).expect("Error evaluating!");
         }
     }
 }
@@ -296,15 +279,6 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                         format!("setLeftStatusBarText('Idle'); setRightStatusBarText('Nodes: {}, Blocks: {}')", nodes, blocks)
                     }
                 }
-                Event::ZonesChanged => {
-                    info!("New zone arrived");
-                    if let Ok(zones) = serde_json::to_string(&context.chain.get_zones()) {
-                        let _ = handle.dispatch(move |web_view|{
-                            web_view.eval(&format!("zonesChanged('{}');", &zones))
-                        });
-                    }
-                    String::new() // Nothing
-                }
                 Event::BlockchainChanged {index} => {
                     debug!("Current blockchain height is {}", index);
                     event_handle_info(&handle, &format!("Blockchain changed, current block count is {} now.", index));
@@ -331,9 +305,9 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
     let index = c.chain.get_height();
     if index > 0 {
         c.bus.post(Event::BlockchainChanged { index });
-        if let Ok(zones) = serde_json::to_string(&c.chain.get_zones()) {
-            let _ = web_view.eval(&format!("zonesChanged('{}');", &zones));
-        }
+    }
+    if let Ok(zones) = serde_json::to_string(&c.chain.get_zones()) {
+        let _ = web_view.eval(&format!("zonesChanged('{}');", &zones));
     }
     event_info(web_view, "Application loaded");
 }
@@ -384,7 +358,7 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
     };
     // Check if yggdrasil only quality of zone is not violated
     let zones = context.chain.get_zones();
-    for z in &zones {
+    for z in zones {
         if z.name == data.zone {
             if z.yggdrasil {
                 for record in &data.records {
@@ -399,10 +373,8 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
     }
     match context.chain.can_mine_domain(context.chain.get_height(), &name, &pub_key) {
         MineResult::Fine => {
-            let zone = get_domain_zone(&name);
-            let difficulty = context.chain.get_zone_difficulty(&zone);
             std::mem::drop(context);
-            create_domain(c, miner, CLASS_DOMAIN, &name, data, difficulty, &keystore);
+            create_domain(c, miner, CLASS_DOMAIN, &name, data, DOMAIN_DIFFICULTY, &keystore);
             let _ = web_view.eval("domainMiningStarted();");
             event_info(web_view, &format!("Mining of domain \\'{}\\' has started", &name));
         }
@@ -431,72 +403,6 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
             show_warning(web_view, &format!("You have cooldown, just {} more minutes!", time / 60));
             let _ = web_view.eval("domainMiningUnavailable();");
         }
-    }
-}
-
-fn action_create_zone(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, web_view: &mut WebView<()>, name: String, data: String) {
-    if context.lock().unwrap().chain.is_waiting_signers() {
-        show_warning(web_view, "Waiting for last full block to be signed. Try again later.");
-        info!("Waiting for last full block to be signed. Try again later.");
-        return;
-    }
-
-    let name = name.to_lowercase();
-    if name.len() > ZONE_MAX_LENGTH || !check_domain(&name, false) || context.lock().unwrap().x_zones.has_zone(&name) {
-        warn!("This zone is unavailable for mining!");
-        show_warning(web_view, "This zone is unavailable for mining!");
-        return;
-    }
-    let data = data.to_lowercase();
-    let mut data = match serde_json::from_str::<ZoneData>(&data) {
-        Ok(zone) => {
-            if zone.difficulty < ZONE_MIN_DIFFICULTY {
-                warn!("Zone difficulty cannot be lower than {}!", ZONE_MIN_DIFFICULTY);
-                show_warning(web_view, &format!("Zone difficulty cannot be lower than {}!", ZONE_MIN_DIFFICULTY));
-                return;
-            }
-            if name != zone.name {
-                warn!("Something wrong with zone data!");
-                show_warning(web_view, "Something wrong with zone data!");
-                return;
-            }
-            zone
-        }
-        Err(_) => {
-            warn!("Something wrong with zone data!");
-            show_warning(web_view, "Something wrong with zone data!");
-            return;
-        }
-    };
-    let (keystore, transaction) = {
-        let context = context.lock().unwrap();
-        (context.get_keystore(), context.chain.get_domain_transaction(&name))
-    };
-    if let Some(keystore) = keystore {
-        data.owners = if data.owners.is_empty() {
-            vec!(keystore.get_public())
-        } else {
-            data.owners
-        };
-        let data = serde_json::to_string(&data).unwrap();
-        match transaction {
-            None => {
-                create_zone(Arc::clone(&context), miner.clone(), CLASS_ZONE, &name, &data, ZONE_DIFFICULTY, &keystore);
-                event_info(web_view, &format!("Mining of zone \\'{}\\' has started", &name));
-            }
-            Some(transaction) => {
-                if transaction.pub_key == keystore.get_public() {
-                    create_zone(Arc::clone(&context), miner.clone(), CLASS_ZONE, &name, &data, ZONE_DIFFICULTY, &keystore);
-                    event_info(web_view, &format!("Mining of zone \\'{}\\' has started", &name));
-                } else {
-                    warn!("Tried to mine not owned domain!");
-                    show_warning(web_view, "You cannot change domain that you don't own!");
-                }
-            }
-        }
-    } else {
-        warn!("Can not mine without keys!");
-        show_warning(web_view, "You don't have keys loaded!<br>Load or mine the keys and try again.");
     }
 }
 
@@ -574,18 +480,6 @@ fn format_event_now(kind: &str, message: &str) -> String {
     format!("addEvent('{}', '{}', '{}');", kind, time.format("%d.%m.%y %X"), message)
 }
 
-fn create_zone(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, class: &str, name: &str, data: &str, difficulty: u32, keystore: &Keystore) {
-    let name = name.to_owned();
-    info!("Generating domain or zone {}", &name);
-    if context.lock().unwrap().x_zones.has_zone(&name) {
-        error!("Unable to mine IANA/OpenNIC/etc zone {}!", &name);
-        return;
-    }
-    let transaction = Transaction::from_str(name, class.to_owned(), data.to_owned(), keystore.get_public().clone());
-    let block = Block::new(Some(transaction), keystore.get_public(), Bytes::default(), difficulty);
-    miner.lock().unwrap().add_block(block, keystore.clone());
-}
-
 fn create_domain(_context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, class: &str, name: &str, mut data: DomainData, difficulty: u32, keystore: &Keystore) {
     let name = name.to_owned();
     let confirmation = hash_identity(&name, Some(&keystore.get_public()));
@@ -604,8 +498,6 @@ pub enum Cmd {
     LoadKey,
     CreateKey,
     SaveKey,
-    CheckZone { name: String },
-    MineZone { name: String, data: String },
     CheckRecord { data: String },
     CheckDomain { name: String },
     MineDomain { name: String, data: String },

@@ -8,7 +8,6 @@ pub enum Event {
     KeyCreated { path: String, public: String, hash: String },
     KeyLoaded { path: String, public: String, hash: String },
     KeySaved { path: String, public: String, hash: String },
-    ZonesChanged,
     NewBlockReceived,
     BlockchainChanged { index: u64 },
     ActionStopMining,

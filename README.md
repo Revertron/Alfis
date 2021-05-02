@@ -4,7 +4,7 @@
 
 Alternative Free Identity System
 
-This project represents a minimal blockchain without cryptocurrency, capable of sustaining any number of domain name zones and domains.
+This project represents a minimal blockchain without cryptocurrency, capable of sustaining any number of domain names in a bunch of original alternative zones.
 
 ![Screenshot](img/keys.png)
 

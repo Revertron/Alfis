@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 pub const DB_VERSION: u32 = 0;
-pub const CHAIN_VERSION: u32 = 0;
+pub const CHAIN_VERSION: u32 = 1;
 
-pub const ZONE_DIFFICULTY: u32 = 28;
-pub const ZONE_MIN_DIFFICULTY: u32 = 22;
+pub const ORIGIN_DIFFICULTY: u32 = 30;
+pub const DOMAIN_DIFFICULTY: u32 = 24;
 pub const SIGNER_DIFFICULTY: u32 = 16;
 pub const KEYSTORE_DIFFICULTY: u32 = 23;
 
@@ -37,7 +37,7 @@ pub const ZONE_MAX_LENGTH: usize = 10;
 pub const MAX_RECONNECTS: u32 = 5;
 
 pub const DB_NAME: &str = "blockchain.db";
-pub const CLASS_ZONE: &str = "zone";
+pub const CLASS_ORIGIN: &str = "origin";
 pub const CLASS_DOMAIN: &str = "domain";
 pub const ALFIS_DEBUG: &str = "ALFIS_DEBUG";
 
@@ -46,7 +46,7 @@ pub const LISTEN_PORT: u16 = 4244;
 pub const UI_REFRESH_DELAY_MS: u128 = 250;
 pub const LOG_REFRESH_DELAY_SEC: u64 = 60;
 
-pub const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(250));
+pub const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(25000));
 pub const MAX_PACKET_SIZE: usize = 1 * 1024 * 1024; // 1 Mb
 pub const MAX_READ_BLOCK_TIME: u128 = 500;
 pub const MAX_IDLE_SECONDS: u64 = 180;

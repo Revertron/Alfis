@@ -1,6 +1,8 @@
 use std::cell::RefCell;
-use std::collections::{HashSet, HashMap};
+use std::cmp::max;
+use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::ops::Deref;
 use std::path::Path;
 
 use chrono::Utc;
@@ -8,38 +10,32 @@ use chrono::Utc;
 use log::{debug, error, info, trace, warn};
 use sqlite::{Connection, State, Statement};
 
-use crate::{Block, Bytes, Keystore, Transaction, check_domain, get_domain_zone, is_yggdrasil_record};
-use crate::blockchain::transaction::TransactionType;
-use crate::commons::constants::*;
-use crate::blockchain::types::{BlockQuality, MineResult, Options};
-use crate::blockchain::types::BlockQuality::*;
+use crate::{Block, Bytes, check_domain, get_domain_zone, is_yggdrasil_record, Keystore, Transaction};
 use crate::blockchain::hash_utils::*;
-use crate::settings::Settings;
-use crate::keys::check_public_key_strength;
-use std::cmp::max;
-use crate::blockchain::transaction::{ZoneData, DomainData};
-use std::ops::Deref;
+use crate::blockchain::transaction::DomainData;
+use crate::blockchain::types::{BlockQuality, MineResult, Options, ZoneData};
+use crate::blockchain::types::BlockQuality::*;
 use crate::blockchain::types::MineResult::*;
+use crate::commons::constants::*;
+use crate::keys::check_public_key_strength;
+use crate::settings::Settings;
 
-const TEMP_DB_NAME: &str = "temp.db";
-const SQL_CREATE_TABLES: &str = include_str!("sql/create_db.sql");
+const TEMP_DB_NAME: &str = ":memory:";
+const SQL_CREATE_TABLES: &str = include_str!("data/create_db.sql");
+const ZONES_TXT: &str = include_str!("data/zones.txt");
 const SQL_ADD_BLOCK: &str = "INSERT INTO blocks (id, timestamp, version, difficulty, random, nonce, 'transaction',\
                           prev_block_hash, hash, pub_key, signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
 const SQL_GET_LAST_BLOCK: &str = "SELECT * FROM blocks ORDER BY id DESC LIMIT 1;";
 const SQL_TRUNCATE_BLOCKS: &str = "DELETE FROM blocks WHERE id >= ?;";
 const SQL_TRUNCATE_DOMAINS: &str = "DELETE FROM domains WHERE id >= ?;";
-const SQL_TRUNCATE_ZONES: &str = "DELETE FROM zones WHERE id >= ?;";
 
-const SQL_ADD_DOMAIN: &str = "INSERT INTO domains (id, timestamp, identity, confirmation, data, pub_key) VALUES (?, ?, ?, ?, ?, ?)";
-const SQL_ADD_ZONE: &str = "INSERT INTO zones (id, timestamp, identity, confirmation, data, pub_key) VALUES (?, ?, ?, ?, ?, ?)";
+const SQL_ADD_DOMAIN: &str = "INSERT INTO domains (id, timestamp, identity, confirmation, data, owner) VALUES (?, ?, ?, ?, ?, ?)";
 const SQL_GET_BLOCK_BY_ID: &str = "SELECT * FROM blocks WHERE id=? LIMIT 1;";
 const SQL_GET_LAST_FULL_BLOCK: &str = "SELECT * FROM blocks WHERE id < ? AND `transaction`<>'' ORDER BY id DESC LIMIT 1;";
 const SQL_GET_LAST_FULL_BLOCK_FOR_KEY: &str = "SELECT * FROM blocks WHERE id < ? AND `transaction`<>'' AND pub_key = ? ORDER BY id DESC LIMIT 1;";
-const SQL_GET_DOMAIN_PUBLIC_KEY_BY_ID: &str = "SELECT pub_key FROM domains WHERE id < ? AND identity = ? LIMIT 1;";
-const SQL_GET_ZONE_PUBLIC_KEY_BY_ID: &str = "SELECT pub_key FROM zones WHERE id < ? AND identity = ? LIMIT 1;";
+const SQL_GET_DOMAIN_OWNER_BY_ID: &str = "SELECT owner FROM domains WHERE id < ? AND identity = ? LIMIT 1;";
 const SQL_GET_DOMAIN_BY_ID: &str = "SELECT * FROM domains WHERE identity = ? ORDER BY id DESC LIMIT 1;";
-const SQL_GET_DOMAINS_BY_KEY: &str = "SELECT * FROM domains WHERE pub_key = ?;";
-const SQL_GET_ZONES: &str = "SELECT data FROM zones;";
+const SQL_GET_DOMAINS_BY_KEY: &str = "SELECT * FROM domains WHERE owner = ?;";
 
 const SQL_GET_OPTIONS: &str = "SELECT * FROM options;";
 
@@ -52,7 +48,7 @@ pub struct Chain {
     last_full_block: Option<Block>,
     max_height: u64,
     db: Connection,
-    zones: RefCell<HashSet<String>>,
+    zones: Vec<ZoneData>,
     signers: RefCell<SignersCache>,
 }
 
@@ -61,7 +57,7 @@ impl Chain {
         let origin = settings.get_origin();
 
         let db = sqlite::open(db_name).expect("Unable to open blockchain DB");
-        let zones = RefCell::new(HashSet::new());
+        let zones = Self::load_zones();
         let mut chain = Chain { origin, last_block: None, last_full_block: None, max_height: 0, db, zones, signers: SignersCache::new() };
         chain.init_db();
         chain
@@ -163,10 +159,6 @@ impl Chain {
         statement.next()?;
 
         let mut statement = self.db.prepare(SQL_TRUNCATE_DOMAINS)?;
-        statement.bind(1, index as i64)?;
-        statement.next()?;
-
-        let mut statement = self.db.prepare(SQL_TRUNCATE_ZONES)?;
         statement.bind(1, index as i64)?;
         statement.next()
     }
@@ -365,7 +357,6 @@ impl Chain {
     fn add_transaction_to_table(&mut self, index: u64, timestamp: i64, t: &Transaction) -> sqlite::Result<State> {
         let sql = match t.class.as_ref() {
             "domain" => SQL_ADD_DOMAIN,
-            "zone" => SQL_ADD_ZONE,
             _ => return Err(sqlite::Error { code: None, message: None })
         };
 
@@ -375,7 +366,7 @@ impl Chain {
         statement.bind(3, &**t.identity)?;
         statement.bind(4, &**t.confirmation)?;
         statement.bind(5, t.data.as_ref() as &str)?;
-        statement.bind(6, &**t.pub_key)?;
+        statement.bind(6, &**t.owner)?;
         statement.next()
     }
 
@@ -453,7 +444,7 @@ impl Chain {
             return false;
         }
         let identity_hash = hash_identity(domain, None);
-        if !self.is_id_available(height, &identity_hash, &keystore.get_public(), false) {
+        if !self.is_id_available(height, &identity_hash, &keystore.get_public()) {
             return false;
         }
 
@@ -463,19 +454,15 @@ impl Chain {
             if parts.last().unwrap().contains(".") {
                 return false;
             }
-            return self.is_zone_in_blockchain(height, parts.first().unwrap());
+            return self.is_available_zone(parts.first().unwrap());
         }
         true
     }
 
     /// Checks if this identity is free or is owned by the same pub_key
-    pub fn is_id_available(&self, height: u64, identity: &Bytes, public_key: &Bytes, zone: bool) -> bool {
-        let sql = match zone {
-            true => { SQL_GET_ZONE_PUBLIC_KEY_BY_ID }
-            false => { SQL_GET_DOMAIN_PUBLIC_KEY_BY_ID }
-        };
-
-        let mut statement = self.db.prepare(sql).unwrap();
+    pub fn is_id_available(&self, height: u64, identity: &Bytes, public_key: &Bytes) -> bool {
+        // TODO check for `owner` field
+        let mut statement = self.db.prepare(SQL_GET_DOMAIN_OWNER_BY_ID).unwrap();
         statement.bind(1, height as i64).expect("Error in bind");
         statement.bind(2, &***identity).expect("Error in bind");
         while let State::Row = statement.next().unwrap() {
@@ -487,50 +474,39 @@ impl Chain {
         true
     }
 
-    pub fn get_zones(&self) -> Vec<ZoneData> {
-        let mut map = HashMap::new();
-        match self.db.prepare(SQL_GET_ZONES) {
-            Ok(mut statement) => {
-                while statement.next().unwrap() == State::Row {
-                    let data = statement.read::<String>(0).unwrap();
-                    //debug!("Got zone data {}", &data);
-                    if let Ok(zone_data) = serde_json::from_str::<ZoneData>(&data) {
-                        map.insert(zone_data.name.clone(), zone_data);
-                    }
-                }
-            }
-            Err(e) => {
-                warn!("Can't get zones from DB {}", e);
-            }
+    pub fn get_zones(&self) -> &Vec<ZoneData> {
+        &self.zones
+    }
+
+    fn load_zones() -> Vec<ZoneData> {
+        let mut result: Vec<ZoneData> = Vec::new();
+        let zones: Vec<_> = ZONES_TXT.split("\n").collect();
+        for zone in zones {
+            let yggdrasil = zone == "ygg" || zone == "anon";
+            result.push(ZoneData {name: zone.to_owned(), yggdrasil})
         }
-        let result: Vec<ZoneData> = map.drain().map(|(_, value)| value).collect();
         result
     }
 
+    pub fn get_zones_hash() -> Bytes {
+        Bytes::from_bytes(hash_sha256(&ZONES_TXT.as_bytes()).as_slice())
+    }
+
     /// Checks if some zone exists in our blockchain
-    pub fn is_zone_in_blockchain(&self, height: u64, zone: &str) -> bool {
-        if self.zones.borrow().contains(zone) {
-            return true;
+    pub fn is_available_zone(&self, zone: &str) -> bool {
+        for z in &self.zones {
+            if z.name == zone {
+                return true;
+            }
         }
 
-        // Checking for existing zone in DB
-        let identity_hash = hash_identity(zone, None);
-        if self.is_id_in_blockchain(height, &identity_hash, true) {
-            // If there is such a zone
-            self.zones.borrow_mut().insert(zone.to_owned());
-            return true;
-        }
         false
     }
 
     /// Checks if some id exists in our blockchain
-    pub fn is_id_in_blockchain(&self, height: u64, id: &Bytes, zone: bool) -> bool {
-        let sql = match zone {
-            true => { SQL_GET_ZONE_PUBLIC_KEY_BY_ID }
-            false => { SQL_GET_DOMAIN_PUBLIC_KEY_BY_ID }
-        };
-        // Checking for existing zone in DB
-        let mut statement = self.db.prepare(sql).unwrap();
+    pub fn is_domain_in_blockchain(&self, height: u64, id: &Bytes) -> bool {
+        // Checking for existing domain in DB
+        let mut statement = self.db.prepare(SQL_GET_DOMAIN_OWNER_BY_ID).unwrap();
         statement.bind(1, height as i64).expect("Error in bind");
         statement.bind(2, &***id).expect("Error in bind");
         while let State::Row = statement.next().unwrap() {
@@ -546,17 +522,18 @@ impl Chain {
             return WrongName;
         }
         let zone = get_domain_zone(&name);
-        if !self.is_zone_in_blockchain(height, &zone) {
+        if !self.is_available_zone(&zone) {
             return WrongZone;
         }
         if let Some(transaction) = self.get_domain_transaction(&name) {
-            if transaction.pub_key.ne(pub_key) {
+            if transaction.owner.ne(pub_key) {
                 return NotOwned;
             }
         }
         let identity_hash = hash_identity(&name, None);
+        // TODO extract method
         if let Some(last) = self.get_last_full_block(MAX, Some(&pub_key)) {
-            let new_id = !self.is_id_in_blockchain(height, &identity_hash, false);
+            let new_id = !self.is_domain_in_blockchain(height, &identity_hash);
             let time = last.timestamp + NEW_DOMAINS_INTERVAL - Utc::now().timestamp();
             if new_id && time > 0 {
                 return Cooldown { time }
@@ -586,7 +563,7 @@ impl Chain {
             let class = String::from("domain");
             let data = statement.read::<String>(4).unwrap();
             let pub_key = Bytes::from_bytes(&statement.read::<Vec<u8>>(5).unwrap());
-            let transaction = Transaction { identity, confirmation, class, data, pub_key };
+            let transaction = Transaction { identity, confirmation, class, data, owner: pub_key };
             debug!("Found transaction for domain {}: {:?}", domain, &transaction);
             if transaction.check_identity(domain) {
                 return Some(transaction);
@@ -619,8 +596,8 @@ impl Chain {
             let confirmation = Bytes::from_bytes(&statement.read::<Vec<u8>>(3).unwrap());
             let class = String::from("domain");
             let data = statement.read::<String>(4).unwrap();
-            let pub_key = Bytes::from_bytes(&statement.read::<Vec<u8>>(5).unwrap());
-            let transaction = Transaction { identity: identity.clone(), confirmation: confirmation.clone(), class, data, pub_key };
+            let owner = Bytes::from_bytes(&statement.read::<Vec<u8>>(5).unwrap());
+            let transaction = Transaction { identity: identity.clone(), confirmation: confirmation.clone(), class, data, owner };
             //debug!("Found transaction for domain {}: {:?}", domain, &transaction);
             if let Some(data) = transaction.get_domain_data() {
                 let mut domain = keystore.decrypt(data.domain.as_slice(), &confirmation.as_slice()[..12]);
@@ -644,16 +621,6 @@ impl Chain {
             }
         }
         result
-    }
-
-    pub fn get_zone_difficulty(&self, zone: &str) -> u32 {
-        let zones = self.get_zones();
-        for z in zones.iter() {
-            if z.name.eq(zone) {
-                return z.difficulty;
-            }
-        }
-        u32::MAX
     }
 
     pub fn last_block(&self) -> Option<Block> {
@@ -732,7 +699,7 @@ impl Chain {
         let difficulty = match &block.transaction {
             None => {
                 if block.index == 1 {
-                    ZONE_DIFFICULTY
+                    ORIGIN_DIFFICULTY
                 } else {
                     SIGNER_DIFFICULTY
                 }
@@ -767,28 +734,20 @@ impl Chain {
                 }
             }
         }
-        if matches!(Transaction::get_type(&block.transaction), TransactionType::Zone) {
-            if self.get_zones().len() >= MAXIMUM_ZONES {
-                warn!("Ignoring excess zone block");
-                return Bad;
-            }
-        }
 
         if let Some(transaction) = &block.transaction {
             let current_height = match last_block {
                 None => { 0 }
                 Some(block) => { block.index }
             };
-            // TODO check for zone transaction
-            let is_domain_available = self.is_id_available(current_height, &transaction.identity, &block.pub_key, false);
-            let is_zone_available = self.is_id_available(current_height, &transaction.identity, &block.pub_key, true);
-            if !is_domain_available || !is_zone_available {
+            // If this domain is available to this public key
+            if !self.is_id_available(current_height, &transaction.identity, &block.pub_key) {
                 warn!("Block {:?} is trying to spoof an identity!", &block);
                 return Bad;
             }
             if let Some(last) = self.get_last_full_block(block.index, Some(&block.pub_key)) {
                 if last.index < block.index {
-                    let new_id = !self.is_id_in_blockchain(block.index, &transaction.identity, false);
+                    let new_id = !self.is_domain_in_blockchain(block.index, &transaction.identity);
                     if new_id && last.timestamp + NEW_DOMAINS_INTERVAL > block.timestamp {
                         warn!("Block {:?} is mined too early!", &block);
                         return Bad;
@@ -798,7 +757,7 @@ impl Chain {
             // Check if yggdrasil only property of zone is not violated
             if let Some(block_data) = transaction.get_domain_data() {
                 let zones = self.get_zones();
-                for z in &zones {
+                for z in zones {
                     if z.name == block_data.zone {
                         if z.yggdrasil {
                             for record in &block_data.records {
@@ -911,15 +870,10 @@ impl Chain {
 
     fn get_difficulty_for_transaction(&self, transaction: &Transaction) -> u32 {
         match transaction.class.as_ref() {
-            "domain" => {
+            CLASS_DOMAIN => {
                 return match serde_json::from_str::<DomainData>(&transaction.data) {
-                    Ok(data) => {
-                        for zone in self.get_zones().iter() {
-                            if zone.name == data.zone {
-                                return zone.difficulty;
-                            }
-                        }
-                        u32::MAX
+                    Ok(_) => {
+                        DOMAIN_DIFFICULTY
                     }
                     Err(_) => {
                         warn!("Error parsing DomainData from {:?}", transaction);
@@ -927,7 +881,7 @@ impl Chain {
                     }
                 }
             }
-            "zone" => { ZONE_DIFFICULTY }
+            CLASS_ORIGIN => { ORIGIN_DIFFICULTY }
             _ => { u32::MAX }
         }
     }
@@ -1005,9 +959,10 @@ impl SignersCache {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::{Chain, Settings};
-    use simplelog::{ConfigBuilder, TermLogger, TerminalMode, ColorChoice};
     use log::LevelFilter;
+    use simplelog::{ColorChoice, ConfigBuilder, TerminalMode, TermLogger};
+
+    use crate::{Chain, Settings};
 
     fn init_logger() {
         let config = ConfigBuilder::new()
