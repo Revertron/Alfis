@@ -527,12 +527,6 @@ fn handle_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &Token, 
     let peers_count = peers.get_peers_active_count();
     let peer = peers.get_mut_peer(token).unwrap();
     peer.set_received_block(block.index);
-    if let Some(transaction) = &block.transaction {
-        if context.lock().unwrap().x_zones.has_hash(&transaction.identity.to_string()) {
-            // This peer has mined some of the forbidden zones
-            return State::Banned;
-        }
-    }
 
     let mut context = context.lock().unwrap();
     let max_height = context.chain.max_height();

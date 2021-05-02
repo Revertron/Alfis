@@ -3,7 +3,7 @@ use std::time::Duration;
 pub const DB_VERSION: u32 = 0;
 pub const CHAIN_VERSION: u32 = 1;
 
-pub const ORIGIN_DIFFICULTY: u32 = 30;
+pub const ORIGIN_DIFFICULTY: u32 = 28;
 pub const DOMAIN_DIFFICULTY: u32 = 24;
 pub const SIGNER_DIFFICULTY: u32 = 16;
 pub const KEYSTORE_DIFFICULTY: u32 = 23;

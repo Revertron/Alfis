@@ -42,7 +42,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
         .size(1023, 720)
         .min_size(773, 350)
         .resizable(true)
-        .debug(false)
+        .debug(true)
         .user_data(())
         .invoke_handler(|web_view, arg| {
             debug!("Command {}", arg);
@@ -306,7 +306,9 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
     if index > 0 {
         c.bus.post(Event::BlockchainChanged { index });
     }
-    if let Ok(zones) = serde_json::to_string(&c.chain.get_zones()) {
+    let zones = c.chain.get_zones();
+    info!("Loaded zones: {:?}", &zones);
+    if let Ok(zones) = serde_json::to_string(&zones) {
         let _ = web_view.eval(&format!("zonesChanged('{}');", &zones));
     }
     event_info(web_view, "Application loaded");

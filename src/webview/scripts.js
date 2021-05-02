@@ -438,11 +438,8 @@ function keystoreChanged(path, pub_key, hash) {
     public_key_field.value = pub_key;
     public_key_field.title = path + "\n" + hash;
 
-    var save_key = document.getElementById("save_key");
-    save_key.disabled = false;
-
-    var new_domain = document.getElementById("new_domain");
-    new_domain.disabled = false;
+    var save_key = document.getElementById("save_key").disabled = false;
+    var new_domain = document.getElementById("new_domain").disabled = false;
 }
 
 function closeZonesDropdown() {
