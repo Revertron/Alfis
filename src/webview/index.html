@@ -177,12 +177,32 @@
                 </div>
 
                 <div class="control">
+                    <div class="dropdown" id="advanced-dropdown" onclick="toggle(this, event);">
+                        <div class="dropdown-trigger">
+                            <button class="button" aria-haspopup="true" aria-controls="advanced-menu" onblur="closeAdvancedDropdown()">
+                                <span>Advanced</span>
+                                <span class="icon is-small">
+                                    <svg viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"></path></svg>
+                                </span>
+                            </button>
+                        </div>
+                        <div class="dropdown-menu" id="advanced-menu" role="menu">
+                            <div class="dropdown-content">
+                                <a class="dropdown-item" onclick="showOwnerDialog();" title="You can change domain owner. Leave empty to be yours only.">Change owner</a>
+                                <a class="dropdown-item" onclick="showContactsDialog();" title="You can add contact information to your domain, if you wish">Set contacts</a>
+                                <a class="dropdown-item">Set info</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control">
                     <div class="buttons has-addons">
                         <button id="add_record_button" class="button is-link is-light" onclick="showNewRecordDialog();" title="Domain is nothing without good DNS records">Add record</button>
-                        <button disabled id="owners_button" class="button is-link is-light" onclick="showOwnersDialog();" title="You can change domain owners. Leave empty to be yours only.">
-                            <span>Set owners</span><span id="owners_count" class="tag is-info is-hidden ml-2">0</span>
+                        <!--<button disabled id="owner_button" class="button is-link is-light" onclick="showOwnerDialog();" title="You can change domain owner. Leave empty to be yours only.">
+                            <span>Set owner</span><span id="owner_count" class="tag is-info is-hidden ml-2">0</span>
                         </button>
-                        <button disabled id="add_contacts_button" class="button is-link is-light" onclick="showContactsDialog();" title="You can add contact information to your domain, if you wish">Set contacts</button>
+                        <button disabled id="add_contacts_button" class="button is-link is-light" onclick="showContactsDialog();" title="You can add contact information to your domain, if you wish">Set contacts</button>-->
                         <button id="new_domain_button" class="button is-link" onclick="createDomain();" title="Start mining">Mine domain</button>
                     </div>
                 </div>
@@ -196,23 +216,46 @@
     </div>
 </div>
 
-<div id="owners_dialog" class="modal">
+<div id="owner_dialog" class="modal">
     <div class="modal-background"></div>
     <div class="modal-content">
         <div class="box">
             <div class="field">
                 <label class="label">Public keys</label>
-                <div class="control">
-                    <textarea class="textarea" id="owners_text"></textarea>
+                <div class="control is-expanded has-icons-left">
+                    <input class="input is-expanded" type="text" placeholder="Public key" id="owner_text">
+                    <span class="icon is-small is-left">
+                        <svg viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path d="M12,17A2,2 0 0,0 14,15C14,13.89 13.1,13 12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17M18,8A2,2 0 0,1 20,10V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V10C4,8.89 4.9,8 6,8H7V6A5,5 0 0,1 12,1A5,5 0 0,1 17,6V8H18M12,3A3,3 0 0,0 9,6V8H15V6A3,3 0 0,0 12,3Z"></path></svg>
+                    </span>
                 </div>
             </div>
             <p class="help mb-3">Domains can be owned by several people.
                 You need to add their public keys in this text field, separated by new line.
-                If you don't include your own key, then domain will be completely transferred to entered owners.
+                If you don't include your own key, then domain will be completely transferred to entered owner.
                 If you wish to own domain by yourself, just leave this space empty.</p>
             <div class="buttons is-grouped is-centered">
-                <button class="button is-link" id="owners_positive_button" onclick="ownersPositiveButton();">Ok</button>
-                <button class="button is-link is-light" id="owners_negative_button" onclick="ownersCancelButton();">Cancel</button>
+                <button class="button is-link" id="owner_positive_button" onclick="ownerPositiveButton();">Ok</button>
+                <button class="button is-link is-light" id="owner_negative_button" onclick="ownerCancelButton();">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="contacts_dialog" class="modal">
+    <div class="modal-background"></div>
+    <div class="modal-content">
+        <div class="box">
+            <div class="field">
+                <label class="label">Domain owner contacts</label>
+                <div class="control">
+                    <textarea class="textarea" id="contacts_text"></textarea>
+                </div>
+            </div>
+            <p class="help mb-3">You can add some contacts to your domain if you wish to be contacted in regards of your services.
+                Just list your contacts, separated by new line.</p>
+            <div class="buttons is-grouped is-centered">
+                <button class="button is-link" id="contacts_positive_button" onclick="contactsPositiveButton();">Ok</button>
+                <button class="button is-link is-light" id="contacts_negative_button" onclick="contactsCancelButton();">Cancel</button>
             </div>
         </div>
     </div>

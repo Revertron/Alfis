@@ -25,9 +25,20 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    pub fn from_str(identity: String, method: String, data: String, owner: Bytes) -> Self {
+    pub fn from_str(identity: String, method: String, data: String, miner: Bytes, owner: Bytes) -> Self {
         let hash = hash_identity(&identity, None);
-        let confirmation = hash_identity(&identity, Some(&owner));
+        let key = if owner.is_empty() {
+            &miner
+        } else {
+            &owner
+        };
+        let confirmation = hash_identity(&identity, Some(key));
+        // If the miner doesn't change owner, we don't include owner at all
+        let owner = if owner.is_empty() || owner == miner {
+            miner
+        } else {
+            owner
+        };
         return Self::new(hash, confirmation, method, data, owner);
     }
 
@@ -125,6 +136,7 @@ pub enum TransactionType {
 pub struct DomainData {
     pub domain: Bytes,
     pub zone: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub info: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub records: Vec<DnsRecord>,

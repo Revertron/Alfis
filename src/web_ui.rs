@@ -53,8 +53,8 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                 SaveKey => { action_save_key(&context); }
                 CheckRecord { data } => { action_check_record(web_view, data); }
                 CheckDomain { name } => { action_check_domain(&context, web_view, name); }
-                MineDomain { name, data } => {
-                    action_create_domain(Arc::clone(&context), Arc::clone(&miner), web_view, name, data);
+                MineDomain { name, data, owner } => {
+                    action_create_domain(Arc::clone(&context), Arc::clone(&miner), web_view, name, data, owner);
                 }
                 TransferDomain { .. } => {}
                 StopMining => { context.lock().unwrap().bus.post(Event::ActionStopMining); }
@@ -332,7 +332,7 @@ fn load_domains(context: &mut MutexGuard<Context>, handle: &Handle<()>) {
     });
 }
 
-fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, web_view: &mut WebView<()>, name: String, data: String) {
+fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, web_view: &mut WebView<()>, name: String, data: String, owner: String) {
     debug!("Creating domain with data: {}", &data);
     let c = Arc::clone(&context);
     let context = context.lock().unwrap();
@@ -358,6 +358,11 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
             return;
         }
     };
+    let owner = if !owner.is_empty() {
+        Bytes::new(from_hex(&owner).unwrap())
+    } else {
+        Bytes::default()
+    };
     // Check if yggdrasil only quality of zone is not violated
     let zones = context.chain.get_zones();
     for z in zones {
@@ -376,7 +381,7 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
     match context.chain.can_mine_domain(context.chain.get_height(), &name, &pub_key) {
         MineResult::Fine => {
             std::mem::drop(context);
-            create_domain(c, miner, CLASS_DOMAIN, &name, data, DOMAIN_DIFFICULTY, &keystore);
+            create_domain(c, miner, CLASS_DOMAIN, &name, data, DOMAIN_DIFFICULTY, &keystore, owner);
             let _ = web_view.eval("domainMiningStarted();");
             event_info(web_view, &format!("Mining of domain \\'{}\\' has started", &name));
         }
@@ -482,13 +487,13 @@ fn format_event_now(kind: &str, message: &str) -> String {
     format!("addEvent('{}', '{}', '{}');", kind, time.format("%d.%m.%y %X"), message)
 }
 
-fn create_domain(_context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, class: &str, name: &str, mut data: DomainData, difficulty: u32, keystore: &Keystore) {
+fn create_domain(_context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, class: &str, name: &str, mut data: DomainData, difficulty: u32, keystore: &Keystore, owner: Bytes) {
     let name = name.to_owned();
     let confirmation = hash_identity(&name, Some(&keystore.get_public()));
     data.domain = keystore.encrypt(name.as_bytes(), &confirmation.as_slice()[..12]);
 
     let data = serde_json::to_string(&data).unwrap();
-    let transaction = Transaction::from_str(name, class.to_owned(), data, keystore.get_public().clone());
+    let transaction = Transaction::from_str(name, class.to_owned(), data, keystore.get_public().clone(), owner);
     let block = Block::new(Some(transaction), keystore.get_public(), Bytes::default(), difficulty);
     miner.lock().unwrap().add_block(block, keystore.clone());
 }
@@ -502,7 +507,7 @@ pub enum Cmd {
     SaveKey,
     CheckRecord { data: String },
     CheckDomain { name: String },
-    MineDomain { name: String, data: String },
+    MineDomain { name: String, data: String, owner: String },
     TransferDomain { name: String, owner: String },
     StopMining,
     Open { link: String },

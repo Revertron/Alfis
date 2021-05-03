@@ -1,5 +1,5 @@
 var recordsBuffer = [];
-var ownersBuffer = [];
+var owner = "";
 var availableZones = [];
 var myDomains = [];
 var currentZone;
@@ -114,17 +114,21 @@ function refreshMyDomains() {
         var title = value.name;
         var domain_data = JSON.parse(value.data);
         var tags = "";
-        domain_data.records.forEach(function(v, i, a) {
-            if (typeof v.domain !== 'undefined') {
-                var buf = tag.replace("{domain}", v.domain);
-                if (typeof v.addr !== 'undefined') {
-                    buf = buf.replace("{ip}", v.addr);
-                } else if (typeof v.host !== 'undefined') {
-                    buf = buf.replace("{ip}", v.host);
+        if (typeof domain_data.records !== 'undefined') {
+            domain_data.records.forEach(function(v, i, a) {
+                if (typeof v.domain !== 'undefined') {
+                    var buf = tag.replace("{domain}", v.domain);
+                    if (typeof v.addr !== 'undefined') {
+                        buf = buf.replace("{ip}", v.addr);
+                    } else if (typeof v.host !== 'undefined') {
+                        buf = buf.replace("{ip}", v.host);
+                    }
+                    tags = tags + buf;
                 }
-                tags = tags + buf;
-            }
-        });
+            });
+        } else {
+            tags = tag.replace("{domain}", "No records").replace("{ip}", "");
+        }
         cards = cards + card.replace("{title}", title).replace("{domain}", title).replace("{tags}", tags);
     });
     document.getElementById("my_domains").innerHTML = cards;
@@ -138,9 +142,11 @@ function editDomain(domain) {
         var title = value.name;
         var domain_data = JSON.parse(value.data);
         recordsBuffer = [];
-        domain_data.records.forEach(function(v, i, a) {
-            recordsBuffer.push(v);
-        });
+        if (typeof domain_data.records !== 'undefined') {
+            domain_data.records.forEach(function(v, i, a) {
+                recordsBuffer.push(v);
+            });
+        }
         document.getElementById("new_domain").value = title.replace("." + domain_data.zone, "");
         changeZone(domain_data.zone);
         refreshRecordsList();
@@ -231,11 +237,11 @@ function createDomain() {
     var data = {};
     data.domain = "";
     data.zone = currentZone.name;
+    data.info = "";
     data.records = recordsBuffer;
-    data.owners = []; // TODO make a dialog to fill them
     data.contacts = []; // TODO make a dialog to fill them
     data = JSON.stringify(data);
-    external.invoke(JSON.stringify({cmd: 'mineDomain', name: domain, data: data}));
+    external.invoke(JSON.stringify({cmd: 'mineDomain', name: domain, data: data, owner: owner}));
 }
 
 function domainMiningStarted() {
@@ -253,11 +259,11 @@ function domainMiningUnavailable() {
     //recordsBuffer = [];
     //refreshRecordsList();
     document.getElementById("new_domain_dialog").className = "modal";
-    document.getElementById("tab_domains").disabled = true;
-    document.getElementById("domain_records").disabled = true;
-    document.getElementById("add_record_button").disabled = true;
-    document.getElementById("new_domain_button").disabled = true;
-    document.getElementById("new_key_button").disabled = true;
+    document.getElementById("tab_domains").disabled = false;
+    document.getElementById("domain_records").disabled = false;
+    document.getElementById("add_record_button").disabled = false;
+    document.getElementById("new_domain_button").disabled = false;
+    document.getElementById("new_key_button").disabled = false;
 }
 
 function sendAction(param) {
@@ -307,8 +313,13 @@ function showModalDialog(text, callback) {
     dialog.className = "modal is-active";
 }
 
-function showOwnersDialog() {
-    var dialog = document.getElementById("owners_dialog");
+function showOwnerDialog() {
+    var dialog = document.getElementById("owner_dialog");
+    dialog.className = "modal is-active";
+}
+
+function showContactsDialog() {
+    var dialog = document.getElementById("contacts_dialog");
     dialog.className = "modal is-active";
 }
 
@@ -320,33 +331,25 @@ function isValidOwner(text) {
     return regexp.test(text);
 }
 
-function ownersPositiveButton() {
-    var text = document.getElementById("owners_text").value;
+function ownerPositiveButton() {
+    var text = document.getElementById("owner_text").value;
     if (text != "") {
-        ownersBuffer = [];
-        var wrong = false;
-        var lines = text.split("\n");
-        lines.forEach(function(value, index, array) {
-            if (wrong) {
-                return;
-            }
-            if (isValidOwner(value)) {
-                ownersBuffer.push(value);
-            } else {
-                alert("Wrong owner '{}'!".replace("{}", value));
-                wrong = true;
-                return;
-            }
-        });
+        if (isValidOwner(text)) {
+            owner = text;
+        } else {
+            alert("Wrong owner '{}'!".replace("{}", value));
+            wrong = true;
+            return;
+        }
+    } else {
+        owner = "";
     }
-    if (!wrong) {
-        var dialog = document.getElementById("owners_dialog");
-        dialog.className = "modal";
-    }
+    var dialog = document.getElementById("owner_dialog");
+    dialog.className = "modal";
 }
 
-function ownersCancelButton() {
-    var dialog = document.getElementById("owners_dialog");
+function ownerCancelButton() {
+    var dialog = document.getElementById("owner_dialog");
     dialog.className = "modal";
 }
 
@@ -446,6 +449,13 @@ function closeZonesDropdown() {
     var active = document.activeElement;
     if (active == null || (active.id != 'zones-menu' && active.tagName != 'BODY')) {
         document.getElementById("zones-dropdown").className = "dropdown";
+    }
+}
+
+function closeAdvancedDropdown() {
+    var active = document.activeElement;
+    if (active == null || (active.id != 'advanced-menu' && active.tagName != 'BODY')) {
+        document.getElementById("advanced-dropdown").className = "dropdown";
     }
 }
 

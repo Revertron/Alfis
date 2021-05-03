@@ -229,13 +229,17 @@ impl Chain {
         debug!("Adding block:\n{:?}", &block);
         let index = block.index;
         let timestamp = block.timestamp;
+        let owner = block.pub_key.clone();
         self.last_block = Some(block.clone());
         if block.transaction.is_some() {
             self.last_full_block = Some(block.clone());
         }
         let transaction = block.transaction.clone();
         if self.add_block_to_table(block).is_ok() {
-            if let Some(transaction) = transaction {
+            if let Some(mut transaction) = transaction {
+                if transaction.owner.is_empty() {
+                    transaction.owner = owner;
+                }
                 self.add_transaction_to_table(index, timestamp, &transaction).expect("Error adding transaction");
             }
         }
@@ -321,6 +325,9 @@ impl Chain {
     }
 
     pub fn is_waiting_signers(&self) -> bool {
+        if self.get_height() < BLOCK_SIGNERS_START {
+            return false;
+        }
         if let Some(full_block) = &self.last_full_block {
             let sign_count = self.get_height() - full_block.index;
             if sign_count < BLOCK_SIGNERS_MIN {
@@ -356,7 +363,8 @@ impl Chain {
     /// Adds transaction to transactions table
     fn add_transaction_to_table(&mut self, index: u64, timestamp: i64, t: &Transaction) -> sqlite::Result<State> {
         let sql = match t.class.as_ref() {
-            "domain" => SQL_ADD_DOMAIN,
+            CLASS_DOMAIN => SQL_ADD_DOMAIN,
+            CLASS_ORIGIN => return Ok(State::Done),
             _ => return Err(sqlite::Error { code: None, message: None })
         };
 
@@ -590,29 +598,18 @@ impl Chain {
         let mut statement = self.db.prepare(SQL_GET_DOMAINS_BY_KEY).unwrap();
         statement.bind(1, &**pub_key).expect("Error in bind");
         while let State::Row = statement.next().unwrap() {
-            let index = statement.read::<i64>(0).unwrap() as u64;
+            let _index = statement.read::<i64>(0).unwrap() as u64;
             let timestamp = statement.read::<i64>(1).unwrap();
             let identity = Bytes::from_bytes(&statement.read::<Vec<u8>>(2).unwrap());
             let confirmation = Bytes::from_bytes(&statement.read::<Vec<u8>>(3).unwrap());
-            let class = String::from("domain");
+            let class = String::from(CLASS_DOMAIN);
             let data = statement.read::<String>(4).unwrap();
             let owner = Bytes::from_bytes(&statement.read::<Vec<u8>>(5).unwrap());
             let transaction = Transaction { identity: identity.clone(), confirmation: confirmation.clone(), class, data, owner };
-            //debug!("Found transaction for domain {}: {:?}", domain, &transaction);
+            debug!("Found transaction for domain {:?}", &transaction);
             if let Some(data) = transaction.get_domain_data() {
-                let mut domain = keystore.decrypt(data.domain.as_slice(), &confirmation.as_slice()[..12]);
-                if domain.is_empty() {
-                    // Legacy encryption scheme
-                    for i in 1..=10 {
-                        let b = self.get_block(index - i).unwrap();
-                        domain = keystore.decrypt(data.domain.as_slice(), &b.hash.as_slice()[..12]);
-                        if !domain.is_empty() {
-                            break;
-                        }
-                    }
-                }
-
-                let mut domain = String::from_utf8(domain.to_vec()).unwrap();
+                let decrypted = keystore.decrypt(data.domain.as_slice(), &confirmation.as_slice()[..12]);
+                let mut domain = String::from_utf8(decrypted.to_vec()).unwrap();
                 if domain.is_empty() {
                     domain = String::from("unknown");
                 }
