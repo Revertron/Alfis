@@ -6,6 +6,7 @@ use serde::{Serialize, Deserialize};
 use crate::bytes::Bytes;
 use crate::Transaction;
 use crate::blockchain::hash_utils::{hash_difficulty, key_hash_difficulty};
+use crate::blockchain::transaction::TransactionType;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Block {
@@ -61,11 +62,13 @@ impl Block {
     }
 
     pub fn is_genesis(&self) -> bool {
-        self.index == 1 && self.transaction.is_none() && self.prev_block_hash == Bytes::default()
+        self.index == 1 &&
+            matches!(Transaction::get_type(&self.transaction), TransactionType::Origin) &&
+            self.prev_block_hash == Bytes::default()
     }
 
     pub fn as_bytes(&self) -> Vec<u8> {
-        Vec::from(serde_json::to_string(&self).unwrap().as_bytes())
+        bincode::serialize(&self).unwrap()
     }
 
     /// Checks if this block is superior than the other

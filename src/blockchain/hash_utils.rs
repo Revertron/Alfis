@@ -9,8 +9,7 @@ pub fn check_block_hash(block: &Block) -> bool {
     let mut copy: Block = block.clone();
     copy.hash = Bytes::default();
     copy.signature = Bytes::default();
-    let data = serde_json::to_string(&copy).unwrap();
-    blakeout_data(data.as_bytes()) == block.hash
+    blakeout_data(&copy.as_bytes()) == block.hash
 }
 
 /// Hashes data by given hasher

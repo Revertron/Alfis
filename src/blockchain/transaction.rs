@@ -14,14 +14,14 @@ extern crate serde_json;
 
 #[derive(Clone, Deserialize, PartialEq)]
 pub struct Transaction {
+    pub class: String,
     #[serde(default, skip_serializing_if = "Bytes::is_zero")]
     pub identity: Bytes,
     #[serde(default, skip_serializing_if = "Bytes::is_zero")]
     pub confirmation: Bytes,
-    pub class: String,
-    pub data: String,
     #[serde(default, skip_serializing_if = "Bytes::is_zero")]
     pub owner: Bytes,
+    pub data: String,
 }
 
 impl Transaction {
@@ -81,6 +81,9 @@ impl Transaction {
                 if transaction.class == CLASS_DOMAIN {
                     return TransactionType::Domain;
                 }
+                if transaction.class == CLASS_ORIGIN {
+                    return TransactionType::Origin;
+                }
                 TransactionType::Unknown
             }
         }
@@ -90,11 +93,11 @@ impl Transaction {
 impl fmt::Debug for Transaction {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("Transaction")
+            .field("class", &self.class)
             .field("identity", &self.identity)
             .field("confirmation", &self.confirmation)
-            .field("class", &self.class)
+            .field("owner", &&self.owner)
             .field("data", &self.data)
-            .field("pub_key", &&self.owner)
             .finish()
     }
 }
@@ -102,11 +105,11 @@ impl fmt::Debug for Transaction {
 impl Serialize for Transaction {
     fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> where S: Serializer {
         let mut structure = serializer.serialize_struct("Transaction", 5).unwrap();
+        structure.serialize_field("class", &self.class)?;
         structure.serialize_field("identity", &self.identity)?;
         structure.serialize_field("confirmation", &self.confirmation)?;
-        structure.serialize_field("class", &self.class)?;
+        structure.serialize_field("owner", &self.owner)?;
         structure.serialize_field("data", &self.data)?;
-        structure.serialize_field("pub_key", &self.owner)?;
         structure.end()
     }
 }
@@ -115,6 +118,7 @@ pub enum TransactionType {
     Unknown,
     Signing,
     Domain,
+    Origin,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
