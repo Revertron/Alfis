@@ -81,19 +81,19 @@ body {
   min-height: 2rem;
 }
 
-.notification {
+.notification.mini {
   position: absolute;
   z-index: 100;
   width: 50%;
 }
 
-.notification.is-warning {
+.notification.mini.is-warning {
   position: absolute;
   top: 10pt;
   right: 10pt;
 }
 
-.notification.is-success {
+.notification.mini.is-success {
   position: absolute;
   bottom: 30pt;
   right: 10pt;

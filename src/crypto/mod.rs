@@ -1,3 +1,3 @@
-mod chacha;
+mod crypto_box;
 
-pub use chacha::Chacha;
+pub use crypto_box::CryptoBox;

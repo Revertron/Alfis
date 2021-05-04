@@ -17,7 +17,7 @@ use crate::blockchain::types::{BlockQuality, MineResult, Options, ZoneData};
 use crate::blockchain::types::BlockQuality::*;
 use crate::blockchain::types::MineResult::*;
 use crate::commons::constants::*;
-use crate::keys::check_public_key_strength;
+use crate::keystore::check_public_key_strength;
 use crate::settings::Settings;
 
 const TEMP_DB_NAME: &str = ":memory:";
@@ -29,13 +29,13 @@ const SQL_GET_LAST_BLOCK: &str = "SELECT * FROM blocks ORDER BY id DESC LIMIT 1;
 const SQL_TRUNCATE_BLOCKS: &str = "DELETE FROM blocks WHERE id >= ?;";
 const SQL_TRUNCATE_DOMAINS: &str = "DELETE FROM domains WHERE id >= ?;";
 
-const SQL_ADD_DOMAIN: &str = "INSERT INTO domains (id, timestamp, identity, confirmation, data, owner) VALUES (?, ?, ?, ?, ?, ?)";
+const SQL_ADD_DOMAIN: &str = "INSERT INTO domains (id, timestamp, identity, confirmation, data, signing, encryption) VALUES (?, ?, ?, ?, ?, ?, ?)";
 const SQL_GET_BLOCK_BY_ID: &str = "SELECT * FROM blocks WHERE id=? LIMIT 1;";
 const SQL_GET_LAST_FULL_BLOCK: &str = "SELECT * FROM blocks WHERE id < ? AND `transaction`<>'' ORDER BY id DESC LIMIT 1;";
 const SQL_GET_LAST_FULL_BLOCK_FOR_KEY: &str = "SELECT * FROM blocks WHERE id < ? AND `transaction`<>'' AND pub_key = ? ORDER BY id DESC LIMIT 1;";
-const SQL_GET_DOMAIN_OWNER_BY_ID: &str = "SELECT owner FROM domains WHERE id < ? AND identity = ? LIMIT 1;";
+const SQL_GET_DOMAIN_OWNER_BY_ID: &str = "SELECT signing FROM domains WHERE id < ? AND identity = ? LIMIT 1;";
 const SQL_GET_DOMAIN_BY_ID: &str = "SELECT * FROM domains WHERE identity = ? ORDER BY id DESC LIMIT 1;";
-const SQL_GET_DOMAINS_BY_KEY: &str = "SELECT * FROM domains WHERE owner = ?;";
+const SQL_GET_DOMAINS_BY_KEY: &str = "SELECT * FROM domains WHERE signing = ?;";
 
 const SQL_GET_OPTIONS: &str = "SELECT * FROM options;";
 
@@ -237,8 +237,8 @@ impl Chain {
         let transaction = block.transaction.clone();
         if self.add_block_to_table(block).is_ok() {
             if let Some(mut transaction) = transaction {
-                if transaction.owner.is_empty() {
-                    transaction.owner = owner;
+                if transaction.signing.is_empty() {
+                    transaction.signing = owner;
                 }
                 self.add_transaction_to_table(index, timestamp, &transaction).expect("Error adding transaction");
             }
@@ -374,7 +374,8 @@ impl Chain {
         statement.bind(3, &**t.identity)?;
         statement.bind(4, &**t.confirmation)?;
         statement.bind(5, t.data.as_ref() as &str)?;
-        statement.bind(6, &**t.owner)?;
+        statement.bind(6, &**t.signing)?;
+        statement.bind(7, &**t.encryption)?;
         statement.next()
     }
 
@@ -534,7 +535,7 @@ impl Chain {
             return WrongZone;
         }
         if let Some(transaction) = self.get_domain_transaction(&name) {
-            if transaction.owner.ne(pub_key) {
+            if transaction.signing.ne(pub_key) {
                 return NotOwned;
             }
         }
@@ -568,10 +569,11 @@ impl Chain {
             }
             let identity = Bytes::from_bytes(&statement.read::<Vec<u8>>(2).unwrap());
             let confirmation = Bytes::from_bytes(&statement.read::<Vec<u8>>(3).unwrap());
-            let class = String::from("domain");
+            let class = String::from(CLASS_DOMAIN);
             let data = statement.read::<String>(4).unwrap();
-            let pub_key = Bytes::from_bytes(&statement.read::<Vec<u8>>(5).unwrap());
-            let transaction = Transaction { identity, confirmation, class, data, owner: pub_key };
+            let signing = Bytes::from_bytes(&statement.read::<Vec<u8>>(5).unwrap());
+            let encryption = Bytes::from_bytes(&statement.read::<Vec<u8>>(6).unwrap());
+            let transaction = Transaction { identity, confirmation, class, data, signing, encryption };
             debug!("Found transaction for domain {}: {:?}", domain, &transaction);
             if transaction.check_identity(domain) {
                 return Some(transaction);
@@ -604,11 +606,12 @@ impl Chain {
             let confirmation = Bytes::from_bytes(&statement.read::<Vec<u8>>(3).unwrap());
             let class = String::from(CLASS_DOMAIN);
             let data = statement.read::<String>(4).unwrap();
-            let owner = Bytes::from_bytes(&statement.read::<Vec<u8>>(5).unwrap());
-            let transaction = Transaction { identity: identity.clone(), confirmation: confirmation.clone(), class, data, owner };
+            let signing = Bytes::from_bytes(&statement.read::<Vec<u8>>(5).unwrap());
+            let encryption = Bytes::from_bytes(&statement.read::<Vec<u8>>(6).unwrap());
+            let transaction = Transaction { identity: identity.clone(), confirmation: confirmation.clone(), class, data, signing, encryption };
             debug!("Found transaction for domain {:?}", &transaction);
             if let Some(data) = transaction.get_domain_data() {
-                let decrypted = keystore.decrypt(data.domain.as_slice(), &confirmation.as_slice()[..12]);
+                let decrypted = keystore.decrypt(data.encrypted.as_slice());
                 let mut domain = String::from_utf8(decrypted.to_vec()).unwrap();
                 if domain.is_empty() {
                     domain = String::from("unknown");

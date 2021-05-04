@@ -16,16 +16,16 @@ pub struct Block {
     pub difficulty: u32,
     pub random: u32,
     pub nonce: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub transaction: Option<Transaction>,
-    #[serde(default, skip_serializing_if = "Bytes::is_zero")]
-    pub prev_block_hash: Bytes,
     #[serde(default, skip_serializing_if = "Bytes::is_zero")]
     pub hash: Bytes,
+    #[serde(default, skip_serializing_if = "Bytes::is_zero")]
+    pub prev_block_hash: Bytes,
     #[serde(default, skip_serializing_if = "Bytes::is_zero")]
     pub pub_key: Bytes,
     #[serde(default, skip_serializing_if = "Bytes::is_zero")]
     pub signature: Bytes,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction: Option<Transaction>,
 }
 
 impl Block {

@@ -11,82 +11,111 @@ use std::path::Path;
 use std::sync::{Arc, atomic, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 
+use serde::{Deserialize, Serialize};
 use ed25519_dalek::Keypair;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
 use crate::blockchain::hash_utils::*;
-use crate::{Context, setup_miner_thread};
+use crate::{Context, setup_miner_thread, to_hex, from_hex};
 use crate::event::Event;
 use crate::commons::KEYSTORE_DIFFICULTY;
 use crate::bytes::Bytes;
+use crate::crypto::CryptoBox;
 use blakeout::Blakeout;
 use std::time::Instant;
 use std::cell::RefCell;
 use self::ed25519_dalek::{Signer, PublicKey, Verifier, SecretKey};
 use self::ed25519_dalek::ed25519::signature::Signature;
 use rand_old::{CryptoRng, RngCore};
-use rand_old::rngs::OsRng;
-use crate::crypto::Chacha;
 
 #[derive(Debug)]
 pub struct Keystore {
     keypair: Keypair,
     hash: RefCell<Bytes>,
     path: String,
-    chacha: Chacha
+    crypto_box: CryptoBox
 }
 
 impl Keystore {
     pub fn new() -> Self {
-        let mut csprng = OsRng::default();
+        let mut csprng = rand_old::thread_rng();
         let keypair = ed25519_dalek::Keypair::generate(&mut csprng);
-        let chacha = get_chacha(&keypair);
-        Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new(), chacha }
+        let crypto_box = CryptoBox::generate(&mut csprng);
+        Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new(), crypto_box }
     }
 
     pub fn from_random<R>(csprng: &mut R) -> Self where R: CryptoRng + RngCore {
         let keypair = ed25519_dalek::Keypair::generate(csprng);
-        let chacha = get_chacha(&keypair);
-        Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new(), chacha }
+        let crypto_box = CryptoBox::generate(csprng);
+        Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new(), crypto_box }
     }
 
     pub fn from_bytes(seed: &[u8]) -> Self {
         let keypair = Keypair::from_bytes(seed).expect("Error creating keypair from bytes!");
-        let chacha = get_chacha(&keypair);
-        Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new(), chacha }
+        let mut csprng = rand_old::thread_rng();
+        let crypto_box = CryptoBox::generate(&mut csprng);
+        Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new(), crypto_box }
     }
 
     pub fn from_random_bytes(key: &[u8]) -> Self {
         let secret = SecretKey::from_bytes(&key).unwrap();
         let public = PublicKey::from(&secret);
         let keypair = Keypair { secret, public };
-        let chacha = get_chacha(&keypair);
-        Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new(), chacha }
+        let mut csprng = rand_old::thread_rng();
+        let crypto_box = CryptoBox::generate(&mut csprng);
+        Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new(), crypto_box }
     }
 
     pub fn from_file(filename: &str, _password: &str) -> Option<Self> {
         let path = Path::new(filename);
         match fs::read(&path) {
             Ok(key) => {
-                if key.len() == 32 {
-                    let mut keystore = Keystore::from_random_bytes(key.as_slice());
-                    keystore.path = path.to_str().unwrap().to_owned();
-                    let bytes = Bytes::from_bytes(&keystore.keypair.public.to_bytes());
-                    return if check_public_key_strength(&bytes, KEYSTORE_DIFFICULTY) {
-                        Some(keystore)
-                    } else {
-                        None
-                    };
+                return match key.len() {
+                    32 => {
+                        let mut keystore = Keystore::from_random_bytes(key.as_slice());
+                        keystore.path = path.to_str().unwrap().to_owned();
+                        let bytes = Bytes::from_bytes(&keystore.keypair.public.to_bytes());
+                        if check_public_key_strength(&bytes, KEYSTORE_DIFFICULTY) {
+                            warn!("Loaded key from OLD format! Please, resave it!");
+                            Some(keystore)
+                        } else {
+                            None
+                        }
+                    }
+                    64 => {
+                        let mut keystore = Self::from_bytes(key.as_slice());
+                        keystore.path = path.to_str().unwrap().to_owned();
+                        let bytes = Bytes::from_bytes(&keystore.keypair.public.to_bytes());
+                        if check_public_key_strength(&bytes, KEYSTORE_DIFFICULTY) {
+                            warn!("Loaded key from OLD format! Please, resave it!");
+                            Some(keystore)
+                        } else {
+                            None
+                        }
+                    }
+                    _ => {
+                        match toml::from_slice::<Keys>(key.as_slice()) {
+                            Ok(keys) => {
+                                let secret = SecretKey::from_bytes(&from_hex(&keys.signing.secret).unwrap()).unwrap();
+                                let public = PublicKey::from_bytes(&from_hex(&keys.signing.public).unwrap()).unwrap();
+                                let keypair = Keypair { secret, public };
+                                let crypto_box = CryptoBox::from_strings(&keys.encryption.secret, &keys.encryption.public);
+                                let keystore = Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::from(filename), crypto_box };
+                                let bytes = Bytes::from_bytes(&keystore.keypair.public.to_bytes());
+                                if check_public_key_strength(&bytes, KEYSTORE_DIFFICULTY) {
+                                    Some(keystore)
+                                } else {
+                                    None
+                                }
+                            }
+                            Err(e) => {
+                                error!("Error loading keystore from {}: {}", filename, e);
+                                None
+                            }
+                        }
+                    }
                 }
-                let mut keystore = Self::from_bytes(key.as_slice());
-                keystore.path = path.to_str().unwrap().to_owned();
-                let bytes = Bytes::from_bytes(&keystore.keypair.public.to_bytes());
-                return if check_public_key_strength(&bytes, KEYSTORE_DIFFICULTY) {
-                    Some(keystore)
-                } else {
-                    None
-                };
             }
             Err(_) => {
                 None
@@ -98,8 +127,9 @@ impl Keystore {
         match File::create(Path::new(filename)) {
             Ok(mut f) => {
                 //TODO implement key encryption
-                let bytes = self.keypair.to_bytes();
-                f.write_all(&bytes).expect("Error saving keystore");
+                let keys = self.get_keys();
+                let data = toml::to_string(&keys).unwrap();
+                f.write_all(data.trim().as_bytes()).expect("Error saving keystore");
                 self.path = filename.to_owned();
             }
             Err(_) => { error!("Error saving key file!"); }
@@ -112,6 +142,16 @@ impl Keystore {
 
     pub fn get_private(&self) -> Bytes {
         Bytes::from_bytes(&self.keypair.secret.to_bytes())
+    }
+
+    pub fn get_encryption_public(&self) -> Bytes {
+        Bytes::from_bytes(self.crypto_box.public.as_bytes())
+    }
+
+    pub fn get_keys(&self) -> Keys {
+        let signing = KeyPack::new(to_hex(&self.keypair.public.to_bytes()), to_hex(&self.keypair.secret.to_bytes()));
+        let encryption = KeyPack::new(to_hex(&self.crypto_box.public.to_bytes()), to_hex(&self.crypto_box.secret.to_bytes()));
+        Keys::new(false, signing, encryption)
     }
 
     pub fn get_path(&self) -> &str {
@@ -138,13 +178,13 @@ impl Keystore {
         }
     }
 
-    pub fn encrypt(&self, message: &[u8], nonce: &[u8]) -> Bytes {
-        let encrypted = self.chacha.encrypt(message, nonce);
+    pub fn encrypt(&self, message: &[u8]) -> Bytes {
+        let encrypted = self.crypto_box.hide(message).unwrap();
         Bytes::from_bytes(&encrypted)
     }
 
-    pub fn decrypt(&self, message: &[u8], nonce: &[u8]) -> Bytes {
-        let decrypted = self.chacha.decrypt(message, nonce);
+    pub fn decrypt(&self, message: &[u8]) -> Bytes {
+        let decrypted = self.crypto_box.reveal(message).unwrap();
         Bytes::from_bytes(&decrypted)
     }
 }
@@ -152,7 +192,7 @@ impl Keystore {
 impl Clone for Keystore {
     fn clone(&self) -> Self {
         let keypair = Keypair::from_bytes(&self.keypair.to_bytes()).unwrap();
-        Self { keypair, hash: RefCell::new(Bytes::default()), path: self.path.clone(), chacha: self.chacha.clone() }
+        Self { keypair, hash: RefCell::new(Bytes::default()), path: self.path.clone(), crypto_box: self.crypto_box.clone() }
     }
 }
 
@@ -227,10 +267,12 @@ fn generate_key(difficulty: u32, mining: Arc<AtomicBool>) -> Option<Keystore> {
     let mut buf = [0u8; 32];
     loop {
         rng.fill_bytes(&mut buf);
-        let keystore = Keystore::from_random_bytes(&buf);
+        let secret = SecretKey::from_bytes(&buf).unwrap();
+        let public = PublicKey::from(&secret);
         digest.reset();
-        digest.update(keystore.get_public().as_slice());
+        digest.update(public.as_bytes());
         if key_hash_difficulty(digest.result()) >= difficulty {
+            let keystore = Keystore::from_random_bytes(&buf);
             info!("Generated keypair with public key: {:?} and hash {:?}", &keystore.get_public(), &keystore.get_hash());
             return Some(keystore);
         }
@@ -247,11 +289,29 @@ fn generate_key(difficulty: u32, mining: Arc<AtomicBool>) -> Option<Keystore> {
     }
 }
 
-fn get_chacha(keypair: &Keypair) -> Chacha {
-    let mut digest = Blakeout::new();
-    digest.update(&keypair.to_bytes());
-    let seed = digest.result();
-    Chacha::new(seed)
+#[derive(Serialize, Deserialize, Debug)]
+pub struct KeyPack {
+    public: String,
+    secret: String
+}
+
+impl KeyPack {
+    pub fn new(public: String, secret: String) -> Self {
+        Self { public, secret }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Keys {
+    encrypted: bool,
+    signing: KeyPack,
+    encryption: KeyPack
+}
+
+impl Keys {
+    pub fn new(encrypted: bool, signing: KeyPack, encryption: KeyPack) -> Self {
+        Self { encrypted, signing, encryption }
+    }
 }
 
 #[cfg(test)]

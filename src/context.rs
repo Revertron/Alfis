@@ -26,20 +26,6 @@ impl Context {
         }
     }
 
-    /// Load keystore and return Context
-    pub fn load_keystore<S: Into<String>>(mut self, name: S, password: S) -> Context {
-        let filename = &name.into();
-        match Keystore::from_file(filename, &password.into()) {
-            None => {
-                warn!("Error loading keystore '{}'!", filename);
-            },
-            Some(keystore) => {
-                self.keystore = Some(keystore);
-            },
-        }
-        self
-    }
-
     pub fn get_keystore(&self) -> Option<Keystore> {
         self.keystore.clone()
     }

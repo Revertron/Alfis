@@ -1,5 +1,6 @@
 var recordsBuffer = [];
-var owner = "";
+var ownerSigning = "";
+var ownerEncryption = "";
 var availableZones = [];
 var myDomains = [];
 var currentZone;
@@ -235,13 +236,13 @@ function createDomain() {
     var new_domain = document.getElementById("new_domain").value.toLowerCase();
     var domain = new_domain + "." + currentZone.name;
     var data = {};
-    data.domain = "";
+    data.encrypted = "";
     data.zone = currentZone.name;
     data.info = "";
     data.records = recordsBuffer;
     data.contacts = []; // TODO make a dialog to fill them
     data = JSON.stringify(data);
-    external.invoke(JSON.stringify({cmd: 'mineDomain', name: domain, data: data, owner: owner}));
+    external.invoke(JSON.stringify({cmd: 'mineDomain', name: domain, data: data, signing: ownerSigning, encryption: ownerEncryption}));
 }
 
 function domainMiningStarted() {
@@ -318,11 +319,6 @@ function showOwnerDialog() {
     dialog.className = "modal is-active";
 }
 
-function showContactsDialog() {
-    var dialog = document.getElementById("contacts_dialog");
-    dialog.className = "modal is-active";
-}
-
 function isValidOwner(text) {
     if (text.length != 64) {
         return false;
@@ -332,17 +328,20 @@ function isValidOwner(text) {
 }
 
 function ownerPositiveButton() {
-    var text = document.getElementById("owner_text").value;
-    if (text != "") {
-        if (isValidOwner(text)) {
-            owner = text;
+    var signing = document.getElementById("owner_signing").value;
+    var encryption = document.getElementById("owner_encryption").value;
+    if (signing != "" && encryption != "") {
+        if (isValidOwner(signing) && isValidOwner(encryption)) {
+            ownerSigning = signing;
+            ownerEncryption = encryption;
         } else {
             alert("Wrong owner '{}'!".replace("{}", value));
             wrong = true;
             return;
         }
     } else {
-        owner = "";
+        ownerSigning = "";
+        ownerEncryption = "";
     }
     var dialog = document.getElementById("owner_dialog");
     dialog.className = "modal";
@@ -353,16 +352,35 @@ function ownerCancelButton() {
     dialog.className = "modal";
 }
 
+function showContactsDialog() {
+    var dialog = document.getElementById("contacts_dialog");
+    dialog.className = "modal is-active";
+}
+
+function contactsPositiveButton() {
+    var dialog = document.getElementById("contacts_dialog");
+    dialog.className = "modal";
+}
+
+function contactsNegativeButton() {
+    var dialog = document.getElementById("contacts_dialog");
+    dialog.className = "modal";
+}
+
+function showDomainInfoDialog() {
+
+}
+
 function showWarning(text) {
     var warning = document.getElementById("notification_warning");
     var message = document.getElementById("warning_text");
     message.innerHTML = text;
 
-    warning.className = "notification is-warning";
+    warning.className = "notification mini is-warning";
     var button = document.getElementById("warning_close");
     button.onclick = function() {
         message.value = "";
-        warning.className = "notification is-warning is-hidden";
+        warning.className = "notification mini is-warning is-hidden";
     }
     setTimeout(button.onclick, 5000);
 }
@@ -372,11 +390,11 @@ function showSuccess(text) {
     var message = document.getElementById("success_text");
     message.innerHTML = text;
 
-    warning.className = "notification is-success";
+    warning.className = "notification mini is-success";
     var button = document.getElementById("success_close");
     button.onclick = function() {
         message.value = "";
-        warning.className = "notification is-success is-hidden";
+        warning.className = "notification mini is-success is-hidden";
     }
 }
 

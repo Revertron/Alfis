@@ -12,7 +12,7 @@ use crate::{Block, Bytes, Context, Keystore, setup_miner_thread};
 use crate::commons::*;
 use crate::blockchain::types::BlockQuality;
 use crate::blockchain::hash_utils::*;
-use crate::keys::check_public_key_strength;
+use crate::keystore::check_public_key_strength;
 use crate::event::Event;
 use blakeout::Blakeout;
 use std::thread::sleep;

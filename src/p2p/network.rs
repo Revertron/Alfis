@@ -137,8 +137,13 @@ impl Network {
                 if !events.is_empty() {
                     last_events_time = Instant::now();
                 } else if last_events_time.elapsed().as_secs() > MAX_IDLE_SECONDS {
-                    warn!("Something is wrong with swarm connections, closing all.");
-                    peers.close_all_peers(poll.registry());
+                    if peers.get_peers_count() > 0 {
+                        warn!("Something is wrong with swarm connections, closing all.");
+                        peers.close_all_peers(poll.registry());
+                        continue;
+                    } else {
+                        thread::sleep(POLL_TIMEOUT.unwrap());
+                    }
                 }
 
                 if ui_timer.elapsed().as_millis() > UI_REFRESH_DELAY_MS {

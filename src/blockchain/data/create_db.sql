@@ -20,7 +20,8 @@ CREATE TABLE domains (
     'identity' BINARY,
     'confirmation' BINARY,
     'data' TEXT,
-    'owner' BINARY
+    'signing' BINARY,
+    'encryption' BINARY
 );
 CREATE INDEX ids ON domains ('identity');
 

@@ -208,8 +208,8 @@ fn create_genesis_if_needed(context: &Arc<Mutex<Context>>, miner: &Arc<Mutex<Min
     if origin.is_empty() && last_block.is_none() {
         if let Some(keystore) = &context.keystore {
             // If blockchain is empty, we are going to mine a Genesis block
-            let transaction = Transaction::origin(Chain::get_zones_hash(), context.get_keystore().unwrap().get_public());
-            let block = Block::new(Some(transaction), context.get_keystore().unwrap().get_public(), Bytes::default(), ORIGIN_DIFFICULTY);
+            let transaction = Transaction::origin(Chain::get_zones_hash(), keystore.get_public(), keystore.get_encryption_public());
+            let block = Block::new(Some(transaction), keystore.get_public(), Bytes::default(), ORIGIN_DIFFICULTY);
             miner.lock().unwrap().add_block(block, keystore.clone());
         }
     }

@@ -7,14 +7,14 @@ pub use crate::miner::Miner;
 pub use crate::p2p::Network;
 pub use crate::settings::Settings;
 pub use crate::bytes::Bytes;
-pub use crate::keys::Keystore;
+pub use crate::keystore::Keystore;
 pub use crate::simplebus::*;
 pub use crate::commons::*;
 
 pub mod blockchain;
 pub mod commons;
 pub mod simplebus;
-pub mod keys;
+pub mod keystore;
 pub mod miner;
 pub mod context;
 pub mod event;

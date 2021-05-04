@@ -37,7 +37,7 @@ pub const LISTEN_PORT: u16 = 4244;
 pub const UI_REFRESH_DELAY_MS: u128 = 250;
 pub const LOG_REFRESH_DELAY_SEC: u64 = 60;
 
-pub const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(25000));
+pub const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(250));
 pub const MAX_PACKET_SIZE: usize = 1 * 1024 * 1024; // 1 Mb
 pub const MAX_READ_BLOCK_TIME: u128 = 500;
 pub const MAX_RECONNECTS: u32 = 5;

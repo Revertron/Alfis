@@ -63,7 +63,12 @@
                 <button class="button is-link" id="new_key_button" onclick="createKey();" title="Generate new keypair, suitable to mine domains">Mine new key</button>
             </div>
         </div>
-        <p class="help">To mine domains you need to mine a strong pair of keys.</p>
+        <p class="help">To mine domains you need to mine a strong pair of signing keys and a pair of encryption keys.</p>
+
+        <div class="notification is-warning mt-4">
+            <!--<button class="delete"></button>-->
+            If you have old keys in 32 or 64 byte format <strong>you need to save them to a new TOML format</strong>, otherwise you may encounter grave consequences!
+        </div>
     </div>
 
     <!-- Domain mining -->
@@ -188,9 +193,9 @@
                         </div>
                         <div class="dropdown-menu" id="advanced-menu" role="menu">
                             <div class="dropdown-content">
-                                <a class="dropdown-item" onclick="showOwnerDialog();" title="You can change domain owner. Leave empty to be yours only.">Change owner</a>
-                                <a class="dropdown-item" onclick="showContactsDialog();" title="You can add contact information to your domain, if you wish">Set contacts</a>
-                                <a class="dropdown-item">Set info</a>
+                                <a class="dropdown-item" onclick="showOwnerDialog();" title="You can change domain owner. Leave empty to be yours only.">Change domain owner</a>
+                                <a class="dropdown-item" onclick="showContactsDialog();" title="You can add contact information to your domain, if you wish.">Set owner contacts</a>
+                                <a class="dropdown-item" onclick="showDomainInfoDialog();" title="Set some information about your domain.">Set domain info</a>
                             </div>
                         </div>
                     </div>
@@ -221,18 +226,27 @@
     <div class="modal-content">
         <div class="box">
             <div class="field">
-                <label class="label">Public keys</label>
+                <label class="label">Signing public key</label>
                 <div class="control is-expanded has-icons-left">
-                    <input class="input is-expanded" type="text" placeholder="Public key" id="owner_text">
+                    <input class="input is-expanded" type="text" placeholder="Signing public key" id="owner_signing">
                     <span class="icon is-small is-left">
                         <svg viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path d="M12,17A2,2 0 0,0 14,15C14,13.89 13.1,13 12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17M18,8A2,2 0 0,1 20,10V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V10C4,8.89 4.9,8 6,8H7V6A5,5 0 0,1 12,1A5,5 0 0,1 17,6V8H18M12,3A3,3 0 0,0 9,6V8H15V6A3,3 0 0,0 12,3Z"></path></svg>
                     </span>
                 </div>
             </div>
-            <p class="help mb-3">Domains can be owned by several people.
-                You need to add their public keys in this text field, separated by new line.
-                If you don't include your own key, then domain will be completely transferred to entered owner.
-                If you wish to own domain by yourself, just leave this space empty.</p>
+            <div class="field">
+                <label class="label">Encryption public key</label>
+                <div class="control is-expanded has-icons-left">
+                    <input class="input is-expanded" type="text" placeholder="Encryption public key" id="owner_encryption">
+                    <span class="icon is-small is-left">
+                        <svg viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path d="M12,17A2,2 0 0,0 14,15C14,13.89 13.1,13 12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17M18,8A2,2 0 0,1 20,10V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V10C4,8.89 4.9,8 6,8H7V6A5,5 0 0,1 12,1A5,5 0 0,1 17,6V8H18M12,3A3,3 0 0,0 9,6V8H15V6A3,3 0 0,0 12,3Z"></path></svg>
+                    </span>
+                </div>
+            </div>
+            <p class="help mb-3">
+                If you wish to transfer this domain to another owner, you need to set new owners public keys.
+                Signing public key to the first field. And encryption public key to the second field.
+                If you don't want to transfer just leave both fields empty.</p>
             <div class="buttons is-grouped is-centered">
                 <button class="button is-link" id="owner_positive_button" onclick="ownerPositiveButton();">Ok</button>
                 <button class="button is-link is-light" id="owner_negative_button" onclick="ownerCancelButton();">Cancel</button>
@@ -342,12 +356,12 @@
     </div>
 </div>
 
-<div class="notification is-warning is-hidden" id="notification_warning">
+<div class="notification mini is-warning is-hidden" id="notification_warning">
     <button class="delete" id="warning_close"></button>
     <p id="warning_text"></p>
 </div>
 
-<div class="notification is-success is-hidden" id="notification_success">
+<div class="notification mini is-success is-hidden" id="notification_success">
     <button class="delete" id="success_close"></button>
     <p id="success_text"></p>
 </div>

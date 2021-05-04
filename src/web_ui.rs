@@ -15,8 +15,7 @@ use serde::Deserialize;
 use web_view::Content;
 
 use alfis::{Block, Bytes, Context, Keystore, Transaction};
-use alfis::keys;
-use alfis::blockchain::hash_utils::hash_identity;
+use alfis::keystore;
 use alfis::blockchain::transaction::DomainData;
 use alfis::blockchain::types::MineResult;
 use alfis::commons::*;
@@ -26,6 +25,7 @@ use alfis::miner::Miner;
 use Cmd::*;
 
 use self::web_view::{Handle, WebView};
+use alfis::crypto::CryptoBox;
 
 pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let file_content = include_str!("webview/index.html");
@@ -49,12 +49,12 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
             match serde_json::from_str(arg).unwrap() {
                 Loaded => { action_loaded(&context, web_view); }
                 LoadKey => { action_load_key(&context, web_view); }
-                CreateKey => { keys::create_key(Arc::clone(&context)); }
+                CreateKey => { keystore::create_key(Arc::clone(&context)); }
                 SaveKey => { action_save_key(&context); }
                 CheckRecord { data } => { action_check_record(web_view, data); }
                 CheckDomain { name } => { action_check_domain(&context, web_view, name); }
-                MineDomain { name, data, owner } => {
-                    action_create_domain(Arc::clone(&context), Arc::clone(&miner), web_view, name, data, owner);
+                MineDomain { name, data, signing, encryption } => {
+                    action_create_domain(Arc::clone(&context), Arc::clone(&miner), web_view, name, data, signing, encryption);
                 }
                 TransferDomain { .. } => {}
                 StopMining => { context.lock().unwrap().bus.post(Event::ActionStopMining); }
@@ -126,10 +126,13 @@ fn action_save_key(context: &Arc<Mutex<Context>>) {
     if context.lock().unwrap().get_keystore().is_none() {
         return;
     }
-    let result = tfd::save_file_dialog_with_filter("Save keys file", "", &["*.key"], "Key files (*.key)");
+    let result = tfd::save_file_dialog_with_filter("Save keys file", "", &["*.toml"], "Key files (*.toml)");
     match result {
         None => {}
-        Some(new_path) => {
+        Some(mut new_path) => {
+            if !new_path.ends_with(".toml") {
+                new_path.push_str(".toml");
+            }
             let mut context = context.lock().unwrap();
             let path = new_path.clone();
             if let Some(mut keystore) = context.get_keystore() {
@@ -144,7 +147,7 @@ fn action_save_key(context: &Arc<Mutex<Context>>) {
 }
 
 fn action_load_key(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
-    let result = tfd::open_file_dialog("Open keys file", "", Some((&["*.key"], "*.key")));
+    let result = tfd::open_file_dialog("Open keys file", "", Some((&["*.key", "*.toml"], "Key files")));
     match result {
         None => {}
         Some(file_name) => {
@@ -155,7 +158,7 @@ fn action_load_key(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                     event_fail(web_view, &format!("Error loading key from \\'{}\\'!", &file_name));
                 }
                 Some(keystore) => {
-                    info!("Loaded keystore with key: {:?}", &keystore.get_public());
+                    info!("Loaded keystore with key: {:?}", &keystore);
                     let mut c = context.lock().unwrap();
                     let path = keystore.get_path().to_owned();
                     let public = keystore.get_public().to_string();
@@ -332,7 +335,7 @@ fn load_domains(context: &mut MutexGuard<Context>, handle: &Handle<()>) {
     });
 }
 
-fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, web_view: &mut WebView<()>, name: String, data: String, owner: String) {
+fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, web_view: &mut WebView<()>, name: String, data: String, signing: String, encryption: String) {
     debug!("Creating domain with data: {}", &data);
     let c = Arc::clone(&context);
     let context = context.lock().unwrap();
@@ -358,11 +361,6 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
             return;
         }
     };
-    let owner = if !owner.is_empty() {
-        Bytes::new(from_hex(&owner).unwrap())
-    } else {
-        Bytes::default()
-    };
     // Check if yggdrasil only quality of zone is not violated
     let zones = context.chain.get_zones();
     for z in zones {
@@ -378,10 +376,20 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
             }
         }
     }
+    let signing = if !signing.is_empty() {
+        Bytes::new(from_hex(&signing).unwrap())
+    } else {
+        Bytes::default()
+    };
+    let encryption = if !encryption.is_empty() {
+        Bytes::new(from_hex(&encryption).unwrap())
+    } else {
+        Bytes::default()
+    };
     match context.chain.can_mine_domain(context.chain.get_height(), &name, &pub_key) {
         MineResult::Fine => {
             std::mem::drop(context);
-            create_domain(c, miner, CLASS_DOMAIN, &name, data, DOMAIN_DIFFICULTY, &keystore, owner);
+            create_domain(c, miner, CLASS_DOMAIN, &name, data, DOMAIN_DIFFICULTY, &keystore, signing, encryption);
             let _ = web_view.eval("domainMiningStarted();");
             event_info(web_view, &format!("Mining of domain \\'{}\\' has started", &name));
         }
@@ -487,13 +495,18 @@ fn format_event_now(kind: &str, message: &str) -> String {
     format!("addEvent('{}', '{}', '{}');", kind, time.format("%d.%m.%y %X"), message)
 }
 
-fn create_domain(_context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, class: &str, name: &str, mut data: DomainData, difficulty: u32, keystore: &Keystore, owner: Bytes) {
+fn create_domain(_context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, class: &str, name: &str, mut data: DomainData, difficulty: u32, keystore: &Keystore, signing: Bytes, encryption: Bytes) {
     let name = name.to_owned();
-    let confirmation = hash_identity(&name, Some(&keystore.get_public()));
-    data.domain = keystore.encrypt(name.as_bytes(), &confirmation.as_slice()[..12]);
+    let encrypted = CryptoBox::encrypt(encryption.as_slice(), name.as_bytes()).expect("Error encrypting domain name!");
+    data.encrypted = Bytes::from_bytes(&encrypted);
 
     let data = serde_json::to_string(&data).unwrap();
-    let transaction = Transaction::from_str(name, class.to_owned(), data, keystore.get_public().clone(), owner);
+    let (signing, encryption) = if signing.is_empty() || encryption.is_empty() {
+        (keystore.get_public(), keystore.get_encryption_public())
+    } else {
+        (signing, encryption)
+    };
+    let transaction = Transaction::from_str(name, class.to_owned(), data, signing, encryption);
     let block = Block::new(Some(transaction), keystore.get_public(), Bytes::default(), difficulty);
     miner.lock().unwrap().add_block(block, keystore.clone());
 }
@@ -507,7 +520,7 @@ pub enum Cmd {
     SaveKey,
     CheckRecord { data: String },
     CheckDomain { name: String },
-    MineDomain { name: String, data: String, owner: String },
+    MineDomain { name: String, data: String, signing: String, encryption: String },
     TransferDomain { name: String, owner: String },
     StopMining,
     Open { link: String },
