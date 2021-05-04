@@ -204,10 +204,6 @@
                 <div class="control">
                     <div class="buttons has-addons">
                         <button id="add_record_button" class="button is-link is-light" onclick="showNewRecordDialog();" title="Domain is nothing without good DNS records">Add record</button>
-                        <!--<button disabled id="owner_button" class="button is-link is-light" onclick="showOwnerDialog();" title="You can change domain owner. Leave empty to be yours only.">
-                            <span>Set owner</span><span id="owner_count" class="tag is-info is-hidden ml-2">0</span>
-                        </button>
-                        <button disabled id="add_contacts_button" class="button is-link is-light" onclick="showContactsDialog();" title="You can add contact information to your domain, if you wish">Set contacts</button>-->
                         <button id="new_domain_button" class="button is-link" onclick="createDomain();" title="Start mining">Mine domain</button>
                     </div>
                 </div>
@@ -262,7 +258,7 @@
             <div class="field">
                 <label class="label">Domain owner contacts</label>
                 <div class="control">
-                    <textarea class="textarea" id="contacts_text"></textarea>
+                    <textarea class="textarea" id="contacts_text" maxlength="250"></textarea>
                 </div>
             </div>
             <p class="help mb-3">You can add some contacts to your domain if you wish to be contacted in regards of your services.
@@ -270,6 +266,25 @@
             <div class="buttons is-grouped is-centered">
                 <button class="button is-link" id="contacts_positive_button" onclick="contactsPositiveButton();">Ok</button>
                 <button class="button is-link is-light" id="contacts_negative_button" onclick="contactsCancelButton();">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="info_dialog" class="modal">
+    <div class="modal-background"></div>
+    <div class="modal-content">
+        <div class="box">
+            <div class="field">
+                <label class="label">Some description about your domain</label>
+                <div class="control">
+                    <textarea class="textarea" id="info_text" maxlength="250"></textarea>
+                </div>
+            </div>
+            <p class="help mb-3">You can add some description to your domain if you wish for users or search engines to know what is it about.</p>
+            <div class="buttons is-grouped is-centered">
+                <button class="button is-link" id="info_positive_button" onclick="infoPositiveButton();">Ok</button>
+                <button class="button is-link is-light" id="info_negative_button" onclick="infoCancelButton();">Cancel</button>
             </div>
         </div>
     </div>

@@ -238,11 +238,23 @@ function createDomain() {
     var data = {};
     data.encrypted = "";
     data.zone = currentZone.name;
-    data.info = "";
+    data.info = document.getElementById("info_text").value;
     data.records = recordsBuffer;
-    data.contacts = []; // TODO make a dialog to fill them
+    data.contacts = getContacts();
     data = JSON.stringify(data);
     external.invoke(JSON.stringify({cmd: 'mineDomain', name: domain, data: data, signing: ownerSigning, encryption: ownerEncryption}));
+}
+
+function getContacts() {
+    var result = [];
+    var text = document.getElementById("contacts_text").value;
+    if (value != "") {
+        var lines = value.split("\n");
+        lines.forEach(function(value, index, array) {
+            result.push(value);
+        });
+    }
+    return result;
 }
 
 function domainMiningStarted() {
@@ -368,7 +380,18 @@ function contactsNegativeButton() {
 }
 
 function showDomainInfoDialog() {
+    var dialog = document.getElementById("info_dialog");
+    dialog.className = "modal is-active";
+}
 
+function infoPositiveButton() {
+    var dialog = document.getElementById("info_dialog");
+    dialog.className = "modal";
+}
+
+function infoNegativeButton() {
+    var dialog = document.getElementById("info_dialog");
+    dialog.className = "modal";
 }
 
 function showWarning(text) {
