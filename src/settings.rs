@@ -52,7 +52,7 @@ impl Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            origin: String::from("0AE588D62D710422A7972EA1E8A659CC8E93DB59489ACE32C499CD279B000000"),
+            origin: String::from("00002883BB006454F795BE6902770B1A18D897B33A0AB1631F53C37C2F41F800"),
             key_file: String::from("default.key"),
             check_blocks: default_check_blocks(),
             net: Net::default(),

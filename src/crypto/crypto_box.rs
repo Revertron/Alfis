@@ -67,10 +67,7 @@ impl Clone for CryptoBox {
 #[cfg(test)]
 mod tests {
     use rand::RngCore;
-    use crate::{to_hex, from_hex};
-    use ed25519_dalek::Keypair;
     use crate::crypto::CryptoBox;
-    use ecies_ed25519::{encrypt, decrypt, SecretKey, PublicKey};
 
     const TEXT: &str = "Some very secret message";
 

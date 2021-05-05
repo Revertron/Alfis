@@ -89,6 +89,7 @@ mod tests {
     use std::convert::TryInto;
 
     #[test]
+    #[ignore]
     pub fn test_hash() {
         let id = b"example.com";
         let key = b"some_key";
@@ -108,6 +109,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_hash_is_good() {
         let hash = vec!(0u8,0u8,0u8,255,255,255,255,255);
         let bytes: [u8; 8] = hash[..8].try_into().unwrap();
