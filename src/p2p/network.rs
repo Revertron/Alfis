@@ -153,9 +153,8 @@ impl Network {
                         let height = context.chain.get_height();
                         let nodes = peers.get_peers_active_count();
                         let banned = peers.get_peers_banned_count();
-                        if nodes > 0 {
-                            context.bus.post(crate::event::Event::NetworkStatus { nodes, blocks: height });
-                        }
+                        context.bus.post(crate::event::Event::NetworkStatus { nodes, blocks: height });
+
                         if log_timer.elapsed().as_secs() > LOG_REFRESH_DELAY_SEC {
                             info!("Active nodes count: {}, banned count: {}, blocks count: {}", nodes, banned, height);
                             let elapsed = last_events_time.elapsed().as_secs();
@@ -164,7 +163,7 @@ impl Network {
                             }
                             log_timer = Instant::now();
                         }
-                        if nodes < MAX_NODES && connect_timer.elapsed().as_secs() >= 10 {
+                        if nodes < MAX_NODES && connect_timer.elapsed().as_secs() >= 5 {
                             peers.connect_new_peers(poll.registry(), &mut unique_token, yggdrasil_only);
                             connect_timer = Instant::now();
                         }

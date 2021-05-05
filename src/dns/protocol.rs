@@ -533,6 +533,26 @@ impl DnsRecord {
         }
     }
 
+    pub fn get_data(&self) -> Option<String> {
+        match *self {
+            DnsRecord::A { ref addr, .. } => Some(addr.to_string()),
+            DnsRecord::AAAA { ref addr, .. } => Some(addr.to_string()),
+            DnsRecord::NS { ref host, .. } => Some(host.clone()),
+            DnsRecord::CNAME { ref host, .. } => Some(host.clone()),
+            DnsRecord::SRV { ref host, .. } => Some(host.clone()),
+            DnsRecord::MX { ref host, .. } => Some(host.clone()),
+            DnsRecord::TXT { ref data, .. } => Some(data.clone()),
+            DnsRecord::SOA { ref m_name, ref r_name, .. } => {
+                let mut result = String::from(m_name);
+                result.push_str(" @ ");
+                result.push_str(r_name);
+                Some(result)
+            },
+            DnsRecord::UNKNOWN { ref domain, .. } => Some(domain.clone()),
+            DnsRecord::OPT { .. } => None,
+        }
+    }
+
     pub fn get_ttl(&self) -> u32 {
         match *self {
             DnsRecord::A {

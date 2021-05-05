@@ -26,6 +26,8 @@ pub const BLOCK_SIGNERS_START_RANDOM: i64 = 180;
 
 pub const NEW_DOMAINS_INTERVAL: i64 = 86400; // One day in seconds
 pub const DOMAIN_LIFETIME: i64 = 86400 * 365; // One year
+pub const MAX_RECORDS: usize = 30;
+pub const MAX_DATA_LEN: usize = 255;
 
 pub const DB_NAME: &str = "blockchain.db";
 pub const CLASS_ORIGIN: &str = "origin";
@@ -34,7 +36,7 @@ pub const ALFIS_DEBUG: &str = "ALFIS_DEBUG";
 
 /// Public nodes listen port
 pub const LISTEN_PORT: u16 = 4244;
-pub const UI_REFRESH_DELAY_MS: u128 = 250;
+pub const UI_REFRESH_DELAY_MS: u128 = 500;
 pub const LOG_REFRESH_DELAY_SEC: u64 = 60;
 
 pub const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(250));

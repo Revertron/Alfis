@@ -108,7 +108,15 @@ fn run_interface_loop(context: &mut Arc<Mutex<Context>>, interface: &mut WebView
 
 fn action_check_record(web_view: &mut WebView<()>, data: String) {
     match serde_json::from_str::<DnsRecord>(&data) {
-        Ok(_) => { web_view.eval("recordOkay(true)").expect("Error evaluating!"); }
+        Ok(record) => {
+            if let Some(string) = record.get_data() {
+                if string.len() > MAX_DATA_LEN {
+                    web_view.eval("recordOkay(false)").expect("Error evaluating!");
+                } else {
+                    web_view.eval("recordOkay(true)").expect("Error evaluating!");
+                }
+            }
+        }
         Err(e) => { web_view.eval("recordOkay(false)").expect("Error evaluating!"); dbg!(e); }
     }
 }
@@ -361,6 +369,11 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
             return;
         }
     };
+    if data.records.len() > MAX_RECORDS {
+        show_warning(web_view, "Too many records. Mining more than 30 records not allowed.");
+        let _ = web_view.eval("domainMiningUnavailable();");
+        return;
+    }
     // Check if yggdrasil only quality of zone is not violated
     let zones = context.chain.get_zones();
     for z in zones {

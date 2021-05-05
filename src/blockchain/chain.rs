@@ -756,6 +756,10 @@ impl Chain {
             }
             // Check if yggdrasil only property of zone is not violated
             if let Some(block_data) = transaction.get_domain_data() {
+                if block_data.records.len() > MAX_RECORDS {
+                    warn!("Someone mined too many records!");
+                    return Bad;
+                }
                 let zones = self.get_zones();
                 for z in zones {
                     if z.name == block_data.zone {
@@ -764,6 +768,12 @@ impl Chain {
                                 if !is_yggdrasil_record(record) {
                                     warn!("Someone mined domain with clearnet records for Yggdrasil only zone!");
                                     return Bad;
+                                }
+                                if let Some(data) = record.get_data() {
+                                    if data.len() > MAX_DATA_LEN {
+                                        warn!("Someone mined too long record!");
+                                        return Bad;
+                                    }
                                 }
                             }
                         }
