@@ -248,8 +248,8 @@ function createDomain() {
 function getContacts() {
     var result = [];
     var text = document.getElementById("contacts_text").value;
-    if (value != "") {
-        var lines = value.split("\n");
+    if (text != "") {
+        var lines = text.split("\n");
         lines.forEach(function(value, index, array) {
             result.push(value);
         });

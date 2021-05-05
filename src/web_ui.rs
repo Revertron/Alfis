@@ -166,7 +166,7 @@ fn action_load_key(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                     event_fail(web_view, &format!("Error loading key from \\'{}\\'!", &file_name));
                 }
                 Some(keystore) => {
-                    info!("Loaded keystore with key: {:?}", &keystore);
+                    info!("Loaded keystore with keys: {:?}, {:?}", &keystore.get_public(), &keystore.get_encryption_public());
                     let mut c = context.lock().unwrap();
                     let path = keystore.get_path().to_owned();
                     let public = keystore.get_public().to_string();
@@ -389,15 +389,10 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
             }
         }
     }
-    let signing = if !signing.is_empty() {
-        Bytes::new(from_hex(&signing).unwrap())
+    let (signing, encryption) = if signing.is_empty() || encryption.is_empty() {
+        (keystore.get_public(), keystore.get_encryption_public())
     } else {
-        Bytes::default()
-    };
-    let encryption = if !encryption.is_empty() {
-        Bytes::new(from_hex(&encryption).unwrap())
-    } else {
-        Bytes::default()
+        (Bytes::new(from_hex(&signing).unwrap()), Bytes::new(from_hex(&encryption).unwrap()))
     };
     match context.chain.can_mine_domain(context.chain.get_height(), &name, &pub_key) {
         MineResult::Fine => {
