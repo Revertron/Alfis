@@ -489,7 +489,8 @@ impl Chain {
 
     fn load_zones() -> Vec<ZoneData> {
         let mut result: Vec<ZoneData> = Vec::new();
-        let zones: Vec<_> = ZONES_TXT.split("\n").collect();
+        let zones_text = ZONES_TXT.replace("\r", "");
+        let zones: Vec<_> = zones_text.split("\n").collect();
         for zone in zones {
             let yggdrasil = zone == "ygg" || zone == "anon";
             result.push(ZoneData {name: zone.to_owned(), yggdrasil})
