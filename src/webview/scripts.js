@@ -5,6 +5,18 @@ var availableZones = [];
 var myDomains = [];
 var currentZone;
 
+document.addEventListener('click', function (event) {
+    closeDropdowns();
+});
+
+function closeDropdowns() {
+    // Get all elements with class="dropdowns" and hide them
+    var dropdowns = document.getElementsByClassName("dropdown is-active");
+    for (i = 0; i < dropdowns.length; i++) {
+        dropdowns[i].classList.remove('is-active');
+    }
+}
+
 function addRecord(record) {
     recordsBuffer.push(record);
     refreshRecordsList();
@@ -187,6 +199,7 @@ function openTab(element, tabName) {
 
 function toggle(element, event) {
     event.stopPropagation();
+    closeDropdowns();
     element.classList.toggle('is-active');
 }
 
@@ -486,20 +499,6 @@ function keystoreChanged(path, pub_key, hash) {
     var new_domain = document.getElementById("new_domain").disabled = false;
 }
 
-function closeZonesDropdown() {
-    var active = document.activeElement;
-    if (active == null || (active.id != 'zones-menu' && active.tagName != 'BODY')) {
-        document.getElementById("zones-dropdown").className = "dropdown";
-    }
-}
-
-function closeAdvancedDropdown() {
-    var active = document.activeElement;
-    if (active == null || (active.id != 'advanced-menu' && active.tagName != 'BODY')) {
-        document.getElementById("advanced-dropdown").className = "dropdown";
-    }
-}
-
 function refreshZonesList() {
     var buf = "";
     availableZones.sort(function compare(rhs, lhs) {
@@ -522,7 +521,7 @@ function refreshZonesList() {
         if (typeof currentZone !== 'undefined' && currentZone.name == value.name) {
             add_class = "is-active";
         }
-        buf += "<a id=\"zone-{1}\" class=\"dropdown-item {2}\" onclick=\"changeZone('{3}');\">.{4}</a>"
+        buf += "<a id=\"zone-{1}\" class=\"dropdown-item {2}\" onclick=\"changeZone('{3}', event);\">.{4}</a>"
             .replace("{1}", value.name)
             .replace("{2}", add_class)
             .replace("{3}", value.name)
@@ -545,7 +544,9 @@ function zonesChanged(text) {
     refreshZonesList();
 }
 
-function changeZone(zone) {
+function changeZone(zone, event) {
+    event.stopPropagation();
+    closeDropdowns();
     availableZones.forEach(function(value, index, array) {
         if (value.name == zone) {
             currentZone = value;
