@@ -87,3 +87,8 @@ It needs to be without `nogui` suffix.
 Just unzip that archive in some directory and run `alfis` (or `alfis.exe`) binary.
 By default, it searches for config file, named `alfis.toml` in current working directory, and creates/changes `blockchain.db` file in the same directory.
 If you want it to load config from another file you can command it so: `alfis -c /etc/alfis.conf`.
+
+## Roadmap
+1. Stabilize blockchain functions (domain transfer, info & contacts in UI), bug hunting and fixing.
+2. Change DNS server/proxy to own resource saving implementation (using trust-dns-proto for RR parsing).
+3. P2P traffic encryption (ECDH).
