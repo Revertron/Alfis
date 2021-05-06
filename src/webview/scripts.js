@@ -9,11 +9,13 @@ document.addEventListener('click', function (event) {
     closeDropdowns();
 });
 
-function closeDropdowns() {
+function closeDropdowns(except) {
     // Get all elements with class="dropdowns" and hide them
     var dropdowns = document.getElementsByClassName("dropdown is-active");
     for (i = 0; i < dropdowns.length; i++) {
-        dropdowns[i].classList.remove('is-active');
+        if (dropdowns[i] != except) {
+            dropdowns[i].classList.remove('is-active');
+        }
     }
 }
 
@@ -120,7 +122,7 @@ function addMyDomain(name, timestamp, data) {
 }
 
 function refreshMyDomains() {
-    var card = '<div class="card is-clickable is-inline-block" onclick="editDomain(\'{domain}\');"><div class="card-content p-3"><div class="content is-small"><h3>{title}</h3><div class="tags">{tags}</div></div></div></div>';
+    var card = '<div class="card is-clickable is-inline-block" onclick="editDomain(\'{domain}\', event);"><div class="card-content p-3"><div class="content is-small"><h3>{title}</h3><div class="tags">{tags}</div></div></div></div>';
     var tag = '<span class="tag" title="{ip}">{domain}</span>';
     var cards = "";
     myDomains.forEach(function(value, index, array) {
@@ -147,7 +149,7 @@ function refreshMyDomains() {
     document.getElementById("my_domains").innerHTML = cards;
 }
 
-function editDomain(domain) {
+function editDomain(domain, event) {
     myDomains.forEach(function(value, index, array) {
         if (domain != value.name) {
             return;
@@ -161,7 +163,13 @@ function editDomain(domain) {
             });
         }
         document.getElementById("new_domain").value = title.replace("." + domain_data.zone, "");
-        changeZone(domain_data.zone);
+        if (typeof domain_data.info !== 'undefined') {
+            document.getElementById("info_text").value = domain_data.info;
+        }
+        if (typeof domain_data.contacts !== 'undefined') {
+            document.getElementById("contacts_text").value = domain_data.contacts.join("\n");
+        }
+        changeZone(domain_data.zone, event);
         refreshRecordsList();
         showNewDomainDialog();
     });
@@ -199,7 +207,7 @@ function openTab(element, tabName) {
 
 function toggle(element, event) {
     event.stopPropagation();
-    closeDropdowns();
+    closeDropdowns(element);
     element.classList.toggle('is-active');
 }
 
