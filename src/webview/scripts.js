@@ -167,7 +167,12 @@ function editDomain(domain, event) {
             document.getElementById("info_text").value = domain_data.info;
         }
         if (typeof domain_data.contacts !== 'undefined') {
-            document.getElementById("contacts_text").value = domain_data.contacts.join("\n");
+            var count = 1;
+            domain_data.contacts.forEach(function(v, i, a) {
+                document.getElementById("contact" + count + "_name").value = decodeURIComponent(v.name);
+                document.getElementById("contact" + count + "_value").value = decodeURIComponent(v.value);
+                count = count + 1;
+            });
         }
         changeZone(domain_data.zone, event);
         refreshRecordsList();
@@ -268,12 +273,16 @@ function createDomain() {
 
 function getContacts() {
     var result = [];
-    var text = document.getElementById("contacts_text").value;
-    if (text != "") {
-        var lines = text.split("\n");
-        lines.forEach(function(value, index, array) {
-            result.push(value);
-        });
+    for (var x = 1; x <= 3; x++) {
+        var name = document.getElementById("contact" + x + "_name").value;
+        var value = document.getElementById("contact" + x + "_value").value;
+        if (name == "" || value == "") {
+            continue;
+        }
+        var obj = {};
+        obj.name = encodeURIComponent(name.trim());
+        obj.value = encodeURIComponent(value.trim());
+        result.push(obj);
     }
     return result;
 }

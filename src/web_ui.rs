@@ -369,6 +369,7 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
             return;
         }
     };
+    info!("Parsed domain data:\n{:#?}", &data);
     if data.records.len() > MAX_RECORDS {
         show_warning(web_view, "Too many records. Mining more than 30 records not allowed.");
         let _ = web_view.eval("domainMiningUnavailable();");
