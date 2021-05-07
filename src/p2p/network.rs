@@ -564,17 +564,16 @@ fn handle_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &Token, 
         }
         BlockQuality::Fork => {
             debug!("Got forked block {} with hash {:?}", block.index, block.hash);
+            // If we are very much behind of blockchain
+            let lagged = block.index == context.chain.get_height() && block.index + LIMITED_CONFIDENCE_DEPTH <= max_height;
             let last_block = context.chain.last_block().unwrap();
-            if block.is_better_than(&last_block) {
+            if block.is_better_than(&last_block) || lagged {
                 context.chain.replace_block(block).expect("Error replacing block with fork");
                 let index = context.chain.get_height();
                 context.bus.post(crate::event::Event::BlockchainChanged { index });
             } else {
                 debug!("Fork in not better than our block, dropping.");
             }
-            let height = context.chain.get_height();
-            context.chain.update_max_height(height);
-            context.bus.post(crate::event::Event::SyncFinished);
         }
     }
     State::idle()
