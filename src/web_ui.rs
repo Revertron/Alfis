@@ -42,7 +42,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
         .size(1023, 720)
         .min_size(773, 350)
         .resizable(true)
-        .debug(true)
+        .debug(false)
         .user_data(())
         .invoke_handler(|web_view, arg| {
             debug!("Command {}", arg);
