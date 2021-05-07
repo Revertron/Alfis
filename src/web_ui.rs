@@ -71,7 +71,6 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
 
     let mut context = Arc::clone(&context);
     run_interface_loop(&mut context, &mut interface);
-    interface.exit();
 }
 
 /// Indefinitely loops through WebView steps
