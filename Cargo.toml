@@ -72,5 +72,5 @@ FileDescription="Alternative Free Identity System"
 
 [features]
 webgui = ["web-view", "tinyfiledialogs", "open"]
-edge = ["web-view/edge"]
+edge = ["webgui", "web-view/edge"]
 default = ["webgui"]

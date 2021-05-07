@@ -180,6 +180,7 @@ fn action_load_key(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
 }
 
 fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
+    info!("Interface loaded");
     web_view.eval("showMiningIndicator(false, false);").expect("Error evaluating!");
     let handle: Handle<()> = web_view.handle();
     let threads = context.lock().unwrap().settings.mining.threads;

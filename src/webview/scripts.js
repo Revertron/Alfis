@@ -183,7 +183,13 @@ function editDomain(domain, event) {
 function onLoad() {
     // Workaround for Arch Linux Webkit
     // https://github.com/Boscop/web-view/issues/212#issuecomment-671055663
-    window.external={invoke:function(x){window.webkit.messageHandlers.external.postMessage(x);}};
+    if (typeof window.external == 'undefined' || typeof window.external.invoke == 'undefined') {
+        window.external = {
+            invoke: function(x) {
+                window.webkit.messageHandlers.external.postMessage(x);
+            }
+        };
+    }
 
     external.invoke(JSON.stringify({cmd: 'loaded'}));
 }
