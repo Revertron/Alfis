@@ -17,9 +17,12 @@ use simplelog::*;
 use winapi::um::wincon::{ATTACH_PARENT_PROCESS, AttachConsole, FreeConsole};
 
 use alfis::{Block, Bytes, Chain, Miner, Context, Network, Settings, dns_utils, Keystore, ORIGIN_DIFFICULTY, ALFIS_DEBUG, DB_NAME, Transaction};
+use alfis::event::Event;
 use std::fs::OpenOptions;
 use std::process::exit;
 use std::io::{Seek, SeekFrom};
+use std::sync::atomic::{AtomicBool, Ordering};
+use alfis::keystore::create_key;
 
 #[cfg(feature = "webgui")]
 mod web_ui;
@@ -47,6 +50,7 @@ fn main() {
     opts.optflag("d", "debug", "Show trace messages, more than debug");
     opts.optflag("b", "blocks", "List blocks from DB and exit");
     opts.optflag("g", "generate", "Generate new config file. Generated config will be printed to console.");
+    opts.optopt("k", "gen-key", "Generate new keys and save them to file.", "FILE");
     opts.optopt("l", "log", "Write log to file", "FILE");
     opts.optopt("c", "config", "Path to config file", "FILE");
     opts.optopt("w", "work-dir", "Path to working directory", "DIRECTORY");
@@ -105,7 +109,7 @@ fn main() {
     let settings = Settings::load(&config_name).expect(&format!("Cannot load settings from {}!", &config_name));
     debug!(target: LOG_TARGET_MAIN, "Loaded settings: {:?}", &settings);
     let keystore = Keystore::from_file(&settings.key_file, "");
-    let mut chain: Chain = Chain::new(&settings, DB_NAME);
+    let chain: Chain = Chain::new(&settings, DB_NAME);
     if opt_matches.opt_present("b") {
         for i in 1..(chain.get_height() + 1) {
             if let Some(block) = chain.get_block(i) {
@@ -114,15 +118,53 @@ fn main() {
         }
         return;
     }
-    chain.check_chain(settings.check_blocks);
-
-    match chain.get_block(1) {
-        None => { info!(target: LOG_TARGET_MAIN, "No blocks found in DB"); }
-        Some(block) => { trace!(target: LOG_TARGET_MAIN, "Loaded DB with origin {:?}", &block.hash); }
-    }
     let settings_copy = settings.clone();
     let context = Context::new(env!("CARGO_PKG_VERSION").to_owned(), settings, keystore, chain);
     let context: Arc<Mutex<Context>> = Arc::new(Mutex::new(context));
+
+    // If we just need to generate keys
+    if let Some(filename) = opt_matches.opt_str("k") {
+        info!(target: LOG_TARGET_MAIN, "Generating keys...");
+        let mining = Arc::new(AtomicBool::new(true));
+        let mining_copy = Arc::clone(&mining);
+        let context_copy = Arc::clone(&context);
+        if let Ok(mut context) = context.lock() {
+            // Register key-mined event listener
+            context.bus.register(move |_uuid, e| {
+                if matches!(e, Event::KeyCreated {..}) {
+                    let context_copy = Arc::clone(&context_copy);
+                    let mining_copy = Arc::clone(&mining_copy);
+                    let filename = filename.clone();
+                    thread::spawn(move || {
+                        if let Some(mut keystore) = context_copy.lock().unwrap().get_keystore() {
+                            keystore.save(&filename, "");
+                            mining_copy.store(false, Ordering::Relaxed);
+                        }
+                    });
+                    false
+                } else {
+                    true
+                }
+            });
+        }
+        // Start key mining
+        create_key(context);
+
+        let delay = Duration::from_secs(1);
+        while mining.load(Ordering::Relaxed) {
+            thread::sleep(delay);
+        }
+        exit(0);
+    }
+
+    if let Ok(mut context) = context.lock() {
+        context.chain.check_chain(settings_copy.check_blocks);
+        match context.chain.get_block(1) {
+            None => { info!(target: LOG_TARGET_MAIN, "No blocks found in DB"); }
+            Some(block) => { trace!(target: LOG_TARGET_MAIN, "Loaded DB with origin {:?}", &block.hash); }
+        }
+    }
+
     dns_utils::start_dns_server(&context, &settings_copy);
 
     let mut miner_obj = Miner::new(Arc::clone(&context));

@@ -241,12 +241,13 @@ pub fn create_key(context: Arc<Mutex<Context>>) {
                     debug!("Keystore mining finished");
                 }
                 Some(keystore) => {
-                    mining.store(false, atomic::Ordering::SeqCst);
                     let mut context = context.lock().unwrap();
                     let hash = keystore.get_hash().to_string();
-                    info!("Key mined successfully: {:?}, hash: {}", &keystore.get_public(), &hash);
-                    context.bus.post(Event::KeyCreated { path: keystore.get_path().to_owned(), public: keystore.get_public().to_string(), hash });
+                    let path = keystore.get_path().to_owned();
+                    let public = keystore.get_public().to_string();
+                    info!("Key mined successfully! Public key: {}, hash: {}", &public, &hash);
                     context.set_keystore(Some(keystore));
+                    context.bus.post(Event::KeyCreated { path, public, hash });
                 }
             }
             let miners = miners_count.fetch_sub(1, atomic::Ordering::SeqCst) - 1;
@@ -280,8 +281,8 @@ fn generate_key(difficulty: u32, mining: Arc<AtomicBool>) -> Option<Keystore> {
         digest.reset();
         digest.update(public.as_bytes());
         if key_hash_difficulty(digest.result()) >= difficulty {
+            mining.store(false, atomic::Ordering::SeqCst);
             let keystore = Keystore::from_random_bytes(&buf);
-            info!("Generated keypair with public key: {:?} and hash {:?}", &keystore.get_public(), &keystore.get_hash());
             return Some(keystore);
         }
         if !mining.load(atomic::Ordering::SeqCst) {
