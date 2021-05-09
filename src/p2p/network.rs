@@ -20,6 +20,7 @@ use rand::random;
 use crate::{Block, Context, p2p::Message, p2p::Peer, p2p::Peers, p2p::State};
 use crate::blockchain::types::BlockQuality;
 use crate::commons::*;
+use crate::eventbus::{register, post};
 
 const SERVER: Token = Token(0);
 
@@ -39,7 +40,7 @@ impl Network {
         };
 
         let running = Arc::new(AtomicBool::new(true));
-        subscribe_to_bus(&mut self.context, Arc::clone(&running));
+        subscribe_to_bus(Arc::clone(&running));
 
         // Starting server socket
         let addr = listen_addr.parse().expect("Error parsing listen address");
@@ -128,9 +129,9 @@ impl Network {
                         token => {
                             if !handle_connection_event(Arc::clone(&context), &mut peers, &poll.registry(), &event) {
                                 let _ = peers.close_peer(poll.registry(), &token);
-                                let mut context = context.lock().unwrap();
+                                let context = context.lock().unwrap();
                                 let blocks_count = context.chain.get_height();
-                                context.bus.post(crate::event::Event::NetworkStatus { nodes: peers.get_peers_active_count(), blocks: blocks_count });
+                                post(crate::event::Event::NetworkStatus { nodes: peers.get_peers_active_count(), blocks: blocks_count });
                             }
                         }
                     }
@@ -150,11 +151,11 @@ impl Network {
                 if ui_timer.elapsed().as_millis() > UI_REFRESH_DELAY_MS {
                     // Send pings to idle peers
                     let (height, hash) = {
-                        let mut context = context.lock().unwrap();
+                        let context = context.lock().unwrap();
                         let height = context.chain.get_height();
                         let nodes = peers.get_peers_active_count();
                         let banned = peers.get_peers_banned_count();
-                        context.bus.post(crate::event::Event::NetworkStatus { nodes, blocks: height });
+                        post(crate::event::Event::NetworkStatus { nodes, blocks: height });
 
                         if log_timer.elapsed().as_secs() > LOG_REFRESH_DELAY_SEC {
                             info!("Active nodes count: {}, banned count: {}, blocks count: {}", nodes, banned, height);
@@ -184,9 +185,9 @@ impl Network {
     }
 }
 
-fn subscribe_to_bus(context: &mut Arc<Mutex<Context>>, running: Arc<AtomicBool>) {
+fn subscribe_to_bus(running: Arc<AtomicBool>) {
     use crate::event::Event;
-    context.lock().unwrap().bus.register(move |_uuid, e| {
+    register(move |_uuid, e| {
         match e {
             Event::ActionQuit => {
                 running.store(false, Ordering::SeqCst);
@@ -433,7 +434,7 @@ fn handle_message(context: Arc<Mutex<Context>>, message: Message, peers: &mut Pe
                 if peer.is_higher(my_height) {
                     context.chain.update_max_height(height);
                     let event = crate::event::Event::Syncing { have: my_height, height: max(height, my_height) };
-                    context.bus.post(event);
+                    post(event);
                 }
                 if nodes < MAX_NODES && random::<bool>() {
                     debug!("Requesting more peers from {}", peer.get_addr().ip());
@@ -539,15 +540,15 @@ fn handle_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &Token, 
         BlockQuality::Good => {
             context.chain.add_block(block);
             let my_height = context.chain.get_height();
-            context.bus.post(crate::event::Event::BlockchainChanged { index: my_height });
+            post(crate::event::Event::BlockchainChanged { index: my_height });
             // If it was the last block to sync
             if my_height == max_height {
-                context.bus.post(crate::event::Event::SyncFinished);
+                post(crate::event::Event::SyncFinished);
             } else {
                 let event = crate::event::Event::Syncing { have: my_height, height: max(max_height, my_height) };
-                context.bus.post(event);
+                post(event);
             }
-            context.bus.post(crate::event::Event::NetworkStatus { nodes: peers_count, blocks: my_height });
+            post(crate::event::Event::NetworkStatus { nodes: peers_count, blocks: my_height });
         }
         BlockQuality::Twin => { debug!("Ignoring duplicate block {}", block.index); }
         BlockQuality::Future => { debug!("Ignoring future block {}", block.index); }
@@ -556,7 +557,7 @@ fn handle_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &Token, 
             debug!("Ignoring bad block from {}:\n{:?}", peer.get_addr(), &block);
             let height = context.chain.get_height();
             context.chain.update_max_height(height);
-            context.bus.post(crate::event::Event::SyncFinished);
+            post(crate::event::Event::SyncFinished);
             return State::Banned;
         }
         BlockQuality::Rewind => {
@@ -571,7 +572,7 @@ fn handle_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &Token, 
             if block.is_better_than(&last_block) || lagged {
                 context.chain.replace_block(block).expect("Error replacing block with fork");
                 let index = context.chain.get_height();
-                context.bus.post(crate::event::Event::BlockchainChanged { index });
+                post(crate::event::Event::BlockchainChanged { index });
             } else {
                 debug!("Fork in not better than our block, dropping.");
             }

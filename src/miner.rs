@@ -16,6 +16,7 @@ use crate::keystore::check_public_key_strength;
 use crate::event::Event;
 use blakeout::Blakeout;
 use std::thread::sleep;
+use crate::eventbus::{register, post};
 
 #[derive(Clone)]
 pub struct MineJob {
@@ -93,7 +94,7 @@ impl Miner {
         // Add events listener to a [Bus]
         let running = self.running.clone();
         let mining = self.mining.clone();
-        self.context.lock().unwrap().bus.register(move |_uuid, e| {
+        register(move |_uuid, e| {
             match e {
                 Event::ActionQuit => { running.store(false, Ordering::Relaxed); }
                 Event::NewBlockReceived => {}
@@ -211,14 +212,14 @@ impl Miner {
             job.block.pub_key = job.keystore.get_public();
             if !check_public_key_strength(&job.block.pub_key, KEYSTORE_DIFFICULTY) {
                 warn!("Can not mine block with weak public key!");
-                context.lock().unwrap().bus.post(Event::MinerStopped { success: false, full: false });
+                post(Event::MinerStopped { success: false, full: false });
                 mining.store(false, Ordering::SeqCst);
                 return;
             }
             match context.lock().unwrap().chain.update_sign_block_for_mining(job.block) {
                 None => {
                     warn!("We missed block to lock");
-                    context.lock().unwrap().bus.post(Event::MinerStopped { success: false, full: false });
+                    post(Event::MinerStopped { success: false, full: false });
                     mining.store(false, Ordering::SeqCst);
                     return;
                 }
@@ -235,8 +236,8 @@ impl Miner {
         }
 
         let (lower, threads) = {
+            post(Event::MinerStarted);
             let mut context = context.lock().unwrap();
-            context.bus.post(Event::MinerStarted);
             context.miner_state.mining = true;
             context.miner_state.full = job.block.transaction.is_some();
             (context.settings.mining.lower, context.settings.mining.threads)
@@ -266,9 +267,10 @@ impl Miner {
                         let count = live_threads.fetch_sub(1, Ordering::SeqCst);
                         // If this is the last thread, but mining was not stopped by another thread
                         if count == 1 {
-                            let mut context = context.lock().unwrap();
-                            context.miner_state.mining = false;
-                            context.bus.post(Event::MinerStopped { success: false, full });
+                            if let Ok(mut context) = context.lock() {
+                                context.miner_state.mining = false;
+                            }
+                            post(Event::MinerStopped { success: false, full });
                         }
                     },
                     Some(mut block) => {
@@ -290,7 +292,7 @@ impl Miner {
                             success = true;
                         }
                         context.miner_state.mining = false;
-                        context.bus.post(Event::MinerStopped { success, full });
+                        post(Event::MinerStopped { success, full });
                         mining.store(false, Ordering::SeqCst);
                     },
                 }
@@ -352,9 +354,7 @@ fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<Atomic
                 if elapsed > 10000 {
                     let speed = (nonce - prev_nonce) / (elapsed as u64 / 1000);
                     //debug!("Mining speed {} H/s, max difficulty {}", speed, max_diff);
-                    if let Ok(mut context) = context.try_lock() {
-                        context.bus.post(Event::MinerStats { thread, speed, max_diff, target_diff })
-                    }
+                    post(Event::MinerStats { thread, speed, max_diff, target_diff });
                     time = Instant::now();
                     prev_nonce = nonce;
                 }

@@ -1,5 +1,4 @@
-use crate::{Chain, Bus, Keystore, Settings};
-use crate::event::Event;
+use crate::{Chain, Keystore, Settings};
 #[allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
 use crate::miner::MinerState;
@@ -9,7 +8,6 @@ pub struct Context {
     pub settings: Settings,
     pub keystore: Option<Keystore>,
     pub chain: Chain,
-    pub bus: Bus<Event>,
     pub miner_state: MinerState,
 }
 
@@ -21,7 +19,6 @@ impl Context {
             settings,
             keystore,
             chain,
-            bus: Bus::new(),
             miner_state: MinerState { mining: false, full: false }
         }
     }

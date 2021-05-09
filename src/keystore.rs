@@ -20,6 +20,7 @@ use crate::blockchain::hash_utils::*;
 use crate::{Context, setup_miner_thread, to_hex, from_hex};
 use crate::event::Event;
 use crate::commons::KEYSTORE_DIFFICULTY;
+use crate::eventbus::{register, post};
 use crate::bytes::Bytes;
 use crate::crypto::CryptoBox;
 use blakeout::Blakeout;
@@ -220,7 +221,7 @@ pub fn check_public_key_strength(key: &Bytes, strength: u32) -> bool {
 pub fn create_key(context: Arc<Mutex<Context>>) {
     let mining = Arc::new(AtomicBool::new(true));
     let miners_count = Arc::new(AtomicUsize::new(0));
-    context.lock().unwrap().bus.post(Event::KeyGeneratorStarted);
+    post(Event::KeyGeneratorStarted);
     let lower = context.lock().unwrap().settings.mining.lower;
     let threads = context.lock().unwrap().settings.mining.threads;
     let threads = match threads {
@@ -247,16 +248,16 @@ pub fn create_key(context: Arc<Mutex<Context>>) {
                     let public = keystore.get_public().to_string();
                     info!("Key mined successfully! Public key: {}, hash: {}", &public, &hash);
                     context.set_keystore(Some(keystore));
-                    context.bus.post(Event::KeyCreated { path, public, hash });
+                    post(Event::KeyCreated { path, public, hash });
                 }
             }
             let miners = miners_count.fetch_sub(1, atomic::Ordering::SeqCst) - 1;
             if miners == 0 {
-                context.lock().unwrap().bus.post(Event::KeyGeneratorStopped);
+                post(Event::KeyGeneratorStopped);
             }
         });
     }
-    context.lock().unwrap().bus.register(move |_uuid, e| {
+    register(move |_uuid, e| {
         if e == Event::ActionStopMining {
             info!("Stopping keystore miner");
             mining.store(false, atomic::Ordering::SeqCst);

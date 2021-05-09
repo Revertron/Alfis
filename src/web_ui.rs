@@ -26,6 +26,7 @@ use Cmd::*;
 
 use self::web_view::{Handle, WebView};
 use alfis::crypto::CryptoBox;
+use alfis::eventbus::{register, post};
 
 pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let file_content = include_str!("webview/index.html");
@@ -57,7 +58,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                     action_create_domain(Arc::clone(&context), Arc::clone(&miner), web_view, name, data, signing, encryption);
                 }
                 TransferDomain { .. } => {}
-                StopMining => { context.lock().unwrap().bus.post(Event::ActionStopMining); }
+                StopMining => { post(Event::ActionStopMining); }
                 Open { link } => {
                     if open::that(&link).is_err() {
                         show_warning(web_view, "Something wrong, I can't open the link 😢");
@@ -69,12 +70,11 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
         .build()
         .expect("Error building GUI");
 
-    let mut context = Arc::clone(&context);
-    run_interface_loop(&mut context, &mut interface);
+    run_interface_loop(&mut interface);
 }
 
 /// Indefinitely loops through WebView steps
-fn run_interface_loop(context: &mut Arc<Mutex<Context>>, interface: &mut WebView<()>) {
+fn run_interface_loop(interface: &mut WebView<()>) {
     // We use this ugly loop to lower CPU usage a lot.
     // If we use .run() or only .step() in a loop without sleeps it will try
     // to support 60FPS and uses more CPU than it should.
@@ -84,7 +84,7 @@ fn run_interface_loop(context: &mut Arc<Mutex<Context>>, interface: &mut WebView
         match interface.step() {
             None => {
                 info!("Interface closed, exiting");
-                context.lock().unwrap().bus.post(Event::ActionQuit);
+                post(Event::ActionQuit);
                 thread::sleep(Duration::from_millis(100));
                 break;
             }
@@ -140,14 +140,13 @@ fn action_save_key(context: &Arc<Mutex<Context>>) {
             if !new_path.ends_with(".toml") {
                 new_path.push_str(".toml");
             }
-            let mut context = context.lock().unwrap();
             let path = new_path.clone();
-            if let Some(mut keystore) = context.get_keystore() {
+            if let Some(mut keystore) = context.lock().unwrap().get_keystore() {
                 let public = keystore.get_public().to_string();
                 let hash = keystore.get_hash().to_string();
                 keystore.save(&new_path, "");
                 info!("Key file saved to {}", &path);
-                context.bus.post(Event::KeySaved { path, public, hash });
+                post(Event::KeySaved { path, public, hash });
             }
         }
     }
@@ -166,12 +165,11 @@ fn action_load_key(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                 }
                 Some(keystore) => {
                     info!("Loaded keystore with keys: {:?}, {:?}", &keystore.get_public(), &keystore.get_encryption_public());
-                    let mut c = context.lock().unwrap();
                     let path = keystore.get_path().to_owned();
                     let public = keystore.get_public().to_string();
                     let hash = keystore.get_hash().to_string();
-                    c.bus.post(Event::KeyLoaded { path, public, hash });
-                    c.set_keystore(Some(keystore));
+                    post(Event::KeyLoaded { path, public, hash });
+                    context.lock().unwrap().set_keystore(Some(keystore));
                 }
             }
         }
@@ -189,9 +187,9 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
     };
     let status = Arc::new(Mutex::new(Status::new(threads)));
     let context_copy = Arc::clone(&context);
-    let mut c = context.lock().unwrap();
+    let c = context.lock().unwrap();
 
-    c.bus.register(move |_uuid, e| {
+    register(move |_uuid, e| {
         //debug!("Got event from bus {:?}", &e);
         let status = Arc::clone(&status);
         let handle = handle.clone();
@@ -311,11 +309,11 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
         let path = keystore.get_path().to_owned();
         let public = keystore.get_public().to_string();
         let hash = keystore.get_hash().to_string();
-        c.bus.post(Event::KeyLoaded { path, public, hash });
+        post(Event::KeyLoaded { path, public, hash });
     }
     let index = c.chain.get_height();
     if index > 0 {
-        c.bus.post(Event::BlockchainChanged { index });
+        post(Event::BlockchainChanged { index });
     }
     let zones = c.chain.get_zones();
     info!("Loaded zones: {:?}", &zones);

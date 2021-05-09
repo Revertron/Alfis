@@ -15,6 +15,7 @@ use log::{debug, error, info, trace, warn, LevelFilter};
 use simplelog::*;
 #[cfg(windows)]
 use winapi::um::wincon::{ATTACH_PARENT_PROCESS, AttachConsole, FreeConsole};
+extern crate lazy_static;
 
 use alfis::{Block, Bytes, Chain, Miner, Context, Network, Settings, dns_utils, Keystore, ORIGIN_DIFFICULTY, ALFIS_DEBUG, DB_NAME, Transaction};
 use alfis::event::Event;
@@ -23,6 +24,7 @@ use std::process::exit;
 use std::io::{Seek, SeekFrom};
 use std::sync::atomic::{AtomicBool, Ordering};
 use alfis::keystore::create_key;
+use alfis::eventbus::register;
 
 #[cfg(feature = "webgui")]
 mod web_ui;
@@ -128,25 +130,23 @@ fn main() {
         let mining = Arc::new(AtomicBool::new(true));
         let mining_copy = Arc::clone(&mining);
         let context_copy = Arc::clone(&context);
-        if let Ok(mut context) = context.lock() {
-            // Register key-mined event listener
-            context.bus.register(move |_uuid, e| {
-                if matches!(e, Event::KeyCreated {..}) {
-                    let context_copy = Arc::clone(&context_copy);
-                    let mining_copy = Arc::clone(&mining_copy);
-                    let filename = filename.clone();
-                    thread::spawn(move || {
-                        if let Some(mut keystore) = context_copy.lock().unwrap().get_keystore() {
-                            keystore.save(&filename, "");
-                            mining_copy.store(false, Ordering::Relaxed);
-                        }
-                    });
-                    false
-                } else {
-                    true
-                }
-            });
-        }
+        // Register key-mined event listener
+        register(move |_uuid, e| {
+            if matches!(e, Event::KeyCreated {..}) {
+                let context_copy = Arc::clone(&context_copy);
+                let mining_copy = Arc::clone(&mining_copy);
+                let filename = filename.clone();
+                thread::spawn(move || {
+                    if let Some(mut keystore) = context_copy.lock().unwrap().get_keystore() {
+                        keystore.save(&filename, "");
+                        mining_copy.store(false, Ordering::Relaxed);
+                    }
+                });
+                false
+            } else {
+                true
+            }
+        });
         // Start key mining
         create_key(context);
 

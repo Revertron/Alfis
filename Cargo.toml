@@ -36,6 +36,7 @@ sqlite = "0.26.0"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 mio = { version = "0.7", features = ["os-poll", "net"] }
 derive_more = "0.99" # for DNS from hermes
+lazy_static = "1.4.0"
 
 # Optional dependencies regulated by features
 web-view = { version = "0.7", features = [], optional = true }

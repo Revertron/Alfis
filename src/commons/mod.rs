@@ -11,6 +11,8 @@ pub use constants::*;
 use crate::dns::protocol::DnsRecord;
 
 pub mod constants;
+pub mod simplebus;
+pub mod eventbus;
 
 /// Convert bytes array to HEX format
 pub fn to_hex(buf: &[u8]) -> String {
@@ -161,6 +163,7 @@ pub fn setup_miner_thread(cpu: u32) {
 #[cfg(test)]
 mod test {
     use std::net::IpAddr;
+
     use crate::{check_domain, is_yggdrasil};
 
     #[test]
