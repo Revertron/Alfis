@@ -28,6 +28,8 @@ use std::cell::RefCell;
 use self::ed25519_dalek::{Signer, PublicKey, Verifier, SecretKey};
 use self::ed25519_dalek::ed25519::signature::Signature;
 use rand_old::{CryptoRng, RngCore};
+use ecies_ed25519::Error;
+use std::alloc::Global;
 
 #[derive(Debug)]
 pub struct Keystore {
@@ -187,8 +189,13 @@ impl Keystore {
     }
 
     pub fn decrypt(&self, message: &[u8]) -> Bytes {
-        let decrypted = self.crypto_box.reveal(message).unwrap();
-        Bytes::from_bytes(&decrypted)
+        match self.crypto_box.reveal(message) {
+            Ok(decrypted) => { Bytes::from_bytes(&decrypted) }
+            Err(_) => {
+                warn!("Decryption failed");
+                Bytes::default()
+            }
+        }
     }
 }
 
