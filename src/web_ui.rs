@@ -423,11 +423,22 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
             let _ = web_view.eval("domainMiningUnavailable();");
         }
         MineResult::Cooldown { time } => {
-            event_info(web_view, &format!("You have cooldown, just {} more minutes!", time / 60));
-            show_warning(web_view, &format!("You have cooldown, just {} more minutes!", time / 60));
+            event_info(web_view, &format!("You have cooldown {}!", format_cooldown(time)));
+            show_warning(web_view, &format!("You have cooldown {}!", format_cooldown(time)));
             let _ = web_view.eval("domainMiningUnavailable();");
         }
     }
+}
+
+fn format_cooldown(time: i64) -> String {
+    if time <= 60 {
+        return format!("{} seconds", time);
+    }
+    let minutes = time / 60;
+    if minutes <= 60 {
+        return format!("{} minutes", minutes);
+    }
+    format!("{} hours", minutes / 60)
 }
 
 fn show_warning(web_view: &mut WebView<()>, text: &str) {
