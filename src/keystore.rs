@@ -28,8 +28,6 @@ use std::cell::RefCell;
 use self::ed25519_dalek::{Signer, PublicKey, Verifier, SecretKey};
 use self::ed25519_dalek::ed25519::signature::Signature;
 use rand_old::{CryptoRng, RngCore};
-use ecies_ed25519::Error;
-use std::alloc::Global;
 
 #[derive(Debug)]
 pub struct Keystore {
