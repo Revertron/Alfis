@@ -10,6 +10,12 @@ This project represents a minimal blockchain without cryptocurrency, capable of 
 
 ![Screenshot](img/domains.png)
 
+## How it works?
+Every node connects to its siblings and synchronizes the domain database.
+This DB consists of cryptographically bound blocks, that contain encrypted domain names, contacts, and some info, if you wish.
+There are 10 domain zones available to get domain in:
+`.anon`, `.btn`, `.conf`, `.index`, `.merch`, `.mirror`, `.mob`, `.screen`, `.srv`, `.ygg`.
+But, `.anon` and `.ygg` are bound to have IP-addresses from Yggdrasil Network only.
 
 ## Building and running
 
@@ -68,18 +74,18 @@ wget -O - https://deb.revertron.com/key.txt | sudo apt-key add -
 ```
 echo 'deb http://deb.revertron.com/ debian alfis' | sudo tee /etc/apt/sources.list.d/alfis.list
 ```
-3. Update packages
+3. Update packages and install ALFIS
 ```
-sudo apt update
+sudo apt update && sudo apt install alfis
 ```
-4. Install ALFIS
+4. Enable and start the service
 ```
-sudo apt install alfis
+systemctl enable --now alfis
 ```
 After that configuration is in file `/etc/alfis.conf` and data is saved to `/var/lib/alfis`.
 If you have some DNS server bound to port 53, it will not properly start. Deal with it on your own.
 
-### GUI version Windows/Linux/MacOS (if you want to create and change domains)
+### GUI version Windows/Linux/macOS (if you want to create and change domains)
 If you want to create and manage your own domains on blockchain, you will need a version with GUI.
 You can download it from [releases](https://github.com/Revertron/Alfis/releases) section, choose appropriate OS and architecture version.
 It needs to be without `nogui` suffix.
@@ -92,3 +98,4 @@ If you want it to load config from another file you can command it so: `alfis -c
 1. Stabilize blockchain functions (domain transfer, info & contacts in UI), bug hunting and fixing.
 2. Change DNS server/proxy to own resource saving implementation (using trust-dns-proto for RR parsing).
 3. P2P traffic encryption (ECDH).
+4. Web-GUI to manage you node from browser.

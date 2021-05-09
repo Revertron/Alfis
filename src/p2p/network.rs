@@ -71,6 +71,7 @@ impl Network {
                     // Starting peer connections to bootstrap nodes
                     peers.connect_peers(&peers_addrs, &poll.registry(), &mut unique_token, yggdrasil_only);
                     bootstrap_timer = Instant::now();
+                    last_events_time = Instant::now();
                 }
                 // Poll Mio for events, blocking until we get an event.
                 poll.poll(&mut events, POLL_TIMEOUT).expect("Error polling sockets");

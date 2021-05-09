@@ -176,6 +176,9 @@ mod test {
         assert!(!check_domain("ab.c-", true));
         assert!(!check_domain(".ab.c", true));
         assert!(!check_domain("ab.c-", true));
+        assert!(check_domain("a.com", true));
+        assert!(check_domain("ab.com", true));
+        assert!(check_domain("abc.com", true));
         assert!(check_domain("777.com", true));
         assert!(!check_domain("77.com", true));
         assert!(!check_domain("7.com", true));
