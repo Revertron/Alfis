@@ -15,7 +15,6 @@ pub struct Peer {
     public: bool,
     active: bool,
     reconnects: u32,
-    spurious: u32,
     received_block: u64,
     fork: HashMap<u64, Block>
 }
@@ -32,7 +31,6 @@ impl Peer {
             public: false,
             active: false,
             reconnects: 0,
-            spurious: 0,
             received_block: 0,
             fork: HashMap::new()
         }
@@ -117,18 +115,6 @@ impl Peer {
 
     pub fn reset_reconnects(&mut self) {
         self.reconnects = 0;
-    }
-
-    pub fn spurious(&self) -> u32 {
-        self.spurious
-    }
-
-    pub fn inc_spurious(&mut self) {
-        self.spurious += 1;
-    }
-
-    pub fn reset_spurious(&mut self) {
-        self.spurious = 0;
     }
 
     pub fn disabled(&self) -> bool {

@@ -129,8 +129,7 @@ impl Network {
                         token => {
                             if !handle_connection_event(Arc::clone(&context), &mut peers, &poll.registry(), &event) {
                                 let _ = peers.close_peer(poll.registry(), &token);
-                                let context = context.lock().unwrap();
-                                let blocks_count = context.chain.get_height();
+                                let blocks_count = context.lock().unwrap().chain.get_height();
                                 post(crate::event::Event::NetworkStatus { nodes: peers.get_peers_active_count(), blocks: blocks_count });
                             }
                         }
@@ -214,22 +213,9 @@ fn handle_connection_event(context: Arc<Mutex<Context>>, peers: &mut Peers, regi
                 }
                 Some(peer) => {
                     if event.is_read_closed() {
-                        //debug!("Spurious wakeup for connection {}, ignoring", token.0);
-                        if peer.spurious() >= 3 {
-                            debug!("Disconnecting socket for 3 spurious wakeups {}", peer.get_addr().ip());
-                            return false;
-                        }
-                        let interest = if let State::Message{..} = peer.get_state() {
-                            Interest::WRITABLE
-                        } else {
-                            Interest::READABLE
-                        };
-                        let stream = peer.get_stream();
-                        registry.reregister(stream, token, interest).unwrap();
-                        peer.inc_spurious();
-                        return true;
+                        debug!("Node from {} disconnected", peer.get_addr().ip());
+                        return false;
                     }
-                    peer.reset_spurious();
                     let mut stream = peer.get_stream();
                     read_message(&mut stream)
                 }
