@@ -47,16 +47,10 @@ You can do it by issuing this command: `sudo apt install libwebkit2gtk-4.0-dev` 
 
 #### ![Arch Linux Logo](/img/archlinux.svg) On Arch Linux
 
-Create and install package with this commands:
+Install from available [AUR package](https://aur.archlinux.org/packages/alfis) created by [@pztrn](https://github.com/pztrn):
 
 ```sh
-# make package
-git clone https://github.com/Revertron/Alfis.git
-cd Alfis/contrib
-makepkg
-
-# install package (from root)
-pacman -U alfis-<version>-1-x86_64.pkg.tar.xz
+yay -S alfis
 ```
 
 ## Installation
