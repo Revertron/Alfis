@@ -1,3 +1,5 @@
+API_URL = "http://localhost:4280/api";
+
 var recordsBuffer = [];
 var ownerSigning = "";
 var ownerEncryption = "";
@@ -8,6 +10,38 @@ var currentZone;
 document.addEventListener('click', function (event) {
     closeDropdowns();
 });
+
+API = {}
+API.invokeJson = function(json) {
+    external.invoke(json);
+}
+API.invokeCmd = function(cmd) {
+    external.invoke(JSON.stringify(cmd));
+}
+API.postCmd = function(cmd) {
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", API_URL, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.send(JSON.stringify(cmd));
+}
+
+// Defines handler for external API
+function defineExternalApi() {
+    // Workaround for Arch Linux Webkit
+    // https://github.com/Boscop/web-view/issues/212#issuecomment-671055663
+    if (typeof window.external == 'undefined' || typeof window.external.invoke == 'undefined') {
+        window.external = {
+            invoke: function(x) {
+                window.webkit.messageHandlers.external.postMessage(x);
+            }
+        };
+    }
+}
+
+function onLoad() {
+    defineExternalApi();
+    API.invokeCmd({cmd: 'loaded'});
+}
 
 function closeDropdowns(except) {
     // Get all elements with class="dropdowns" and hide them
@@ -180,20 +214,6 @@ function editDomain(domain, event) {
     });
 }
 
-function onLoad() {
-    // Workaround for Arch Linux Webkit
-    // https://github.com/Boscop/web-view/issues/212#issuecomment-671055663
-    if (typeof window.external == 'undefined' || typeof window.external.invoke == 'undefined') {
-        window.external = {
-            invoke: function(x) {
-                window.webkit.messageHandlers.external.postMessage(x);
-            }
-        };
-    }
-
-    external.invoke(JSON.stringify({cmd: 'loaded'}));
-}
-
 function openTab(element, tabName) {
     // Declare all variables
     var i, tabContent, tabLinks;
@@ -223,23 +243,23 @@ function toggle(element, event) {
 }
 
 function open_link(link) {
-    external.invoke(JSON.stringify({cmd: 'open', link: link}));
+    API.invokeCmd({cmd: 'open', link: link});
 }
 
 function loadKey() {
-    external.invoke(JSON.stringify({cmd: 'loadKey'}));
+    API.invokeCmd({cmd: 'loadKey'});
 }
 
 function createKey() {
-    external.invoke(JSON.stringify({cmd: 'createKey'}));
+    API.invokeCmd({cmd: 'createKey'});
 }
 
 function saveKey() {
-    external.invoke(JSON.stringify({cmd: 'saveKey'}));
+    API.invokeCmd({cmd: 'saveKey'});
 }
 
 function checkRecord(data) {
-    external.invoke(JSON.stringify({cmd: 'checkRecord', data: JSON.stringify(data)}));
+    API.invokeCmd({cmd: 'checkRecord', data: JSON.stringify(data)});
 }
 
 function recordOkay(okay) {
@@ -274,7 +294,7 @@ function createDomain() {
     data.records = recordsBuffer;
     data.contacts = getContacts();
     data = JSON.stringify(data);
-    external.invoke(JSON.stringify({cmd: 'mineDomain', name: domain, data: data, signing: ownerSigning, encryption: ownerEncryption}));
+    API.invokeCmd({cmd: 'mineDomain', name: domain, data: data, signing: ownerSigning, encryption: ownerEncryption});
 }
 
 function getContacts() {
@@ -315,14 +335,10 @@ function domainMiningUnavailable() {
     document.getElementById("new_key_button").disabled = false;
 }
 
-function sendAction(param) {
-    external.invoke(JSON.stringify(param));
-}
-
 function onDomainChange(element) {
     if (typeof currentZone !== 'undefined') {
         var domain = element.value + "." + currentZone.name;
-        external.invoke(JSON.stringify({cmd: 'checkDomain', name: domain}));
+        API.invokeCmd({cmd: 'checkDomain', name: domain});
     }
 }
 
@@ -480,7 +496,7 @@ function showMiningIndicator(visible, blue) {
 
 function miningIndicatorClick(element) {
     showModalDialog("Do you really want to stop mining?", function() {
-        external.invoke(JSON.stringify({cmd: 'stopMining'}));
+        API.invokeCmd({cmd: 'stopMining'});
     });
 }
 

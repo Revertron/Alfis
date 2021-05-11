@@ -12,7 +12,6 @@ use chrono::{DateTime, Local};
 #[allow(unused_imports)]
 use log::{debug, error, info, LevelFilter, trace, warn};
 use serde::Deserialize;
-use web_view::Content;
 
 use alfis::{Block, Bytes, Context, Keystore, Transaction};
 use alfis::keystore;
@@ -27,50 +26,48 @@ use Cmd::*;
 use self::web_view::{Handle, WebView};
 use alfis::crypto::CryptoBox;
 use alfis::eventbus::{register, post};
+use self::web_view::Content::Url;
 
 pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
-    let file_content = include_str!("webview/index.html");
-    let mut styles = inline_style(include_str!("webview/bulma.css"));
-    styles.push_str(&inline_style(include_str!("webview/styles.css")));
-    styles.push_str(&inline_style(include_str!("webview/busy_indicator.css")));
-    let scripts = inline_script(include_str!("webview/scripts.js"));
-
-    let html = Content::Html(file_content.to_owned().replace("{styles}", &styles).replace("{scripts}", &scripts));
     let title = format!("ALFIS {}", env!("CARGO_PKG_VERSION"));
     let mut interface = web_view::builder()
         .title(&title)
-        .content(html)
+        .content(Url("http://localhost:4280/"))
         .size(1023, 720)
         .min_size(773, 350)
         .resizable(true)
         .debug(false)
         .user_data(())
         .invoke_handler(|web_view, arg| {
-            debug!("Command {}", arg);
-            match serde_json::from_str(arg).unwrap() {
-                Loaded => { action_loaded(&context, web_view); }
-                LoadKey => { action_load_key(&context, web_view); }
-                CreateKey => { keystore::create_key(Arc::clone(&context)); }
-                SaveKey => { action_save_key(&context); }
-                CheckRecord { data } => { action_check_record(web_view, data); }
-                CheckDomain { name } => { action_check_domain(&context, web_view, name); }
-                MineDomain { name, data, signing, encryption } => {
-                    action_create_domain(Arc::clone(&context), Arc::clone(&miner), web_view, name, data, signing, encryption);
-                }
-                TransferDomain { .. } => {}
-                StopMining => { post(Event::ActionStopMining); }
-                Open { link } => {
-                    if open::that(&link).is_err() {
-                        show_warning(web_view, "Something wrong, I can't open the link 😢");
-                    }
-                }
-            }
+            handle_command(web_view, &context, &miner, arg);
             Ok(())
         })
         .build()
         .expect("Error building GUI");
 
     run_interface_loop(&mut interface);
+}
+
+fn handle_command(web_view: &mut WebView<()>, context: &Arc<Mutex<Context>>, miner: &Arc<Mutex<Miner>>, arg: &str) {
+    debug!("Command {}", arg);
+    match serde_json::from_str(arg).unwrap() {
+        Loaded => { action_loaded(&context, web_view); }
+        LoadKey => { action_load_key(&context, web_view); }
+        CreateKey => { keystore::create_key(Arc::clone(&context)); }
+        SaveKey => { action_save_key(&context); }
+        CheckRecord { data } => { action_check_record(web_view, data); }
+        CheckDomain { name } => { action_check_domain(&context, web_view, name); }
+        MineDomain { name, data, signing, encryption } => {
+            action_create_domain(Arc::clone(&context), Arc::clone(&miner), web_view, name, data, signing, encryption);
+        }
+        TransferDomain { .. } => {}
+        StopMining => { post(Event::ActionStopMining); }
+        Open { link } => {
+            if open::that(&link).is_err() {
+                show_warning(web_view, "Something wrong, I can't open the link 😢");
+            }
+        }
+    }
 }
 
 /// Indefinitely loops through WebView steps
@@ -569,12 +566,4 @@ impl Status {
     fn get_speed(&self) -> u64 {
         self.speed.iter().sum()
     }
-}
-
-fn inline_style(s: &str) -> String {
-    format!(r#"<style type="text/css">{}</style>"#, s)
-}
-
-fn inline_script(s: &str) -> String {
-    format!(r#"<script type="text/javascript">{}</script>"#, s)
 }

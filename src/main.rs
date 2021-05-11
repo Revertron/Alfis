@@ -25,6 +25,7 @@ use std::io::{Seek, SeekFrom};
 use std::sync::atomic::{AtomicBool, Ordering};
 use alfis::keystore::create_key;
 use alfis::eventbus::register;
+use alfis::web_server::start_server;
 
 #[cfg(feature = "webgui")]
 mod web_ui;
@@ -173,6 +174,11 @@ fn main() {
 
     let mut network = Network::new(Arc::clone(&context));
     network.start().expect("Error starting network component");
+
+    // Starting internal Web-server to provide HTML/CSS/JS for UI
+    thread::spawn(|| {
+        let _ = start_server();
+    });
 
     create_genesis_if_needed(&context, &miner);
     if no_gui {
