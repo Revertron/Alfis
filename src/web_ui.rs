@@ -14,25 +14,25 @@ use log::{debug, error, info, LevelFilter, trace, warn};
 use serde::Deserialize;
 
 use alfis::{Block, Bytes, Context, Keystore, Transaction};
-use alfis::keystore;
 use alfis::blockchain::transaction::DomainData;
 use alfis::blockchain::types::MineResult;
 use alfis::commons::*;
+use alfis::crypto::CryptoBox;
 use alfis::dns::protocol::DnsRecord;
 use alfis::event::Event;
+use alfis::eventbus::{post, register};
+use alfis::keystore;
 use alfis::miner::Miner;
 use Cmd::*;
 
 use self::web_view::{Handle, WebView};
-use alfis::crypto::CryptoBox;
-use alfis::eventbus::{register, post};
 use self::web_view::Content::Url;
 
 pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let title = format!("ALFIS {}", env!("CARGO_PKG_VERSION"));
     let mut interface = web_view::builder()
         .title(&title)
-        .content(Url("http://localhost:4280/"))
+        .content(Url(WEB_URL))
         .size(1023, 720)
         .min_size(773, 350)
         .resizable(true)

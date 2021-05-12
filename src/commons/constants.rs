@@ -45,3 +45,8 @@ pub const MAX_READ_BLOCK_TIME: u128 = 500;
 pub const MAX_RECONNECTS: u32 = 5;
 pub const MAX_IDLE_SECONDS: u64 = 180;
 pub const MAX_NODES: usize = 15;
+
+// Web-server is providing HTML/CSS/JS files to web-ui on this address
+pub const WEB_SERVER_ADDR: &str = "[::1]:4280";
+// Web-UI is loading its resources from this address
+pub const WEB_URL: &str = "http://localhost:4280/";
