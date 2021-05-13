@@ -10,6 +10,9 @@ This project represents a minimal blockchain without cryptocurrency, capable of 
 
 ![Screenshot](img/domains.png)
 
+## Note
+The `origin` of current testnet is `0000001D2A77D63477172678502E51DE7F346061FF7EB188A2445ECA3FC0780E`.
+
 ## How it works?
 Every node connects to its siblings and synchronizes the domain database.
 This DB consists of cryptographically bound blocks, that contain encrypted domain names, contacts, and some info, if you wish.
