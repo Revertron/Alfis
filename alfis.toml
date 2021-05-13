@@ -1,5 +1,5 @@
 # The hash of first block in a chain to know with which nodes to work
-origin = "00002883BB006454F795BE6902770B1A18D897B33A0AB1631F53C37C2F41F800"
+origin = "0000001D2A77D63477172678502E51DE7F346061FF7EB188A2445ECA3FC0780E"
 # A path to your key file to load automatically
 key_file = "key1.toml"
 # How many last blocks to check on start
