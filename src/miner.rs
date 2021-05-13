@@ -216,7 +216,8 @@ impl Miner {
                 mining.store(false, Ordering::SeqCst);
                 return;
             }
-            match context.lock().unwrap().chain.update_sign_block_for_mining(job.block) {
+            let new_block = context.lock().unwrap().chain.update_sign_block_for_mining(job.block);
+            match new_block {
                 None => {
                     warn!("We missed block to lock");
                     post(Event::MinerStopped { success: false, full: false });
