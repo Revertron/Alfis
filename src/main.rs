@@ -110,7 +110,6 @@ fn main() {
 
     let settings = Settings::load(&config_name).expect(&format!("Cannot load settings from {}!", &config_name));
     debug!(target: LOG_TARGET_MAIN, "Loaded settings: {:?}", &settings);
-    let keystore = Keystore::from_file(&settings.key_file, "");
     let chain: Chain = Chain::new(&settings, DB_NAME);
     if opt_matches.opt_present("b") {
         for i in 1..(chain.get_height() + 1) {
@@ -121,7 +120,26 @@ fn main() {
         return;
     }
     let settings_copy = settings.clone();
-    let context = Context::new(env!("CARGO_PKG_VERSION").to_owned(), settings, keystore, chain);
+    let mut keys = Vec::new();
+    if settings.key_files.len() > 0 {
+        for name in &settings.key_files {
+            match Keystore::from_file(name, "") {
+                None => { warn!("Error loading keyfile from {}", name); }
+                Some(keystore) => {
+                    info!("Successfully loaded keyfile {}", name);
+                    keys.push(keystore);
+                }
+            }
+        }
+    } else {
+        match Keystore::from_file(&settings.key_file, "") {
+            None => { warn!("Error loading keyfile from {}", &settings.key_file); }
+            Some(keystore) => {
+                keys.push(keystore);
+            }
+        }
+    }
+    let context = Context::new(env!("CARGO_PKG_VERSION").to_owned(), settings, keys, chain);
     let context: Arc<Mutex<Context>> = Arc::new(Mutex::new(context));
 
     // If we just need to generate keys
@@ -137,7 +155,7 @@ fn main() {
                 let mining_copy = Arc::clone(&mining_copy);
                 let filename = filename.clone();
                 thread::spawn(move || {
-                    if let Some(mut keystore) = context_copy.lock().unwrap().get_keystore() {
+                    if let Some(keystore) = context_copy.lock().unwrap().get_keystore_mut() {
                         keystore.save(&filename, "");
                         mining_copy.store(false, Ordering::Relaxed);
                     }
@@ -237,7 +255,7 @@ fn setup_logger(opt_matches: &Matches) {
 /// Gets own domains by current loaded keystore and writes them to log
 fn print_my_domains(context: &Arc<Mutex<Context>>) {
     let context = context.lock().unwrap();
-    let domains = context.chain.get_my_domains(&context.keystore);
+    let domains = context.chain.get_my_domains(context.get_keystore());
     debug!("Domains: {:?}", &domains);
 }
 
@@ -248,7 +266,7 @@ fn create_genesis_if_needed(context: &Arc<Mutex<Context>>, miner: &Arc<Mutex<Min
     let last_block = context.get_chain().last_block();
     let origin = context.settings.origin.clone();
     if origin.is_empty() && last_block.is_none() {
-        if let Some(keystore) = &context.keystore {
+        if let Some(keystore) = context.get_keystore() {
             // If blockchain is empty, we are going to mine a Genesis block
             let transaction = Transaction::origin(Chain::get_zones_hash(), keystore.get_public(), keystore.get_encryption_public());
             let block = Block::new(Some(transaction), keystore.get_public(), Bytes::default(), ORIGIN_DIFFICULTY);

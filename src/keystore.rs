@@ -247,7 +247,7 @@ pub fn create_key(context: Arc<Mutex<Context>>) {
                     let path = keystore.get_path().to_owned();
                     let public = keystore.get_public().to_string();
                     info!("Key mined successfully! Public key: {}, hash: {}", &public, &hash);
-                    context.set_keystore(Some(keystore));
+                    context.add_keystore(keystore);
                     post(Event::KeyCreated { path, public, hash });
                 }
             }

@@ -253,12 +253,12 @@ impl Chain {
         Ok(())
     }
 
-    pub fn get_sign_block(&self, keystore: &Option<Keystore>) -> Option<Block> {
+    pub fn get_sign_block(&self, keys: &Vec<Keystore>) -> Option<(Block, Keystore)> {
         if self.get_height() < BLOCK_SIGNERS_START {
             trace!("Too early to start block signings");
             return None;
         }
-        if keystore.is_none() {
+        if keys.is_empty() {
             trace!("We can't sign blocks without keys");
             return None;
         }
@@ -288,22 +288,24 @@ impl Chain {
             None => { return None; }
         };
 
-        let keystore = keystore.clone().unwrap().clone();
         let signers: HashSet<Bytes> = self.get_block_signers(&block).into_iter().collect();
-        if signers.contains(&keystore.get_public()) {
-            for index in block.index..=self.get_height() {
-                let b = self.get_block(index).unwrap();
-                if b.pub_key == keystore.get_public() {
-                    info!("We already mined signing block for block {}", block.index);
-                    return None;
+        'key_loop: for keystore in keys {
+            if signers.contains(&keystore.get_public()) {
+                for index in block.index..=self.get_height() {
+                    let b = self.get_block(index).unwrap();
+                    if b.pub_key == keystore.get_public() {
+                        debug!("We already mined signing block for block {} by {:?}", block.index, &b.pub_key);
+                        continue 'key_loop;
+                    }
                 }
-            }
 
-            info!("We have an honor to mine signing block!");
-            let mut block = Block::new(None, Bytes::default(), last_hash, SIGNER_DIFFICULTY);
-            block.index = last_index + 1;
-            return Some(block);
-        } else if !signers.is_empty() {
+                info!("We have an honor to mine signing block!");
+                let mut block = Block::new(None, Bytes::default(), last_hash, SIGNER_DIFFICULTY);
+                block.index = last_index + 1;
+                return Some((block, keystore.clone()));
+            }
+        }
+        if !signers.is_empty() {
             info!("Signing block must be mined by other nodes");
         }
         None
@@ -590,7 +592,7 @@ impl Chain {
         }
     }
 
-    pub fn get_my_domains(&self, keystore: &Option<Keystore>) -> HashMap<Bytes, (String, i64, DomainData)> {
+    pub fn get_my_domains(&self, keystore: Option<&Keystore>) -> HashMap<Bytes, (String, i64, DomainData)> {
         if keystore.is_none() {
             return HashMap::new();
         }

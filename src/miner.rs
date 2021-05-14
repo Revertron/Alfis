@@ -149,13 +149,13 @@ impl Miner {
 
                     if !signing_waits {
                         if let Ok(context) = context.lock() {
-                            let keystore = context.get_keystore();
+                            let keystores = context.get_keystores();
                             // Ask the blockchain if we have to sign something
-                            if let Some(block) = context.chain.get_sign_block(&keystore) {
+                            if let Some((block, keystore)) = context.chain.get_sign_block(keystores) {
                                 info!("Got signing job, adding to queue");
                                 // We start mining sign block after some time, not everyone in the same time
                                 let start = Utc::now().timestamp() + (rand::random::<i64>() % BLOCK_SIGNERS_START_RANDOM);
-                                jobs.push(MineJob { start, block, keystore: keystore.unwrap() });
+                                jobs.push(MineJob { start, block, keystore });
                             }
                         }
                     }
@@ -177,13 +177,13 @@ impl Miner {
                 } else {
                     // If our queue is empty
                     if let Ok(context) = context.lock() {
-                        let keystore = context.get_keystore();
+                        let keystores = context.get_keystores();
                         // Ask the blockchain if we have to sign something
-                        if let Some(block) = context.chain.get_sign_block(&keystore) {
+                        if let Some((block, keystore)) = context.chain.get_sign_block(keystores) {
                             info!("Got signing job, adding to queue");
                             // We start mining sign block after some time, not everyone in the same time
                             let start = Utc::now().timestamp() + (rand::random::<i64>() % BLOCK_SIGNERS_START_RANDOM);
-                            jobs.push(MineJob { start, block, keystore: keystore.unwrap() });
+                            jobs.push(MineJob { start, block, keystore });
                         }
                     }
                 }

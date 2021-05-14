@@ -1,7 +1,7 @@
 # The hash of first block in a chain to know with which nodes to work
 origin = "0000001D2A77D63477172678502E51DE7F346061FF7EB188A2445ECA3FC0780E"
-# A path to your key file to load automatically
-key_file = "key1.toml"
+# Paths to your key files to load automatically
+key_files = ["key1.toml", "key2.toml", "key3.toml", "key4.toml", "key5.toml"]
 # How many last blocks to check on start
 check_blocks = 8
 

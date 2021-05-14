@@ -12,7 +12,10 @@ pub struct Settings {
     #[serde(default)]
     pub origin: String,
     #[serde(default)]
+    #[deprecated]
     pub key_file: String,
+    #[serde(default)]
+    pub key_files: Vec<String>,
     #[serde(default = "default_check_blocks")]
     pub check_blocks: u64,
     #[serde(default)]
@@ -52,8 +55,9 @@ impl Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            origin: String::from("00002883BB006454F795BE6902770B1A18D897B33A0AB1631F53C37C2F41F800"),
-            key_file: String::from("default.key"),
+            origin: String::from("0000001D2A77D63477172678502E51DE7F346061FF7EB188A2445ECA3FC0780E"),
+            key_file: String::from("key1.toml"),
+            key_files: Vec::new(),
             check_blocks: default_check_blocks(),
             net: Net::default(),
             dns: Default::default(),

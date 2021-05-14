@@ -4,6 +4,8 @@ var ownerEncryption = "";
 var availableZones = [];
 var myDomains = [];
 var currentZone;
+var currentSelectedKey = -1;
+var keysLoaded = [];
 
 document.addEventListener('click', function (event) {
     closeDropdowns();
@@ -576,4 +578,50 @@ function changeZone(zone, event) {
         }
     });
     refreshZonesList();
+}
+
+function refreshKeysMenu() {
+    var buf = "";
+    keysLoaded.forEach(function(value, index, array) {
+        var file_name = value.file_name;
+        if (file_name == "") {
+            file_name = "[Not saved]";
+        }
+        var public = value.public;
+
+        var add_class = "";
+        if (currentSelectedKey == index) {
+            add_class = "is-active";
+        }
+        buf += "<a id=\"key-{id}\" class=\"dropdown-item {class}\" onclick=\"selectKey({index}, event);\" title=\"{title}\">{name}</a>"
+            .replace("{id}", index)
+            .replace("{index}", index)
+            .replace("{class}", add_class)
+            .replace("{title}", public)
+            .replace("{name}", file_name);
+    });
+    var links = document.getElementById("keys_links");
+    links.innerHTML = buf;
+    if (currentSelectedKey >= 0) {
+        var cur_name = document.getElementById("keys_current_name");
+        cur_name.innerHTML = keysLoaded[currentSelectedKey].file_name;
+    }
+}
+
+function keysChanged(json) {
+    keysLoaded = JSON.parse(json);
+    refreshKeysMenu();
+}
+
+function selectKey(index, event) {
+    event.stopPropagation();
+    closeDropdowns();
+    if (currentSelectedKey != index) {
+        external.invoke(JSON.stringify({cmd: 'selectKey', index: parseInt(index)}));
+    }
+}
+
+function keySelected(index) {
+    currentSelectedKey = index;
+    refreshKeysMenu();
 }

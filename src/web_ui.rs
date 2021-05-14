@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use chrono::{DateTime, Local};
 #[allow(unused_imports)]
 use log::{debug, error, info, LevelFilter, trace, warn};
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 use web_view::Content;
 
 use alfis::{Block, Bytes, Context, Keystore, Transaction};
@@ -52,6 +52,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                 LoadKey => { action_load_key(&context, web_view); }
                 CreateKey => { keystore::create_key(Arc::clone(&context)); }
                 SaveKey => { action_save_key(&context); }
+                SelectKey { index } => { action_select_key(&context, web_view, index); }
                 CheckRecord { data } => { action_check_record(web_view, data); }
                 CheckDomain { name } => { action_check_domain(&context, web_view, name); }
                 MineDomain { name, data, signing, encryption } => {
@@ -130,7 +131,7 @@ fn action_check_domain(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>
 }
 
 fn action_save_key(context: &Arc<Mutex<Context>>) {
-    if context.lock().unwrap().get_keystore().is_none() {
+    if !context.lock().unwrap().has_keys() {
         return;
     }
     let result = tfd::save_file_dialog_with_filter("Save keys file", "", &["*.toml"], "Key files (*.toml)");
@@ -141,7 +142,7 @@ fn action_save_key(context: &Arc<Mutex<Context>>) {
                 new_path.push_str(".toml");
             }
             let path = new_path.clone();
-            if let Some(mut keystore) = context.lock().unwrap().get_keystore() {
+            if let Some(keystore) = context.lock().unwrap().get_keystore_mut() {
                 let public = keystore.get_public().to_string();
                 let hash = keystore.get_hash().to_string();
                 keystore.save(&new_path, "");
@@ -149,6 +150,20 @@ fn action_save_key(context: &Arc<Mutex<Context>>) {
                 post(Event::KeySaved { path, public, hash });
             }
         }
+    }
+}
+
+fn action_select_key(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>, index: usize) {
+    if context.lock().unwrap().select_key_by_index(index) {
+        let (path, public, hash) = {
+            let keystore = context.lock().unwrap().get_keystore().cloned().unwrap();
+            let path = keystore.get_path().to_owned();
+            let public = keystore.get_public().to_string();
+            let hash = keystore.get_hash().to_string();
+            (path, public, hash)
+        };
+        post(Event::KeyLoaded { path, public, hash });
+        web_view.eval(&format!("keySelected({})", index)).expect("Error evaluating!");
     }
 }
 
@@ -169,7 +184,12 @@ fn action_load_key(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                     let public = keystore.get_public().to_string();
                     let hash = keystore.get_hash().to_string();
                     post(Event::KeyLoaded { path, public, hash });
-                    context.lock().unwrap().set_keystore(Some(keystore));
+
+                    if !context.lock().unwrap().select_key_by_public(&keystore.get_public()) {
+                        context.lock().unwrap().add_keystore(keystore);
+                    } else {
+                        warn!("This key is already loaded!");
+                    }
                 }
             }
         }
@@ -200,6 +220,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
             let eval = match e {
                 Event::KeyCreated { path, public, hash } => {
                     load_domains(&mut context, &handle);
+                    send_keys_to_ui(&mut context, &handle);
                     event_handle_luck(&handle, "Key successfully created! Don\\'t forget to save it!");
                     let mut s = format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash);
                     s.push_str(" showSuccess('New key mined successfully! Save it to a safe place!')");
@@ -208,6 +229,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                 Event::KeyLoaded { path, public, hash } |
                 Event::KeySaved { path, public, hash } => {
                     load_domains(&mut context, &handle);
+                    send_keys_to_ui(&mut context, &handle);
                     format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash)
                 }
                 Event::MinerStarted | Event::KeyGeneratorStarted => {
@@ -320,6 +342,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
     if let Ok(zones) = serde_json::to_string(&zones) {
         let _ = web_view.eval(&format!("zonesChanged('{}');", &zones));
     }
+    send_keys_to_ui(&c, &web_view.handle());
     event_info(web_view, "Application loaded");
 }
 
@@ -327,7 +350,7 @@ fn load_domains(context: &mut MutexGuard<Context>, handle: &Handle<()>) {
     let _ = handle.dispatch(move |web_view|{
         web_view.eval("clearMyDomains();")
     });
-    let domains = context.chain.get_my_domains(&context.keystore);
+    let domains = context.chain.get_my_domains(context.get_keystore());
     debug!("Domains: {:?}", &domains.values());
     for (_identity, (domain, timestamp, data)) in domains {
         let d = serde_json::to_string(&data).unwrap();
@@ -341,11 +364,30 @@ fn load_domains(context: &mut MutexGuard<Context>, handle: &Handle<()>) {
     });
 }
 
+fn send_keys_to_ui(context: &MutexGuard<Context>, handle: &Handle<()>) {
+    let keys = {
+        let mut keys = Vec::new();
+        for key in context.get_keystores() {
+            let path = key.get_path().replace("\\", "/");
+            let parts: Vec<&str> = path.rsplitn(2, "/").collect();
+            keys.push(KeysForJS { file_name: parts[0].to_owned(), public: key.get_public().to_string() });
+        }
+        keys
+    };
+    if !keys.is_empty() {
+        let index = context.get_active_key_index();
+        let _ = handle.dispatch(move |web_view| {
+            let command = format!("keysChanged('{}'); keySelected({});", serde_json::to_string(&keys).unwrap(), index);
+            web_view.eval(&command)
+        });
+    }
+}
+
 fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, web_view: &mut WebView<()>, name: String, data: String, signing: String, encryption: String) {
     debug!("Creating domain with data: {}", &data);
     let c = Arc::clone(&context);
     let context = context.lock().unwrap();
-    if context.get_keystore().is_none() {
+    if !context.has_keys() {
         show_warning(web_view, "You don't have keys loaded!<br>Load or mine the keys and try again.");
         let _ = web_view.eval("domainMiningUnavailable();");
         return;
@@ -356,7 +398,7 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
         info!("Waiting for last full block to be signed. Try again later.");
         return;
     }
-    let keystore = context.get_keystore().unwrap();
+    let keystore = context.get_keystore().unwrap().clone();
     let pub_key = keystore.get_public();
     let data = match serde_json::from_str::<DomainData>(&data) {
         Ok(data) => { data }
@@ -536,6 +578,7 @@ pub enum Cmd {
     LoadKey,
     CreateKey,
     SaveKey,
+    SelectKey { index: usize },
     CheckRecord { data: String },
     CheckDomain { name: String },
     MineDomain { name: String, data: String, signing: String, encryption: String },
@@ -569,6 +612,12 @@ impl Status {
     fn get_speed(&self) -> u64 {
         self.speed.iter().sum()
     }
+}
+
+#[derive(Serialize)]
+struct KeysForJS {
+    file_name: String,
+    public: String
 }
 
 fn inline_style(s: &str) -> String {
