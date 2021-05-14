@@ -997,6 +997,6 @@ pub mod tests {
         let settings = Settings::default();
         let mut chain = Chain::new(&settings, "./tests/blockchain.db");
         chain.check_chain(u64::MAX);
-        assert_eq!(chain.get_height(), 2);
+        assert_eq!(chain.get_height(), 149);
     }
 }
