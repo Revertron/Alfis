@@ -56,6 +56,9 @@ Install from available [AUR package](https://aur.archlinux.org/packages/alfis) c
 yay -S alfis
 ```
 
+### On Nix/NixOS
+`nix-shell` in this repo and then run `cargo build` and `cargo install` after you have entered the shell.
+
 ## Installation
 
 ### Debian/Ubuntu (only blockchain DNS, without GUI)
