@@ -28,6 +28,8 @@ You can download and run already built binaries from [releases](https://github.c
 You can build Alfis by issuing `cargo build` and `cargo run` commands in a directory of cloned repository.
 If you want to build release version you need to do `cargo build --release` as usual.
 
+If you have the Nix package manager on Linux/Mac/Windows, an initial `shell.nix` is provided that provides build tools and dependencies. Run `nix-shell` to enter it, then run `cargo build` and `cargo run` as listed above.
+
 ### ![Windows Logo](/img/windows.svg) On Windows
 You don't need any additional steps to build Alfis, just stick to the MSVC version of Rust.
 
@@ -55,6 +57,9 @@ Install from available [AUR package](https://aur.archlinux.org/packages/alfis) c
 ```sh
 yay -S alfis
 ```
+
+### On NixOS
+`nix-shell` in this repo and then run `cargo build` and `cargo install` after you have entered the shell
 
 ## Installation
 
