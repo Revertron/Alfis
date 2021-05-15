@@ -561,6 +561,9 @@ fn handle_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &Token, 
                 post(crate::event::Event::BlockchainChanged { index });
             } else {
                 debug!("Fork in not better than our block, dropping.");
+                if let Some(block) = context.chain.get_block(block.index) {
+                    return State::message(Message::block(block.index, serde_json::to_string(&block).unwrap()));
+                }
             }
         }
     }
