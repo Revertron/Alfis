@@ -72,7 +72,7 @@ wget -O - https://deb.revertron.com/key.txt | sudo apt-key add -
 ```
 2. Add repository path to sources list
 ```
-echo 'deb http://deb.revertron.com/ debian alfis' | sudo tee /etc/apt/sources.list.d/alfis.list
+echo 'deb https://deb.revertron.com/ debian alfis' | sudo tee /etc/apt/sources.list.d/alfis.list
 ```
 3. Update packages and install ALFIS
 ```

@@ -14,7 +14,7 @@ pub struct Settings {
     #[serde(default)]
     #[deprecated]
     pub key_file: String,
-    #[serde(default)]
+    #[serde(default = "default_key_files")]
     pub key_files: Vec<String>,
     #[serde(default = "default_check_blocks")]
     pub check_blocks: u64,
@@ -56,8 +56,8 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             origin: String::from("0000001D2A77D63477172678502E51DE7F346061FF7EB188A2445ECA3FC0780E"),
-            key_file: String::from("key1.toml"),
-            key_files: Vec::new(),
+            key_file: String::default(),
+            key_files: default_key_files(),
             check_blocks: default_check_blocks(),
             net: Net::default(),
             dns: Default::default(),
@@ -133,4 +133,14 @@ fn default_threads() -> usize {
 
 fn default_check_blocks() -> u64 {
     8
+}
+
+fn default_key_files() -> Vec<String> {
+    vec![
+        String::from("key1.toml"),
+        String::from("key2.toml"),
+        String::from("key3.toml"),
+        String::from("key4.toml"),
+        String::from("key5.toml"),
+    ]
 }
