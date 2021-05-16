@@ -19,6 +19,7 @@ use crate::blockchain::types::MineResult::*;
 use crate::commons::constants::*;
 use crate::keystore::check_public_key_strength;
 use crate::settings::Settings;
+use rand::prelude::IteratorRandom;
 
 const TEMP_DB_NAME: &str = ":memory:";
 const SQL_CREATE_TABLES: &str = include_str!("data/create_db.sql");
@@ -289,21 +290,24 @@ impl Chain {
         };
 
         let signers: HashSet<Bytes> = self.get_block_signers(&block).into_iter().collect();
-        'key_loop: for keystore in keys {
-            if signers.contains(&keystore.get_public()) {
+        let mut rng = rand::thread_rng();
+        let keystore = keys.iter()
+            .filter(|keystore| signers.contains(&keystore.get_public()))
+            .filter(|keystore| {
                 for index in block.index..=self.get_height() {
                     let b = self.get_block(index).unwrap();
                     if b.pub_key == keystore.get_public() {
                         debug!("We already mined signing block for block {} by {:?}", block.index, &b.pub_key);
-                        continue 'key_loop;
+                        return false;
                     }
                 }
-
-                info!("We have an honor to mine signing block!");
-                let mut block = Block::new(None, Bytes::default(), last_hash, SIGNER_DIFFICULTY);
-                block.index = last_index + 1;
-                return Some((block, keystore.clone()));
-            }
+                true
+            }).choose(&mut rng);
+        if let Some(keystore) = keystore {
+            info!("We have an honor to mine signing block!");
+            let mut block = Block::new(None, Bytes::default(), last_hash, SIGNER_DIFFICULTY);
+            block.index = last_index + 1;
+            return Some((block, keystore.clone()));
         }
         if !signers.is_empty() {
             info!("Signing block must be mined by other nodes");
