@@ -33,6 +33,7 @@ pub enum QueryType {
     NS,    // 2
     CNAME, // 5
     SOA,   // 6
+    PTR,   // 12
     MX,    // 15
     TXT,   // 16
     AAAA,  // 28
@@ -48,6 +49,7 @@ impl QueryType {
             QueryType::NS => 2,
             QueryType::CNAME => 5,
             QueryType::SOA => 6,
+            QueryType::PTR => 12,
             QueryType::MX => 15,
             QueryType::TXT => 16,
             QueryType::AAAA => 28,
@@ -62,6 +64,7 @@ impl QueryType {
             2 => QueryType::NS,
             5 => QueryType::CNAME,
             6 => QueryType::SOA,
+            12 => QueryType::PTR,
             15 => QueryType::MX,
             16 => QueryType::TXT,
             28 => QueryType::AAAA,
@@ -135,6 +138,11 @@ pub enum DnsRecord {
         minimum: u32,
         ttl: TransientTtl,
     }, // 6
+    PTR {
+        domain: String,
+        data: String,
+        ttl: TransientTtl,
+    }, // 12
     MX {
         domain: String,
         priority: u16,
@@ -249,6 +257,16 @@ impl DnsRecord {
                     weight,
                     port,
                     host: srv,
+                    ttl: TransientTtl(ttl),
+                })
+            }
+            QueryType::PTR => {
+                let mut ptr = String::new();
+                buffer.read_qname(&mut ptr)?;
+
+                Ok(DnsRecord::PTR {
+                    domain,
+                    data: ptr,
                     ttl: TransientTtl(ttl),
                 })
             }
@@ -429,6 +447,20 @@ impl DnsRecord {
                 let size = buffer.pos() - (pos + 2);
                 buffer.set_u16(pos, size as u16)?;
             }
+            DnsRecord::PTR { ref domain, ref data, ttl: TransientTtl(ttl) } => {
+                buffer.write_qname(domain)?;
+                buffer.write_u16(QueryType::PTR.to_num())?;
+                buffer.write_u16(1)?;
+                buffer.write_u32(ttl)?;
+
+                let pos = buffer.pos();
+                buffer.write_u16(0)?;
+
+                buffer.write_qname(data)?;
+
+                let size = buffer.pos() - (pos + 2);
+                buffer.set_u16(pos, size as u16)?;
+            }
             DnsRecord::MX {
                 ref domain,
                 priority,
@@ -510,6 +542,7 @@ impl DnsRecord {
             DnsRecord::NS { .. } => QueryType::NS,
             DnsRecord::CNAME { .. } => QueryType::CNAME,
             DnsRecord::SRV { .. } => QueryType::SRV,
+            DnsRecord::PTR { .. } => QueryType::PTR,
             DnsRecord::MX { .. } => QueryType::MX,
             DnsRecord::UNKNOWN { qtype, .. } => QueryType::UNKNOWN(qtype),
             DnsRecord::SOA { .. } => QueryType::SOA,
@@ -525,6 +558,7 @@ impl DnsRecord {
             | DnsRecord::NS { ref domain, .. }
             | DnsRecord::CNAME { ref domain, .. }
             | DnsRecord::SRV { ref domain, .. }
+            | DnsRecord::PTR { ref domain, .. }
             | DnsRecord::MX { ref domain, .. }
             | DnsRecord::UNKNOWN { ref domain, .. }
             | DnsRecord::SOA { ref domain, .. }
@@ -540,6 +574,7 @@ impl DnsRecord {
             DnsRecord::NS { ref host, .. } => Some(host.clone()),
             DnsRecord::CNAME { ref host, .. } => Some(host.clone()),
             DnsRecord::SRV { ref host, .. } => Some(host.clone()),
+            DnsRecord::PTR { ref data, .. } => Some(data.clone()),
             DnsRecord::MX { ref host, .. } => Some(host.clone()),
             DnsRecord::TXT { ref data, .. } => Some(data.clone()),
             DnsRecord::SOA { ref m_name, ref r_name, .. } => {
@@ -572,6 +607,10 @@ impl DnsRecord {
                 ..
             }
             | DnsRecord::SRV {
+                ttl: TransientTtl(ttl),
+                ..
+            }
+            | DnsRecord::PTR {
                 ttl: TransientTtl(ttl),
                 ..
             }

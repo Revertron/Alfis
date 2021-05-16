@@ -132,6 +132,7 @@ pub fn is_yggdrasil_record(record: &DnsRecord) -> bool {
         DnsRecord::NS { .. } => {}
         DnsRecord::CNAME { .. } => {}
         DnsRecord::SOA { .. } => {}
+        DnsRecord::PTR { .. } => {}
         DnsRecord::MX { .. } => {}
         DnsRecord::TXT { .. } => {}
         DnsRecord::AAAA { addr, .. } => { return is_yggdrasil(&IpAddr::from(*addr))}
