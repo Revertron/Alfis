@@ -34,9 +34,9 @@ const SQL_ADD_DOMAIN: &str = "INSERT INTO domains (id, timestamp, identity, conf
 const SQL_GET_BLOCK_BY_ID: &str = "SELECT * FROM blocks WHERE id=? LIMIT 1;";
 const SQL_GET_LAST_FULL_BLOCK: &str = "SELECT * FROM blocks WHERE id < ? AND `transaction`<>'' ORDER BY id DESC LIMIT 1;";
 const SQL_GET_LAST_FULL_BLOCK_FOR_KEY: &str = "SELECT * FROM blocks WHERE id < ? AND `transaction`<>'' AND pub_key = ? ORDER BY id DESC LIMIT 1;";
-const SQL_GET_DOMAIN_OWNER_BY_ID: &str = "SELECT signing FROM domains WHERE id < ? AND identity = ? LIMIT 1;";
+const SQL_GET_DOMAIN_OWNER_BY_ID: &str = "SELECT signing FROM domains WHERE id < ? AND identity = ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_DOMAIN_BY_ID: &str = "SELECT * FROM domains WHERE identity = ? ORDER BY id DESC LIMIT 1;";
-const SQL_GET_DOMAINS_BY_KEY: &str = "SELECT * FROM domains WHERE signing = ?;";
+const SQL_GET_DOMAINS_BY_KEY: &str = "SELECT * FROM domains WHERE signing = ? ORDER BY id;";
 
 const SQL_GET_OPTIONS: &str = "SELECT * FROM options;";
 
@@ -247,7 +247,7 @@ impl Chain {
     }
 
     pub fn replace_block(&mut self, block: Block) -> sqlite::Result<()> {
-        warn!("Replacing block {} with:\n{:?}", block.index, &block);
+        info!("Replacing block {} with:\n{:?}", block.index, &block);
         self.signers.borrow_mut().clear();
         self.truncate_db_from_block(block.index)?;
         self.add_block(block);
@@ -476,7 +476,6 @@ impl Chain {
 
     /// Checks if this identity is free or is owned by the same pub_key
     pub fn is_id_available(&self, height: u64, identity: &Bytes, public_key: &Bytes) -> bool {
-        // TODO check for `owner` field
         let mut statement = self.db.prepare(SQL_GET_DOMAIN_OWNER_BY_ID).unwrap();
         statement.bind(1, height as i64).expect("Error in bind");
         statement.bind(2, &***identity).expect("Error in bind");
@@ -559,15 +558,9 @@ impl Chain {
         Fine
     }
 
-    /// Gets full Transaction info for any domain. Used by DNS part.
-    pub fn get_domain_transaction(&self, domain: &str) -> Option<Transaction> {
-        if domain.is_empty() {
-            return None;
-        }
-        let identity_hash = hash_identity(domain, None);
-
+    pub fn get_id_transaction(&self, identity_hash: &Bytes) -> Option<Transaction> {
         let mut statement = self.db.prepare(SQL_GET_DOMAIN_BY_ID).unwrap();
-        statement.bind(1, &**identity_hash).expect("Error in bind");
+        statement.bind(1, identity_hash.as_slice()).expect("Error in bind");
         while let State::Row = statement.next().unwrap() {
             let timestamp = statement.read::<i64>(1).unwrap();
             if timestamp < Utc::now().timestamp() - DOMAIN_LIFETIME {
@@ -581,6 +574,18 @@ impl Chain {
             let signing = Bytes::from_bytes(&statement.read::<Vec<u8>>(5).unwrap());
             let encryption = Bytes::from_bytes(&statement.read::<Vec<u8>>(6).unwrap());
             let transaction = Transaction { identity, confirmation, class, data, signing, encryption };
+            return Some(transaction);
+        }
+        None
+    }
+
+    /// Gets full Transaction info for any domain. Used by DNS part.
+    pub fn get_domain_transaction(&self, domain: &str) -> Option<Transaction> {
+        if domain.is_empty() {
+            return None;
+        }
+        let identity_hash = hash_identity(domain, None);
+        if let Some(transaction) = self.get_id_transaction(&identity_hash) {
             debug!("Found transaction for domain {}: {:?}", domain, &transaction);
             if transaction.check_identity(domain) {
                 return Some(transaction);
@@ -615,8 +620,17 @@ impl Chain {
             let data = statement.read::<String>(4).unwrap();
             let signing = Bytes::from_bytes(&statement.read::<Vec<u8>>(5).unwrap());
             let encryption = Bytes::from_bytes(&statement.read::<Vec<u8>>(6).unwrap());
+
+            // Get the last transaction for this id and check if it is still ours
+            if let Some(transaction) = self.get_id_transaction(&identity) {
+                if transaction.signing != signing {
+                    trace!("Identity {:?} is not ours anymore, skipping", &identity);
+                    continue;
+                }
+            }
+
             let transaction = Transaction { identity: identity.clone(), confirmation: confirmation.clone(), class, data, signing, encryption };
-            debug!("Found transaction for domain {:?}", &transaction);
+            //trace!("Found transaction for domain {:?}", &transaction);
             if let Some(data) = transaction.get_domain_data() {
                 let decrypted = keystore.decrypt(data.encrypted.as_slice());
                 let mut domain = String::from_utf8(decrypted.to_vec()).unwrap();
