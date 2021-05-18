@@ -604,7 +604,11 @@ function refreshKeysMenu() {
     links.innerHTML = buf;
     if (currentSelectedKey >= 0) {
         var cur_name = document.getElementById("keys_current_name");
-        cur_name.innerHTML = keysLoaded[currentSelectedKey].file_name;
+        if (keysLoaded[currentSelectedKey].file_name == "") {
+            cur_name.innerHTML = "[Not saved]";
+        } else {
+            cur_name.innerHTML = keysLoaded[currentSelectedKey].file_name;
+        }
     }
 }
 
