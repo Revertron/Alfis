@@ -354,7 +354,7 @@ fn load_domains(context: &mut MutexGuard<Context>, handle: &Handle<()>) {
     debug!("Domains: {:?}", &domains.values());
     for (_identity, (domain, timestamp, data)) in domains {
         let d = serde_json::to_string(&data).unwrap();
-        let command = format!("addMyDomain('{}', {}, '{}');", &domain, timestamp, &d);
+        let command = format!("addMyDomain('{}', {}, {}, '{}');", &domain, timestamp, timestamp + DOMAIN_LIFETIME, &d);
         let _ = handle.dispatch(move |web_view|{
             web_view.eval(&command)
         });

@@ -119,17 +119,31 @@ function clearMyDomains() {
     myDomains = [];
 }
 
-function addMyDomain(name, timestamp, data) {
-    myDomains.push({name: name, timestamp: timestamp, data: data});
+function addMyDomain(name, timestamp, expire, data) {
+    myDomains.push({name: name, timestamp: timestamp, expire: expire, data: data});
+}
+
+function formatDate(date) {
+    var month = date.getMonth() + 1;
+    if (month < 10) {
+        month = "0" + month;
+    }
+    var day = date.getDate();
+    if (day < 10) {
+        day = "0" + day;
+    }
+    return "{y}-{m}-{d}".replace("{y}", date.getFullYear()).replace("{m}", month).replace("{d}", day);
 }
 
 function refreshMyDomains() {
-    var card = '<div class="card is-clickable is-inline-block" onclick="editDomain(\'{domain}\', event);"><div class="card-content p-3"><div class="content is-small"><h3>{title}</h3><div class="tags">{tags}</div></div></div></div>';
+    var row = '<tr class="is-clickable" onclick="editDomain(\'{domain}\', event);"><td class="has-text-weight-semibold">{title}</td><td class="w100"><div class="tags">{tags}</div></td><td>{date1}</td><td>{date2}</td></tr>';
     var tag = '<span class="tag" title="{ip}">{domain}</span>';
-    var cards = "";
+    var rows = "";
     myDomains.forEach(function(value, index, array) {
         var title = value.name;
         var domain_data = JSON.parse(value.data);
+        var start = formatDate(new Date(value.timestamp * 1000));
+        var expire = formatDate(new Date(value.expire * 1000));
         var tags = "";
         if (typeof domain_data.records !== 'undefined') {
             domain_data.records.forEach(function(v, i, a) {
@@ -146,9 +160,9 @@ function refreshMyDomains() {
         } else {
             tags = tag.replace("{domain}", "No records").replace("{ip}", "");
         }
-        cards = cards + card.replace("{title}", title).replace("{domain}", title).replace("{tags}", tags);
+        rows = rows + row.replace("{title}", title).replace("{domain}", title).replace("{tags}", tags).replace("{date1}", start).replace("{date2}", expire);
     });
-    document.getElementById("my_domains").innerHTML = cards;
+    document.getElementById("my_domains").innerHTML = rows;
 }
 
 function editDomain(domain, event) {

@@ -114,11 +114,19 @@ body {
   margin-right: 0.8rem;
 }
 
+.w100 {
+  width: 100%;
+}
+
+th, td {
+  white-space: nowrap;
+}
+
 .list {
   overflow-y: auto;
 }
 
-path {
+.icon > svg > path {
   fill: #4a4a4a;
 }
 
