@@ -163,6 +163,11 @@ function refreshMyDomains() {
         rows = rows + row.replace("{title}", title).replace("{domain}", title).replace("{tags}", tags).replace("{date1}", start).replace("{date2}", expire);
     });
     document.getElementById("my_domains").innerHTML = rows;
+    if (rows != "") {
+        document.getElementById("my_domains_table").style.display = 'table';
+    } else {
+        document.getElementById("my_domains_table").style.display = 'none';
+    }
 }
 
 function editDomain(domain, event) {
