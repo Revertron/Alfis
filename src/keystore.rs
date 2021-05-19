@@ -73,51 +73,23 @@ impl Keystore {
         let path = Path::new(filename);
         match fs::read(&path) {
             Ok(key) => {
-                return match key.len() {
-                    32 => {
-                        let mut keystore = Keystore::from_random_bytes(key.as_slice());
-                        keystore.path = path.to_str().unwrap().to_owned();
-                        keystore.old = true;
+                match toml::from_slice::<Keys>(key.as_slice()) {
+                    Ok(keys) => {
+                        let secret = SecretKey::from_bytes(&from_hex(&keys.signing.secret).unwrap()).unwrap();
+                        let public = PublicKey::from_bytes(&from_hex(&keys.signing.public).unwrap()).unwrap();
+                        let keypair = Keypair { secret, public };
+                        let crypto_box = CryptoBox::from_strings(&keys.encryption.secret, &keys.encryption.public);
+                        let keystore = Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::from(filename), crypto_box, old: false };
                         let bytes = Bytes::from_bytes(&keystore.keypair.public.to_bytes());
                         if check_public_key_strength(&bytes, KEYSTORE_DIFFICULTY) {
-                            warn!("Loaded key from OLD format! Please, resave it!");
                             Some(keystore)
                         } else {
                             None
                         }
                     }
-                    64 => {
-                        let mut keystore = Self::from_bytes(key.as_slice());
-                        keystore.path = path.to_str().unwrap().to_owned();
-                        keystore.old = true;
-                        let bytes = Bytes::from_bytes(&keystore.keypair.public.to_bytes());
-                        if check_public_key_strength(&bytes, KEYSTORE_DIFFICULTY) {
-                            warn!("Loaded key from OLD format! Please, resave it!");
-                            Some(keystore)
-                        } else {
-                            None
-                        }
-                    }
-                    _ => {
-                        match toml::from_slice::<Keys>(key.as_slice()) {
-                            Ok(keys) => {
-                                let secret = SecretKey::from_bytes(&from_hex(&keys.signing.secret).unwrap()).unwrap();
-                                let public = PublicKey::from_bytes(&from_hex(&keys.signing.public).unwrap()).unwrap();
-                                let keypair = Keypair { secret, public };
-                                let crypto_box = CryptoBox::from_strings(&keys.encryption.secret, &keys.encryption.public);
-                                let keystore = Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::from(filename), crypto_box, old: false };
-                                let bytes = Bytes::from_bytes(&keystore.keypair.public.to_bytes());
-                                if check_public_key_strength(&bytes, KEYSTORE_DIFFICULTY) {
-                                    Some(keystore)
-                                } else {
-                                    None
-                                }
-                            }
-                            Err(e) => {
-                                error!("Error loading keystore from {}: {}", filename, e);
-                                None
-                            }
-                        }
+                    Err(e) => {
+                        error!("Error loading keystore from {}: {}", filename, e);
+                        None
                     }
                 }
             }

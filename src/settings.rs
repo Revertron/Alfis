@@ -11,9 +11,6 @@ use crate::Bytes;
 pub struct Settings {
     #[serde(default)]
     pub origin: String,
-    #[serde(default)]
-    #[deprecated]
-    pub key_file: String,
     #[serde(default = "default_key_files")]
     pub key_files: Vec<String>,
     #[serde(default = "default_check_blocks")]
@@ -56,7 +53,6 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             origin: String::from("0000001D2A77D63477172678502E51DE7F346061FF7EB188A2445ECA3FC0780E"),
-            key_file: String::default(),
             key_files: default_key_files(),
             check_blocks: default_check_blocks(),
             net: Net::default(),

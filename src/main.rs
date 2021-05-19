@@ -131,13 +131,6 @@ fn main() {
                 }
             }
         }
-    } else {
-        match Keystore::from_file(&settings.key_file, "") {
-            None => { warn!("Error loading keyfile from {}", &settings.key_file); }
-            Some(keystore) => {
-                keys.push(keystore);
-            }
-        }
     }
     let context = Context::new(env!("CARGO_PKG_VERSION").to_owned(), settings, keys, chain);
     let context: Arc<Mutex<Context>> = Arc::new(Mutex::new(context));
