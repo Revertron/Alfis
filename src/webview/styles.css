@@ -125,8 +125,27 @@ body {
   width: 100%;
 }
 
+.table {
+  background-color: transparent;
+}
+
 th, td {
   white-space: nowrap;
+}
+
+.table thead td, .table thead th {
+  border-width: 0 0 1px;
+}
+
+.table tbody tr td,
+.table tbody tr th {
+  border-bottom-width: 0;
+}
+
+.table.is-hoverable tbody tr:not(.is-selected):hover,
+.table.is-hoverable.is-striped tbody tr:not(.is-selected):hover
+.table.is-hoverable.is-fullwidth tbody tr:not(.is-selected):hover {
+  background-color: rgba(250, 250, 250, 0.7);
 }
 
 .list {

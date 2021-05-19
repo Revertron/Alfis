@@ -85,7 +85,10 @@
     </div>
 
     <!-- Domain mining -->
-    <div class="tab row page is-hidden" id="tab_domains" style="align-items: center;">
+    <div class="tab row page is-hidden" id="tab_domains">
+        <div style="text-align: right;" class="is-fullwidth mb-2">
+            <button class="button is-link is-light" onclick="showNewDomainDialog()" style="max-width: 200px;">New domain</button>
+        </div>
         <table class="table is-hoverable is-fullwidth">
             <thead>
             <tr>
@@ -99,7 +102,6 @@
             <!-- Here will be our domains -->
             </tbody>
         </table>
-        <button class="button is-link mt-2" onclick="showNewDomainDialog()" style="max-width: 200px;">New domain</button>
     </div>
 
     <!-- Events and notifications -->
