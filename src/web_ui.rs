@@ -303,11 +303,11 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                         format!("setLeftStatusBarText('Idle'); showMiningIndicator(false, false);")
                     }
                 }
-                Event::NetworkStatus { nodes, blocks } => {
+                Event::NetworkStatus { blocks, domains, keys, nodes } => {
                     if status.mining || status.syncing || nodes < 3 {
-                        format!("setRightStatusBarText('Nodes: {}, Blocks: {}')", nodes, blocks)
+                        format!("setStats({}, {}, {}, {});", blocks, domains, keys, nodes)
                     } else {
-                        format!("setLeftStatusBarText('Idle'); setRightStatusBarText('Nodes: {}, Blocks: {}')", nodes, blocks)
+                        format!("setLeftStatusBarText('Idle'); setStats({}, {}, {}, {});", blocks, domains, keys, nodes)
                     }
                 }
                 Event::BlockchainChanged {index} => {
@@ -343,6 +343,9 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
         let _ = web_view.eval(&format!("zonesChanged('{}');", &zones));
     }
     send_keys_to_ui(&c, &web_view.handle());
+    if let Err(e) = web_view.eval(&format!("setStats({}, {}, {}, {});", c.chain.get_height(), c.chain.get_domains_count(), c.chain.get_users_count(), 0)) {
+        error!("Error evaluating stats: {}", e);
+    }
     event_info(web_view, "Application loaded");
 }
 

@@ -37,6 +37,8 @@ const SQL_GET_LAST_FULL_BLOCK_FOR_KEY: &str = "SELECT * FROM blocks WHERE id < ?
 const SQL_GET_DOMAIN_OWNER_BY_ID: &str = "SELECT signing FROM domains WHERE id < ? AND identity = ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_DOMAIN_BY_ID: &str = "SELECT * FROM domains WHERE identity = ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_DOMAINS_BY_KEY: &str = "SELECT * FROM domains WHERE signing = ? ORDER BY id;";
+const SQL_GET_DOMAINS_COUNT: &str = "SELECT count(DISTINCT identity) FROM domains;";
+const SQL_GET_USERS_COUNT: &str = "SELECT count(DISTINCT pub_key) FROM blocks;";
 
 const SQL_GET_OPTIONS: &str = "SELECT * FROM options;";
 
@@ -599,6 +601,22 @@ impl Chain {
             None => { None }
             Some(transaction) => { Some(transaction.data) }
         }
+    }
+
+    pub fn get_domains_count(&self) -> i64 {
+        let mut statement = self.db.prepare(SQL_GET_DOMAINS_COUNT).unwrap();
+        while let State::Row = statement.next().unwrap() {
+            return statement.read::<i64>(0).unwrap();
+        }
+        0
+    }
+
+    pub fn get_users_count(&self) -> i64 {
+        let mut statement = self.db.prepare(SQL_GET_USERS_COUNT).unwrap();
+        while let State::Row = statement.next().unwrap() {
+            return statement.read::<i64>(0).unwrap();
+        }
+        0
     }
 
     pub fn get_my_domains(&self, keystore: Option<&Keystore>) -> HashMap<Bytes, (String, i64, DomainData)> {

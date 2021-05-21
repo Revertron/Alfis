@@ -82,6 +82,33 @@
             </div>
         </div>
         <p class="help">To mine domains you need to mine a strong pair of signing keys and a pair of encryption keys.</p>
+
+        <nav class="level is-mobile">
+            <div class="level-item has-text-centered">
+                <div>
+                    <p class="heading">Blocks in chain</p>
+                    <p class="title" id="stat_blocks">?</p>
+                </div>
+            </div>
+            <div class="level-item has-text-centered">
+                <div>
+                    <p class="heading">Domains</p>
+                    <p class="title" id="stat_domains">?</p>
+                </div>
+            </div>
+            <div class="level-item has-text-centered">
+                <div>
+                    <p class="heading">Users/Keys</p>
+                    <p class="title" id="stat_keys">?</p>
+                </div>
+            </div>
+            <div class="level-item has-text-centered">
+                <div>
+                    <p class="heading">Connected nodes</p>
+                    <p class="title" id="stat_nodes">0</p>
+                </div>
+            </div>
+        </nav>
     </div>
 
     <!-- Domain mining -->
@@ -138,7 +165,7 @@
     </div>
 
     <div class="row status is-family-code">
-        <div class="level">
+        <div class="level is-mobile">
             <div class="level-left">
                 <div class="level-item" id="indicator_parent">
                     <div class="busy_indicator busy_blue" id="busy_indicator" onclick="miningIndicatorClick(this)">
@@ -152,7 +179,7 @@
             </div>
 
             <div class="level-right">
-                <div class="level-item" id="status_bar_right">No data</div>
+                <div class="level-item" id="status_bar_right">🚀</div>
             </div>
         </div>
     </div>

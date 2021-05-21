@@ -12,7 +12,7 @@ pub enum Event {
     BlockchainChanged { index: u64 },
     ActionStopMining,
     ActionQuit,
-    NetworkStatus { nodes: usize, blocks: u64 },
+    NetworkStatus { blocks: u64, domains: i64, keys: i64, nodes: usize },
     Syncing { have: u64, height: u64 },
     SyncFinished,
 }

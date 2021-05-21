@@ -129,8 +129,10 @@ impl Network {
                         token => {
                             if !handle_connection_event(Arc::clone(&context), &mut peers, &poll.registry(), &event) {
                                 let _ = peers.close_peer(poll.registry(), &token);
-                                let blocks_count = context.lock().unwrap().chain.get_height();
-                                post(crate::event::Event::NetworkStatus { nodes: peers.get_peers_active_count(), blocks: blocks_count });
+                                let blocks = context.lock().unwrap().chain.get_height();
+                                let keys =  context.lock().unwrap().chain.get_users_count();
+                                let domains =  context.lock().unwrap().chain.get_domains_count();
+                                post(crate::event::Event::NetworkStatus { blocks, domains, keys, nodes: peers.get_peers_active_count() });
                             }
                         }
                     }
@@ -151,13 +153,16 @@ impl Network {
                     // Send pings to idle peers
                     let (height, hash) = {
                         let context = context.lock().unwrap();
-                        let height = context.chain.get_height();
+                        let blocks = context.chain.get_height();
                         let nodes = peers.get_peers_active_count();
                         let banned = peers.get_peers_banned_count();
-                        post(crate::event::Event::NetworkStatus { nodes, blocks: height });
+
+                        let keys =  context.chain.get_users_count();
+                        let domains =  context.chain.get_domains_count();
+                        post(crate::event::Event::NetworkStatus { blocks, domains, keys, nodes });
 
                         if log_timer.elapsed().as_secs() > LOG_REFRESH_DELAY_SEC {
-                            info!("Active nodes count: {}, banned count: {}, blocks count: {}", nodes, banned, height);
+                            info!("Active nodes count: {}, banned count: {}, blocks count: {}", nodes, banned, blocks);
                             let elapsed = last_events_time.elapsed().as_secs();
                             if elapsed >= 10 {
                                 warn!("Last network events time {} seconds ago", elapsed);
@@ -168,7 +173,7 @@ impl Network {
                             peers.connect_new_peers(poll.registry(), &mut unique_token, yggdrasil_only);
                             connect_timer = Instant::now();
                         }
-                        (height, context.chain.get_last_hash())
+                        (blocks, context.chain.get_last_hash())
                     };
                     peers.update(poll.registry(), height, hash);
                     ui_timer = Instant::now();
@@ -534,7 +539,9 @@ fn handle_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &Token, 
                 let event = crate::event::Event::Syncing { have: my_height, height: max(max_height, my_height) };
                 post(event);
             }
-            post(crate::event::Event::NetworkStatus { nodes: peers_count, blocks: my_height });
+            let domains = context.chain.get_domains_count();
+            let keys = context.chain.get_users_count();
+            post(crate::event::Event::NetworkStatus { blocks: my_height, domains, keys, nodes: peers_count });
         }
         BlockQuality::Twin => { debug!("Ignoring duplicate block {}", block.index); }
         BlockQuality::Future => { debug!("Ignoring future block {}", block.index); }

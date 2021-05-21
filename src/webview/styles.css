@@ -148,6 +148,12 @@ th, td {
   background-color: rgba(250, 250, 250, 0.7);
 }
 
+nav.level {
+  width: 100%;
+  position: absolute;
+  bottom: 6em;
+}
+
 .list {
   overflow-y: auto;
 }

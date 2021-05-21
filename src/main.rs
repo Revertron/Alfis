@@ -119,6 +119,7 @@ fn main() {
         }
         return;
     }
+    info!("Blocks count: {}, domains count: {}, users count: {}", chain.get_height(), chain.get_domains_count(), chain.get_users_count());
     let settings_copy = settings.clone();
     let mut keys = Vec::new();
     if settings.key_files.len() > 0 {

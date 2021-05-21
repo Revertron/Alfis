@@ -510,9 +510,11 @@ function setLeftStatusBarText(text) {
     bar.innerHTML = text;
 }
 
-function setRightStatusBarText(text) {
-    var bar = document.getElementById("status_bar_right");
-    bar.innerHTML = text;
+function setStats(blocks, domains, keys, nodes) {
+    document.getElementById("stat_blocks").innerHTML = blocks;
+    document.getElementById("stat_domains").innerHTML = domains;
+    document.getElementById("stat_keys").innerHTML = keys;
+    document.getElementById("stat_nodes").innerHTML = nodes;
 }
 
 function addEvent(type, time, message) {
