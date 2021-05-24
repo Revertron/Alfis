@@ -247,8 +247,9 @@ impl Miner {
         let threads = match threads {
             0 => cpus,
             _ => threads
-        };
+        } as u32;
         debug!("Starting {} threads for mining", threads);
+        debug!("Mining block {}", serde_json::to_string(&job.block).unwrap());
         let thread_spawn_interval = Duration::from_millis(100);
         let live_threads = Arc::new(AtomicU32::new(0u32));
         for cpu in 0..threads {
@@ -259,12 +260,14 @@ impl Miner {
             thread::spawn(move || {
                 live_threads.fetch_add(1, Ordering::SeqCst);
                 if lower {
-                    setup_miner_thread(cpu as u32);
+                    setup_miner_thread(cpu);
                 }
                 let full = job.block.transaction.is_some();
                 match find_hash(Arc::clone(&context), job.block, Arc::clone(&mining), cpu) {
                     None => {
-                        debug!("Mining was cancelled");
+                        if live_threads.load(Ordering::Relaxed) >= threads {
+                            debug!("Mining was cancelled");
+                        }
                         let count = live_threads.fetch_sub(1, Ordering::SeqCst);
                         // If this is the last thread, but mining was not stopped by another thread
                         if count == 1 {
@@ -303,7 +306,7 @@ impl Miner {
     }
 }
 
-fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<AtomicBool>, thread: usize) -> Option<Block> {
+fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<AtomicBool>, thread: u32) -> Option<Block> {
     let target_diff = block.difficulty;
     let full = block.transaction.is_some();
     let mut digest = Blakeout::new();
@@ -329,7 +332,6 @@ fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<Atomic
             continue;
         }
 
-        debug!("Mining block {}", serde_json::to_string(&block).unwrap());
         let mut time = Instant::now();
         let mut prev_nonce = 0;
         for nonce in 0..u64::MAX {
@@ -364,7 +366,7 @@ fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<Atomic
                     if let Ok(context) = context.try_lock() {
                         if context.chain.get_height() >= block.index {
                             if !full {
-                                info!("Blockchain changed while mining signing block, dropping work");
+                                //trace!("Blockchain changed while mining signing block, dropping work");
                                 running.store(false, Ordering::SeqCst);
                                 return None;
                             }

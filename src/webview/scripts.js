@@ -6,6 +6,7 @@ var myDomains = [];
 var currentZone;
 var currentSelectedKey = -1;
 var keysLoaded = [];
+var stateMining = false;
 
 document.addEventListener('click', function (event) {
     closeDropdowns();
@@ -482,8 +483,10 @@ function showMiningIndicator(visible, blue) {
     var indicator = document.getElementById("busy_indicator");
     var parent = document.getElementById("indicator_parent");
     var add = "";
+    stateMining = true;
     if (blue) {
         add = " busy_blue";
+        stateMining = false;
     }
     if (visible) {
         indicator.className = 'busy_indicator' + add;
@@ -500,9 +503,11 @@ function showMiningIndicator(visible, blue) {
 }
 
 function miningIndicatorClick(element) {
-    showModalDialog("Do you really want to stop mining?", function() {
-        external.invoke(JSON.stringify({cmd: 'stopMining'}));
-    });
+    if (stateMining) {
+        showModalDialog("Do you really want to stop mining?", function() {
+            external.invoke(JSON.stringify({cmd: 'stopMining'}));
+        });
+    }
 }
 
 function setLeftStatusBarText(text) {

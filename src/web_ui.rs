@@ -255,7 +255,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                             }
                             false => {
                                 event_handle_info(&handle, "Mining finished without result.");
-                                s.push_str(" showSuccess('Mining unsuccessful, sorry.')");
+                                s.push_str(" showWarning('Mining unsuccessful, sorry.')");
                             }
                         }
                     }
@@ -354,7 +354,7 @@ fn load_domains(context: &mut MutexGuard<Context>, handle: &Handle<()>) {
         web_view.eval("clearMyDomains();")
     });
     let domains = context.chain.get_my_domains(context.get_keystore());
-    debug!("Domains: {:?}", &domains.values());
+    //debug!("Domains: {:?}", &domains.values());
     for (_identity, (domain, timestamp, data)) in domains {
         let d = serde_json::to_string(&data).unwrap();
         let command = format!("addMyDomain('{}', {}, {}, '{}');", &domain, timestamp, timestamp + DOMAIN_LIFETIME, &d);
@@ -608,8 +608,8 @@ impl Status {
         Status { mining: false, syncing: false, synced_blocks: 0, sync_height: 0, nodes_connected: 0, chain_height: 0, max_diff: 0, speed }
     }
 
-    fn set_thread_speed(&mut self, thread: usize, speed: u64) {
-        self.speed[thread] = speed;
+    fn set_thread_speed(&mut self, thread: u32, speed: u64) {
+        self.speed[thread as usize] = speed;
     }
 
     fn get_speed(&self) -> u64 {
