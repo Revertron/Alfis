@@ -266,7 +266,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                         status.max_diff = max_diff;
                     }
                     status.set_thread_speed(thread, speed);
-                    if thread == threads - 1 {
+                    if thread as usize == threads - 1 {
                         format!("setLeftStatusBarText('Mining speed {} H/s, max found difficulty {}/{}.'); showMiningIndicator(true, false);", status.get_speed(), status.max_diff, target_diff)
                     } else {
                         String::new()
