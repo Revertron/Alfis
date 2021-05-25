@@ -542,6 +542,11 @@ fn handle_block(context: Arc<Mutex<Context>>, peers: &mut Peers, token: &Token, 
             let domains = context.chain.get_domains_count();
             let keys = context.chain.get_users_count();
             post(crate::event::Event::NetworkStatus { blocks: my_height, domains, keys, nodes: peers_count });
+            // To load blocks from different nodes we randomize requests of new blocks
+            // TODO rethink this approach
+            if max_height > my_height && random::<u8>() < 200 {
+                return State::message(Message::GetBlock { index: my_height + 1 });
+            }
         }
         BlockQuality::Twin => { debug!("Ignoring duplicate block {}", block.index); }
         BlockQuality::Future => { debug!("Ignoring future block {}", block.index); }
