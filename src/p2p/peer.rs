@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use mio::net::TcpStream;
 use crate::p2p::State;
 use crate::Block;
+use crate::crypto::Chacha;
 
 #[derive(Debug)]
 pub struct Peer {
@@ -16,6 +17,7 @@ pub struct Peer {
     active: bool,
     reconnects: u32,
     received_block: u64,
+    cipher: Option<Chacha>,
     fork: HashMap<u64, Block>
 }
 
@@ -32,7 +34,23 @@ impl Peer {
             active: false,
             reconnects: 0,
             received_block: 0,
+            cipher: None,
             fork: HashMap::new()
+        }
+    }
+
+    pub fn set_cipher(&mut self, cipher: Chacha) {
+        self.cipher = Some(cipher);
+    }
+
+    pub fn get_cipher(&self) -> &Option<Chacha> {
+        &self.cipher
+    }
+
+    pub fn get_nonce(&self) -> &[u8; 12] {
+        match &self.cipher {
+            None => { &crate::crypto::ZERO_NONCE }
+            Some(chacha) => { chacha.get_nonce() }
         }
     }
 

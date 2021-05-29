@@ -12,7 +12,6 @@ use rand::seq::IteratorRandom;
 use crate::{Bytes, commons};
 use crate::commons::*;
 use crate::p2p::{Message, Peer, State};
-use crate::commons::next;
 use std::io;
 
 const PING_PERIOD: u64 = 30;
@@ -83,6 +82,12 @@ impl Peers {
                     }
                     State::Twin => {
                         info!("Peer connection {} to {:?} is a twin", &token.0, &peer.get_addr());
+                    }
+                    State::ServerHandshake => {
+                        info!("Peer connection {} from {:?} didn't shake hands", &token.0, &peer.get_addr());
+                    }
+                    State::HandshakeFinished => {
+                        info!("Peer connection {} from {:?} shaked hands, but then failed", &token.0, &peer.get_addr());
                     }
                 }
 
@@ -191,6 +196,15 @@ impl Peers {
             }
         }
         count
+    }
+
+    pub fn is_tween_connect(&self, id: &str) -> bool {
+        for (_, peer) in self.peers.iter() {
+            if peer.active() && peer.get_id() == id {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn get_peers_banned_count(&self) -> usize {
@@ -399,6 +413,13 @@ impl Peers {
     pub fn need_behind_ping(&self) -> bool {
         self.behind_ping_sent_time + 5 < Utc::now().timestamp()
     }
+}
+
+/// Gets new token from old token, mutating the last
+pub fn next(current: &mut Token) -> Token {
+    let next = current.0;
+    current.0 += 1;
+    Token(next)
 }
 
 fn skip_private_addr(addr: &SocketAddr) -> bool {

@@ -7,8 +7,8 @@ use crate::Bytes;
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Message {
     Error,
-    Hand { #[serde(default = "default_version")] app_version: String, origin: String, version: u32, public: bool, #[serde(default)] rand: String },
-    Shake { #[serde(default = "default_version")] app_version: String, origin: String, version: u32, ok: bool, height: u64 },
+    Hand { app_version: String, origin: String, version: u32, public: bool, rand_id: String, },
+    Shake { app_version: String, origin: String, version: u32, public: bool, rand_id: String, height: u64 },
     Ping { height: u64, hash: Bytes },
     Pong { height: u64, hash: Bytes },
     Twin,
@@ -16,24 +16,23 @@ pub enum Message {
     GetPeers,
     Peers { peers: Vec<String> },
     GetBlock { index: u64 },
-    Block { index: u64, block: String },
+    Block { index: u64, block: Vec<u8> },
 }
 
 impl Message {
     pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, ()> {
-        let text = String::from_utf8(bytes).unwrap_or(String::from("Error{}"));
-        match serde_json::from_str(&text) {
+        match serde_cbor::from_slice(bytes.as_slice()) {
             Ok(cmd) => Ok(cmd),
             Err(_) => Err(())
         }
     }
 
-    pub fn hand(app_version: &str, origin: &str, version: u32, public: bool, rand: &str) -> Self {
-        Message::Hand { app_version: app_version.to_owned(), origin: origin.to_owned(), version, public, rand: rand.to_owned() }
+    pub fn hand(app_version: &str, origin: &str, version: u32, public: bool, rand_id: &str) -> Self {
+        Message::Hand { app_version: app_version.to_owned(), origin: origin.to_owned(), version, public, rand_id: rand_id.to_owned() }
     }
 
-    pub fn shake(app_version: &str, origin: &str, version: u32, ok: bool, height: u64) -> Self {
-        Message::Shake { app_version: app_version.to_owned(), origin: origin.to_owned(), version, ok, height }
+    pub fn shake(app_version: &str, origin: &str, version: u32, public: bool, rand_id: &str, height: u64) -> Self {
+        Message::Shake { app_version: app_version.to_owned(), origin: origin.to_owned(), version, public, rand_id: rand_id.to_owned(), height }
     }
 
     pub fn ping(height: u64, hash: Bytes) -> Self {
@@ -44,24 +43,7 @@ impl Message {
         Message::Pong { height, hash }
     }
 
-    pub fn block(height: u64, str: String) -> Self {
-        Message::Block { index: height, block: str }
+    pub fn block(height: u64, block: Vec<u8>) -> Self {
+        Message::Block { index: height, block }
     }
-}
-
-fn default_version() -> String {
-    String::from("0.0.0")
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::p2p::Message;
-
-    #[test]
-    pub fn test_hand() {
-        assert!(serde_json::from_str::<Message>("\"Error\"").is_ok());
-        assert!(serde_json::from_str::<Message>("{\"Hand\":{\"origin\":\"\",\"version\":1,\"public\":false,\"rand\":\"123\"}}").is_ok());
-        assert!(serde_json::from_str::<Message>("{\"Hand\":{\"origin\":\"\",\"version\":1,\"public\":false}}").is_ok());
-    }
-
 }

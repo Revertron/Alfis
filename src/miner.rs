@@ -280,7 +280,7 @@ impl Miner {
                     Some(mut block) => {
                         let index = block.index;
                         let mut context = context.lock().unwrap();
-                        block.signature = Bytes::from_bytes(&job.keystore.sign(&block.as_bytes()));
+                        block.signature = Bytes::from_bytes(&job.keystore.sign(&block.as_bytes_compact()));
                         let mut success = false;
                         if context.chain.check_new_block(&block) != BlockQuality::Good {
                             warn!("Error adding mined block!");
@@ -341,7 +341,7 @@ fn find_hash(context: Arc<Mutex<Context>>, mut block: Block, running: Arc<Atomic
             block.nonce = nonce;
 
             digest.reset();
-            digest.update(&block.as_bytes());
+            digest.update(&block.as_bytes_compact());
             let diff = hash_difficulty(digest.result());
             if diff >= target_diff {
                 block.hash = Bytes::from_bytes(digest.result());

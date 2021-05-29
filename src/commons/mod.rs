@@ -1,7 +1,6 @@
 use std::net::IpAddr;
 use std::num;
 
-use mio::Token;
 use rand::Rng;
 #[cfg(not(target_os = "macos"))]
 use thread_priority::*;
@@ -114,13 +113,6 @@ pub fn is_yggdrasil(addr: &IpAddr) -> bool {
         return first_byte == 2 || first_byte == 3;
     }
     false
-}
-
-/// Gets new token from old token, mutating the last
-pub fn next(current: &mut Token) -> Token {
-    let next = current.0;
-    current.0 += 1;
-    Token(next)
 }
 
 /// Checks if this record has IP from Yggdrasil network

@@ -184,7 +184,11 @@ fn main() {
     let miner: Arc<Mutex<Miner>> = Arc::new(Mutex::new(miner_obj));
 
     let mut network = Network::new(Arc::clone(&context));
-    network.start().expect("Error starting network component");
+    thread::spawn(move || {
+        // Give UI some time to appear :)
+        thread::sleep(Duration::from_millis(1000));
+        network.start();
+    });
 
     create_genesis_if_needed(&context, &miner);
     if no_gui {
