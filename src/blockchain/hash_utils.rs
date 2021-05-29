@@ -9,7 +9,7 @@ pub fn check_block_hash(block: &Block) -> bool {
     let mut copy: Block = block.clone();
     copy.hash = Bytes::default();
     copy.signature = Bytes::default();
-    blakeout_data(&copy.as_bytes()) == block.hash
+    blakeout_data(&copy.as_bytes_compact()) == block.hash
 }
 
 /// Hashes data by given hasher
@@ -23,7 +23,7 @@ pub fn blakeout_data(data: &[u8]) -> Bytes {
 pub fn check_block_signature(block: &Block) -> bool {
     let mut copy = block.clone();
     copy.signature = Bytes::default();
-    Keystore::check(&copy.as_bytes(), &copy.pub_key, &block.signature)
+    Keystore::check(&copy.as_bytes_compact(), &copy.pub_key, &block.signature)
 }
 
 /// Hashes some identity (domain in case of DNS). If you give it a public key, it will hash with it as well.

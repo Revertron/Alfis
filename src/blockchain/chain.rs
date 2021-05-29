@@ -1010,8 +1010,10 @@ impl SignersCache {
 pub mod tests {
     use log::LevelFilter;
     use simplelog::{ColorChoice, ConfigBuilder, TerminalMode, TermLogger};
+    #[allow(unused_imports)]
+    use log::{debug, error, info, trace, warn};
 
-    use crate::{Chain, Settings};
+    use crate::{Chain, Settings, Block};
 
     fn init_logger() {
         let config = ConfigBuilder::new()
@@ -1034,5 +1036,29 @@ pub mod tests {
         let mut chain = Chain::new(&settings, "./tests/blockchain.db");
         chain.check_chain(u64::MAX);
         assert_eq!(chain.get_height(), 149);
+    }
+
+    #[test]
+    pub fn check_serde() {
+        let settings = Settings::default();
+        let chain = Chain::new(&settings, "./tests/blockchain.db");
+
+        // Check the first block, its transaction doesn't have identity
+        let block = chain.get_block(1).unwrap();
+        let buf = serde_cbor::to_vec(&block).unwrap();
+        let block2: Block = serde_cbor::from_slice(&buf[..]).unwrap();
+        assert_eq!(block, block2);
+
+        // Check second block, it is common "full" block with domain
+        let block = chain.get_block(2).unwrap();
+        let buf = serde_cbor::to_vec(&block).unwrap();
+        let block2: Block = serde_cbor::from_slice(&buf[..]).unwrap();
+        assert_eq!(block, block2);
+
+        // Check block 36, it is an "empty" block, used to sign full blocks
+        let block = chain.get_block(36).unwrap();
+        let buf = serde_cbor::to_vec(&block).unwrap();
+        let block2: Block = serde_cbor::from_slice(&buf[..]).unwrap();
+        assert_eq!(block, block2);
     }
 }

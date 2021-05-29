@@ -5,6 +5,8 @@ use crate::p2p::Message;
 pub enum State {
     Connecting,
     Connected,
+    ServerHandshake,
+    HandshakeFinished,
     Idle { from: Instant },
     Message { data: Vec<u8> },
     Error,
@@ -25,8 +27,8 @@ impl State {
     }
 
     pub fn message(message: Message) -> Self {
-        let response = serde_json::to_string(&message).unwrap();
-        State::Message {data: Vec::from(response.as_bytes()) }
+        let data = serde_cbor::to_vec(&message).unwrap();
+        State::Message { data }
     }
 
     pub fn is_idle(&self) -> bool {

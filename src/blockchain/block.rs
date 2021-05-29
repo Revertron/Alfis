@@ -61,13 +61,23 @@ impl Block {
         }
     }
 
+    pub fn from_bytes(data: &[u8]) -> serde_cbor::Result<Self> {
+        serde_cbor::from_slice(data)
+    }
+
     pub fn is_genesis(&self) -> bool {
         self.index == 1 &&
             matches!(Transaction::get_type(&self.transaction), TransactionType::Origin) &&
             self.prev_block_hash == Bytes::default()
     }
 
+    /// Serializes block to CBOR for network
     pub fn as_bytes(&self) -> Vec<u8> {
+        serde_cbor::to_vec(&self).unwrap()
+    }
+
+    /// Serializes block to bincode format for hashing.
+    pub fn as_bytes_compact(&self) -> Vec<u8> {
         bincode::serialize(&self).unwrap()
     }
 

@@ -49,11 +49,6 @@ impl Transaction {
         }
     }
 
-    pub fn get_bytes(&self) -> Vec<u8> {
-        // Let it panic if something is not okay
-        serde_json::to_vec(&self).unwrap()
-    }
-
     pub fn to_string(&self) -> String {
         // Let it panic if something is not okay
         serde_json::to_string(&self).unwrap()
