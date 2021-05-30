@@ -58,7 +58,7 @@ mod tests {
         let bytes2 = chacha2.decrypt(&bytes1).unwrap();
         assert_eq!(String::from_utf8(bytes2).unwrap(), "TEST");
 
-        let bytes2 = chacha2.encrypt(b"TEST");
+        let bytes2 = chacha2.encrypt(b"TEST").unwrap();
 
         assert_eq!(bytes1, bytes2);
     }
