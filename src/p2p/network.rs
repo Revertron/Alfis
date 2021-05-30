@@ -228,8 +228,8 @@ impl Network {
                                         trace!("Client hello read successfully");
                                         true
                                     }
-                                    Err(e) => {
-                                        info!("Error reading client handshake. {}", e);
+                                    Err(_) => {
+                                        debug!("Error reading client handshake from {}.", peer.get_addr());
                                         false
                                     }
                                 }
@@ -256,8 +256,8 @@ impl Network {
                                         trace!("Server hello read successfully");
                                         true
                                     }
-                                    Err(e) => {
-                                        warn!("Error reading server handshake. {}", e);
+                                    Err(_) => {
+                                        debug!("Error reading client handshake from {}", peer.get_addr());
                                         false
                                     }
                                 }
@@ -376,8 +376,9 @@ impl Network {
                         State::Connected => {}
                         State::Message { data } => {
                             //debug!("Sending data to {}: {}", &peer.get_addr(), &String::from_utf8(data.clone()).unwrap());
-                            let data = encode_bytes(&data, peer.get_cipher());
-                            send_message(peer.get_stream(), &data).unwrap_or_else(|e| warn!("Error sending message {}", e));
+                            if let Ok(data) = encode_bytes(&data, peer.get_cipher()) {
+                                send_message(peer.get_stream(), &data).unwrap_or_else(|e| warn!("Error sending message {}", e));
+                            }
                         }
                         State::Idle { from } => {
                             debug!("Odd version of pings :)");
@@ -636,16 +637,16 @@ fn subscribe_to_bus(running: Arc<AtomicBool>) {
 }
 
 
-fn encode_bytes(data: &Vec<u8>, cipher: &Option<Chacha>) -> Vec<u8> {
+fn encode_bytes(data: &Vec<u8>, cipher: &Option<Chacha>) -> Result<Vec<u8>, chacha20poly1305::aead::Error> {
     match cipher {
-        None => { data.clone() }
+        None => { Ok(data.clone()) }
         Some(chacha) => {
             chacha.encrypt(data.as_slice())
         }
     }
 }
 
-fn encode_message(message: &Message, cipher: &Option<Chacha>) -> Result<Vec<u8>, ()> {
+fn encode_message(message: &Message, cipher: &Option<Chacha>) -> Result<Vec<u8>, chacha20poly1305::aead::Error> {
     match serde_cbor::to_vec(message) {
         Ok(vec) => {
             match cipher {
@@ -655,22 +656,22 @@ fn encode_message(message: &Message, cipher: &Option<Chacha>) -> Result<Vec<u8>,
                 }
                 Some(chacha) => {
                     //info!("Encoding message: {:?}", to_hex(&vec));
-                    Ok(chacha.encrypt(vec.as_slice()))
+                    chacha.encrypt(vec.as_slice())
                 }
             }
         }
         Err(e) => {
             warn!("Could not encode message! {}", e);
-            Err(())
+            Err(chacha20poly1305::aead::Error)
         }
     }
 }
 
-fn decode_message(data: &Vec<u8>, cipher: &Option<Chacha>) -> Result<Vec<u8>, Error> {
+fn decode_message(data: &Vec<u8>, cipher: &Option<Chacha>) -> Result<Vec<u8>, chacha20poly1305::aead::Error> {
     match cipher {
         None => { Ok(data.clone()) }
         Some(chacha) => {
-            Ok(chacha.decrypt(data.as_slice()))
+            chacha.decrypt(data.as_slice())
         }
     }
 }
