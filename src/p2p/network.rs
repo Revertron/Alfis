@@ -222,7 +222,6 @@ impl Network {
                                         rng.fill(&mut nonce);
                                         let chacha = Chacha::new(shared.as_bytes(), &nonce);
                                         registry.reregister(stream, event.token(), Interest::WRITABLE).unwrap();
-                                        std::mem::drop(stream);
                                         peer.set_cipher(chacha);
                                         peer.set_state(State::ServerHandshake);
                                         trace!("Client hello read successfully");
@@ -250,7 +249,6 @@ impl Network {
                                         let shared = self.secret_key.diffie_hellman(&public_key);
                                         let chacha = Chacha::new(shared.as_bytes(), &nonce);
                                         registry.reregister(stream, event.token(), Interest::WRITABLE).unwrap();
-                                        std::mem::drop(stream);
                                         peer.set_cipher(chacha);
                                         peer.set_state(State::HandshakeFinished);
                                         trace!("Server hello read successfully");
