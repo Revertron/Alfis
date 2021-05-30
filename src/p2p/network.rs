@@ -225,11 +225,11 @@ impl Network {
                                         std::mem::drop(stream);
                                         peer.set_cipher(chacha);
                                         peer.set_state(State::ServerHandshake);
-                                        info!("Client hello read successfully");
+                                        trace!("Client hello read successfully");
                                         true
                                     }
                                     Err(e) => {
-                                        warn!("Error reading client handshake. {}", e);
+                                        info!("Error reading client handshake. {}", e);
                                         false
                                     }
                                 }
@@ -253,7 +253,7 @@ impl Network {
                                         std::mem::drop(stream);
                                         peer.set_cipher(chacha);
                                         peer.set_state(State::HandshakeFinished);
-                                        info!("Server hello read successfully");
+                                        trace!("Server hello read successfully");
                                         true
                                     }
                                     Err(e) => {
@@ -293,10 +293,10 @@ impl Network {
                 };
                 match Message::from_bytes(data) {
                     Ok(message) => {
-                        let m = format!("{:?}", &message);
+                        //let m = format!("{:?}", &message);
                         let new_state = self.handle_message(message, &event.token());
                         let peer = self.peers.get_mut_peer(&event.token()).unwrap();
-                        debug!("Got message from {}: {:?}", &peer.get_addr(), &m);
+                        //debug!("Got message from {}: {:?}", &peer.get_addr(), &m);
                         let stream = peer.get_stream();
                         match new_state {
                             State::Message { data } => {
@@ -360,14 +360,14 @@ impl Network {
                                 return false;
                             }
                             peer.set_state(State::HandshakeFinished);
-                            info!("Server handshake sent");
+                            trace!("Server handshake sent");
                         }
                         State::HandshakeFinished => {
                             //debug!("Connected to peer {}, sending hello...", &peer.get_addr());
                             let data: Vec<u8> = {
                                 let c = self.context.lock().unwrap();
                                 let message = Message::hand(&c.app_version, &c.settings.origin, CHAIN_VERSION, c.settings.net.public, &my_id);
-                                info!("Sending: {:?}", &message);
+                                //info!("Sending: {:?}", &message);
                                 encode_message(&message, peer.get_cipher()).unwrap()
                             };
                             send_message(peer.get_stream(), &data).unwrap_or_else(|e| warn!("Error sending hello {}", e));
@@ -684,7 +684,7 @@ fn read_message(stream: &mut TcpStream) -> Result<Vec<u8>, ()> {
             0
         }
     };
-    trace!("Payload size is {}", data_size);
+    //trace!("Payload size is {}", data_size);
     if data_size > MAX_PACKET_SIZE || data_size == 0 {
         return Err(());
     }
