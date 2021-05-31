@@ -8,10 +8,9 @@ This project represents a minimal blockchain without cryptocurrency, capable of 
 
 ![Screenshot](img/keys.png)
 
-![Screenshot](img/domains.png)
+![Screenshot](img/domains2.png)
 
-## Note
-The `origin` of current testnet is `0000001D2A77D63477172678502E51DE7F346061FF7EB188A2445ECA3FC0780E`.
+![Screenshot](img/domains.png)
 
 ## How it works?
 Every node connects to its siblings and synchronizes the domain database.
@@ -25,8 +24,7 @@ But, `.anon` and `.ygg` are bound to have IP-addresses from Yggdrasil Network on
 ### On every OS
 You can download and run already built binaries from [releases](https://github.com/Revertron/Alfis/releases), or you can build project yourself.
 
-You can build Alfis by issuing `cargo build` and `cargo run` commands in a directory of cloned repository.
-If you want to build release version you need to do `cargo build --release` as usual.
+You can build Alfis by issuing `cargo build --release` and `cargo run --release` commands in a directory of cloned repository.
 
 ### ![Windows Logo](/img/windows.svg) On Windows
 You don't need any additional steps to build Alfis, just stick to the MSVC version of Rust.
@@ -57,7 +55,7 @@ yay -S alfis
 ```
 
 ### ![NixOS Logo](https://nixos.org/favicon.ico) On Nix/NixOS
-`nix-shell` in this repo and then run `cargo build` and `cargo install` after you have entered the shell.
+`nix-shell` in this repo and then run `cargo build --release` and `cargo install` after you have entered the shell.
 
 ## Installation
 
@@ -97,5 +95,5 @@ If you want it to load config from another file you can command it so: `alfis -c
 ## Roadmap
 1. Stabilize blockchain functions (domain transfer, info & contacts in UI), bug hunting and fixing.
 2. Change DNS server/proxy to own resource saving implementation (using trust-dns-proto for RR parsing).
-3. P2P traffic encryption (ECDH).
+3. P2P traffic encryption (ECDH). ✅
 4. Web-GUI to manage you node from browser.
