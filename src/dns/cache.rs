@@ -306,6 +306,7 @@ mod tests {
 
         // Register a negative cache entry with no TTL
         cache.store_nxdomain("www.yahoo.com", QueryType::A, 0);
+        std::thread::sleep(core::time::Duration::from_secs(1));
 
         // And check that no such result is actually returned, since it's expired
         if cache.lookup("www.yahoo.com", QueryType::A).is_some() {
