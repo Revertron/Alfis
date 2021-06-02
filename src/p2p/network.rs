@@ -3,11 +3,11 @@ extern crate serde_json;
 
 use std::{io, thread};
 use std::cmp::max;
-use std::io::{Read, Write, Error};
+use std::io::{Read, Write, Error, ErrorKind};
 use std::net::{IpAddr, Shutdown, SocketAddr, SocketAddrV4};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 #[allow(unused_imports)]
@@ -274,7 +274,6 @@ impl Network {
                     match self.peers.get_peer(&event.token()) {
                         Some(peer) => {
                             let data = data.unwrap();
-                            //info!("Decoding message {:?}", to_hex(data.as_slice()));
                             match decode_message(&data, peer.get_cipher()) {
                                 Ok(data) => {
                                     data
@@ -337,6 +336,12 @@ impl Network {
                     }
                 }
             } else {
+                let error = data.err().unwrap();
+                let addr = match self.peers.get_peer(&event.token()) {
+                    None => { String::from("unknown") }
+                    Some(peer) => { peer.get_addr().to_string() }
+                };
+                debug!("Error reading message from {}, error = {}", addr, error);
                 return false;
             }
         }
@@ -674,55 +679,15 @@ fn decode_message(data: &Vec<u8>, cipher: &Option<Chacha>) -> Result<Vec<u8>, ch
     }
 }
 
-fn read_message(stream: &mut TcpStream) -> Result<Vec<u8>, ()> {
-    let instant = Instant::now();
-    let data_size = match stream.read_u16::<BigEndian>() {
-        Ok(size) => { (size ^ 0xAAAA) as usize }
-        Err(e) => {
-            error!("Error reading from socket! {}", e);
-            0
-        }
-    };
-    //trace!("Payload size is {}", data_size);
-    if data_size > MAX_PACKET_SIZE || data_size == 0 {
-        return Err(());
+fn read_message(stream: &mut TcpStream) -> Result<Vec<u8>, Error> {
+    let data_size = (stream.read_u16::<BigEndian>()? ^ 0xAAAA) as usize;
+    if data_size == 0 {
+        return Err(io::Error::from(ErrorKind::InvalidInput));
     }
 
     let mut buf = vec![0u8; data_size];
-    let mut bytes_read = 0;
-    loop {
-        match stream.read(&mut buf[bytes_read..]) {
-            Ok(bytes) => {
-                bytes_read += bytes;
-                if bytes_read == data_size {
-                    break;
-                }
-            }
-            // Would block "errors" are the OS's way of saying that the connection is not actually ready to perform this I/O operation.
-            Err(ref err) if would_block(err) => {
-                // We give every connection no more than 200ms to read a message
-                if instant.elapsed().as_millis() < MAX_READ_BLOCK_TIME {
-                    // We need to sleep a bit, otherwise it can eat CPU
-                    let delay = Duration::from_millis(2);
-                    thread::sleep(delay);
-                    continue;
-                } else {
-                    break;
-                }
-            },
-            Err(ref err) if interrupted(err) => continue,
-            // Other errors we'll consider fatal.
-            Err(_) => {
-                debug!("Error reading message, only {}/{} bytes read", bytes_read, data_size);
-                return Err(())
-            },
-        }
-    }
-    if buf.len() == data_size {
-        Ok(buf)
-    } else {
-        Err(())
-    }
+    stream.read_exact(&mut buf)?;
+    Ok(buf)
 }
 
 /// Sends one byte [garbage_size], [random bytes], and [public_key]
@@ -821,12 +786,4 @@ fn send_message(connection: &mut TcpStream, data: &Vec<u8>) -> io::Result<()> {
     buf.write_all(&data)?;
     connection.write_all(&buf)?;
     connection.flush()
-}
-
-fn would_block(err: &io::Error) -> bool {
-    err.kind() == io::ErrorKind::WouldBlock
-}
-
-fn interrupted(err: &io::Error) -> bool {
-    err.kind() == io::ErrorKind::Interrupted
 }
