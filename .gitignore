@@ -2,3 +2,4 @@
 **/*.rs.bk
 /iana-tlds.txt
 /iana-hashes.txt
+Cargo.lock
