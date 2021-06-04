@@ -13,6 +13,7 @@ use crate::{Bytes, commons};
 use crate::commons::*;
 use crate::p2p::{Message, Peer, State};
 use std::io;
+use std::cmp::min;
 
 const PING_PERIOD: u64 = 30;
 
@@ -245,7 +246,7 @@ impl Peers {
         false
     }
 
-    pub fn update(&mut self, registry: &Registry, height: u64, hash: Bytes) {
+    pub fn update(&mut self, registry: &Registry, height: u64, max_height: u64, hash: Bytes) {
         let nodes = self.get_peers_active_count();
 
         let random_time = random::<u64>() % PING_PERIOD;
@@ -270,18 +271,10 @@ impl Peers {
         }
 
         // If someone has more blocks we sync
-        {
-            let mut rng = rand::thread_rng();
-            match self.peers
-                .iter_mut()
-                .filter_map(|(token, peer)| if peer.has_more_blocks(height) { Some((token, peer)) } else { None })
-                .choose(&mut rng) {
-                None => {}
-                Some((token, peer)) => {
-                    debug!("Peer {} is higher than we are, requesting block {}", &peer.get_addr().ip(), height + 1);
-                    registry.reregister(peer.get_stream(), token.clone(), Interest::WRITABLE).unwrap();
-                    peer.set_state(State::message(Message::GetBlock { index: height + 1 }));
-                }
+        if nodes >= MIN_CONNECTED_NODES_START_SYNC {
+            if height < max_height {
+                let count = min(max_height - height, (nodes - 5) as u64);
+                self.ask_blocks_from_peers(registry, height, height + count);
             }
         }
 
@@ -326,6 +319,40 @@ impl Peers {
                     peer.set_stream(stream);
                 }
                 // We make reconnects only to one at a time
+                break;
+            }
+        }
+    }
+
+    #[allow(dead_code)]
+    fn ask_block_from_peer(&mut self, registry: &Registry, height: u64) {
+        let mut rng = rand::thread_rng();
+        match self.peers
+            .iter_mut()
+            .filter_map(|(token, peer)| if peer.has_more_blocks(height) { Some((token, peer)) } else { None })
+            .choose(&mut rng) {
+            None => {}
+            Some((token, peer)) => {
+                debug!("Peer {} is higher than we are, requesting block {}", &peer.get_addr().ip(), height + 1);
+                registry.reregister(peer.get_stream(), token.clone(), Interest::WRITABLE).unwrap();
+                peer.set_state(State::message(Message::GetBlock { index: height + 1 }));
+            }
+        }
+    }
+
+    fn ask_blocks_from_peers(&mut self, registry: &Registry, height: u64, max_height: u64) {
+        let mut rng = rand::thread_rng();
+        let peers = self.peers
+            .iter_mut()
+            .filter_map(|(token, peer)| if peer.has_more_blocks(height) { Some((token, peer)) } else { None })
+            .choose_multiple(&mut rng, (max_height - height) as usize);
+        let mut index = height + 1;
+        for (token, peer) in peers {
+            debug!("Peer {} is higher than we are, requesting block {}", &peer.get_addr().ip(), index);
+            registry.reregister(peer.get_stream(), token.clone(), Interest::WRITABLE).unwrap();
+            peer.set_state(State::message(Message::GetBlock { index }));
+            index += 1;
+            if index > max_height {
                 break;
             }
         }

@@ -265,7 +265,7 @@ impl Chain {
             trace!("We can't sign blocks without keys");
             return None;
         }
-        if self.get_height() < self.max_height() {
+        if self.get_height() < self.get_max_height() {
             trace!("No signing while syncing");
             return None;
         }
@@ -702,7 +702,7 @@ impl Chain {
         }
     }
 
-    pub fn max_height(&self) -> u64 {
+    pub fn get_max_height(&self) -> u64 {
         self.max_height
     }
 
@@ -727,7 +727,7 @@ impl Chain {
         }
         if let Some(last) = last_block {
             if block.index > last.index + 1 {
-                info!("Ignoring future block:\n{:?}", &block);
+                info!("Got future block {}", block.index);
                 return Future;
             }
         }

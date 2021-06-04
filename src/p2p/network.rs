@@ -24,6 +24,7 @@ use crate::blockchain::types::BlockQuality;
 use crate::commons::*;
 use crate::eventbus::{register, post};
 use crate::crypto::Chacha;
+use std::collections::HashMap;
 
 const SERVER: Token = Token(0);
 
@@ -34,6 +35,8 @@ pub struct Network {
     token: Token,
     // States of peer connections, and some data to send when sockets become writable
     peers: Peers,
+    // Orphan blocks from future
+    blocks: HashMap<u64, Block>,
 }
 
 impl Network {
@@ -43,7 +46,7 @@ impl Network {
         let secret_key = StaticSecret::new(&mut thread_rng);
         let public_key = PublicKey::from(&secret_key);
         let peers = Peers::new();
-        Network { context, secret_key, public_key, token: Token(1), peers }
+        Network { context, secret_key, public_key, token: Token(1), peers, blocks: HashMap::new() }
     }
 
     pub fn start(&mut self) {
@@ -155,9 +158,10 @@ impl Network {
 
             if ui_timer.elapsed().as_millis() > UI_REFRESH_DELAY_MS {
                 // Send pings to idle peers
-                let (height, hash) = {
+                let (height, max_height, hash) = {
                     let context = self.context.lock().unwrap();
                     let blocks = context.chain.get_height();
+                    let max_height = context.chain.get_max_height();
                     let nodes = self.peers.get_peers_active_count();
                     let banned = self.peers.get_peers_banned_count();
 
@@ -177,9 +181,9 @@ impl Network {
                         self.peers.connect_new_peers(poll.registry(), &mut self.token, yggdrasil_only);
                         connect_timer = Instant::now();
                     }
-                    (blocks, context.chain.get_last_hash())
+                    (blocks, max_height, context.chain.get_last_hash())
                 };
-                self.peers.update(poll.registry(), height, hash);
+                self.peers.update(poll.registry(), height, max_height, hash);
                 ui_timer = Instant::now();
             }
         }
@@ -561,15 +565,27 @@ impl Network {
         peer.set_received_block(block.index);
 
         let mut context = self.context.lock().unwrap();
-        let max_height = context.chain.max_height();
+        let max_height = context.chain.get_max_height();
         match context.chain.check_new_block(&block) {
             BlockQuality::Good => {
+                let mut next_index = block.index + 1;
                 context.chain.add_block(block);
+                // If we have some consequent blocks in a bucket of 'future blocks', we add them
+                while let Some(block) = self.blocks.remove(&next_index) {
+                    if context.chain.check_new_block(&block) == BlockQuality::Good {
+                        info!("Added block {} from future blocks", next_index);
+                        context.chain.add_block(block);
+                    } else {
+                        break;
+                    }
+                    next_index += 1;
+                }
                 let my_height = context.chain.get_height();
                 post(crate::event::Event::BlockchainChanged { index: my_height });
                 // If it was the last block to sync
                 if my_height == max_height {
                     post(crate::event::Event::SyncFinished);
+                    self.blocks.clear();
                 } else {
                     let event = crate::event::Event::Syncing { have: my_height, height: max(max_height, my_height) };
                     post(event);
@@ -577,21 +593,21 @@ impl Network {
                 let domains = context.chain.get_domains_count();
                 let keys = context.chain.get_users_count();
                 post(crate::event::Event::NetworkStatus { blocks: my_height, domains, keys, nodes: peers_count });
-                // To load blocks from different nodes we randomize requests of new blocks
-                // TODO rethink this approach
-                if max_height > my_height && random::<u8>() < 200 {
-                    return State::message(Message::GetBlock { index: my_height + 1 });
-                }
             }
             BlockQuality::Twin => { debug!("Ignoring duplicate block {}", block.index); }
-            BlockQuality::Future => { debug!("Ignoring future block {}", block.index); }
+            BlockQuality::Future => {
+                debug!("Got future block {}", block.index);
+                self.blocks.insert(block.index, block);
+            }
             BlockQuality::Bad => {
                 // TODO save bad public keys to banned table
                 debug!("Ignoring bad block from {}:\n{:?}", peer.get_addr(), &block);
                 let height = context.chain.get_height();
-                context.chain.update_max_height(height);
-                post(crate::event::Event::SyncFinished);
-                return State::Banned;
+                if height + 1 == block.index {
+                    context.chain.update_max_height(height);
+                    post(crate::event::Event::SyncFinished);
+                    return State::Banned;
+                }
             }
             BlockQuality::Rewind => {
                 debug!("Got some orphan block, requesting its parent");
