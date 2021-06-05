@@ -24,7 +24,7 @@ use crate::blockchain::types::BlockQuality;
 use crate::commons::*;
 use crate::eventbus::{register, post};
 use crate::crypto::Chacha;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 const SERVER: Token = Token(0);
 
@@ -36,7 +36,7 @@ pub struct Network {
     // States of peer connections, and some data to send when sockets become writable
     peers: Peers,
     // Orphan blocks from future
-    blocks: HashMap<u64, Block>,
+    future_blocks: HashMap<u64, Block>,
 }
 
 impl Network {
@@ -46,7 +46,7 @@ impl Network {
         let secret_key = StaticSecret::new(&mut thread_rng);
         let public_key = PublicKey::from(&secret_key);
         let peers = Peers::new();
-        Network { context, secret_key, public_key, token: Token(1), peers, blocks: HashMap::new() }
+        Network { context, secret_key, public_key, token: Token(1), peers, future_blocks: HashMap::new() }
     }
 
     pub fn start(&mut self) {
@@ -183,7 +183,9 @@ impl Network {
                     }
                     (blocks, max_height, context.chain.get_last_hash())
                 };
-                self.peers.update(poll.registry(), height, max_height, hash);
+
+                let have_blocks: HashSet<u64> = self.future_blocks.values().map(|block| block.index).collect();
+                self.peers.update(poll.registry(), hash, height, max_height, have_blocks);
                 ui_timer = Instant::now();
             }
         }
@@ -571,11 +573,12 @@ impl Network {
                 let mut next_index = block.index + 1;
                 context.chain.add_block(block);
                 // If we have some consequent blocks in a bucket of 'future blocks', we add them
-                while let Some(block) = self.blocks.remove(&next_index) {
+                while let Some(block) = self.future_blocks.remove(&next_index) {
                     if context.chain.check_new_block(&block) == BlockQuality::Good {
                         info!("Added block {} from future blocks", next_index);
                         context.chain.add_block(block);
                     } else {
+                        warn!("Block {} in future blocks is bad!", block.index);
                         break;
                     }
                     next_index += 1;
@@ -585,7 +588,7 @@ impl Network {
                 // If it was the last block to sync
                 if my_height == max_height {
                     post(crate::event::Event::SyncFinished);
-                    self.blocks.clear();
+                    self.future_blocks.clear();
                 } else {
                     let event = crate::event::Event::Syncing { have: my_height, height: max(max_height, my_height) };
                     post(event);
@@ -597,7 +600,7 @@ impl Network {
             BlockQuality::Twin => { debug!("Ignoring duplicate block {}", block.index); }
             BlockQuality::Future => {
                 debug!("Got future block {}", block.index);
-                self.blocks.insert(block.index, block);
+                self.future_blocks.insert(block.index, block);
             }
             BlockQuality::Bad => {
                 // TODO save bad public keys to banned table

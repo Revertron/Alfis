@@ -246,7 +246,7 @@ impl Peers {
         false
     }
 
-    pub fn update(&mut self, registry: &Registry, height: u64, max_height: u64, hash: Bytes) {
+    pub fn update(&mut self, registry: &Registry, hash: Bytes, height: u64, max_height: u64, have_blocks: HashSet<u64>) {
         let nodes = self.get_peers_active_count();
 
         let random_time = random::<u64>() % PING_PERIOD;
@@ -274,7 +274,7 @@ impl Peers {
         if nodes >= MIN_CONNECTED_NODES_START_SYNC {
             if height < max_height {
                 let count = min(max_height - height, (nodes - 5) as u64);
-                self.ask_blocks_from_peers(registry, height, height + count);
+                self.ask_blocks_from_peers(registry, height, height + count, have_blocks);
             }
         }
 
@@ -340,7 +340,7 @@ impl Peers {
         }
     }
 
-    fn ask_blocks_from_peers(&mut self, registry: &Registry, height: u64, max_height: u64) {
+    fn ask_blocks_from_peers(&mut self, registry: &Registry, height: u64, max_height: u64, have_blocks: HashSet<u64>) {
         let mut rng = rand::thread_rng();
         let peers = self.peers
             .iter_mut()
@@ -348,6 +348,11 @@ impl Peers {
             .choose_multiple(&mut rng, (max_height - height) as usize);
         let mut index = height + 1;
         for (token, peer) in peers {
+            if have_blocks.contains(&index) {
+                debug!("We have block {} in map, skipping request", index);
+                index += 1;
+                continue;
+            }
             debug!("Peer {} is higher than we are, requesting block {}", &peer.get_addr().ip(), index);
             registry.reregister(peer.get_stream(), token.clone(), Interest::WRITABLE).unwrap();
             peer.set_state(State::message(Message::GetBlock { index }));
