@@ -1071,9 +1071,9 @@ dependencies = [
 
 [[package]]
 name = "thread-priority"
-version = "0.2.1"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2dff8073d6382f78367078270c65b5e96cd7f6afc49c42562188e02fea28bfd1"
+checksum = "cbb8681124ddad2b07e677d7a99f564c9edbd289cc53cdc0010fd110cb4818ec"
 dependencies = [
  "libc",
  "winapi",
