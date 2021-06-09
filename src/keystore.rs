@@ -1,34 +1,33 @@
-extern crate rand;
 extern crate ed25519_dalek;
+extern crate rand;
 extern crate serde;
 extern crate serde_json;
 
-use std::thread;
-use std::fs;
+use std::cell::RefCell;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use std::sync::{Arc, atomic, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicUsize};
+use std::sync::{atomic, Arc, Mutex};
+use std::time::Instant;
+use std::{fs, thread};
 
-use serde::{Deserialize, Serialize};
+use blakeout::Blakeout;
 use ed25519_dalek::Keypair;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-
-use crate::blockchain::hash_utils::*;
-use crate::{Context, setup_miner_thread, to_hex, from_hex};
-use crate::event::Event;
-use crate::commons::KEYSTORE_DIFFICULTY;
-use crate::eventbus::{register, post};
-use crate::bytes::Bytes;
-use crate::crypto::CryptoBox;
-use blakeout::Blakeout;
-use std::time::Instant;
-use std::cell::RefCell;
-use self::ed25519_dalek::{Signer, PublicKey, Verifier, SecretKey};
-use self::ed25519_dalek::ed25519::signature::Signature;
 use rand_old::{CryptoRng, RngCore};
+use serde::{Deserialize, Serialize};
+
+use self::ed25519_dalek::ed25519::signature::Signature;
+use self::ed25519_dalek::{PublicKey, SecretKey, Signer, Verifier};
+use crate::blockchain::hash_utils::*;
+use crate::bytes::Bytes;
+use crate::commons::KEYSTORE_DIFFICULTY;
+use crate::crypto::CryptoBox;
+use crate::event::Event;
+use crate::eventbus::{post, register};
+use crate::{from_hex, setup_miner_thread, to_hex, Context};
 
 #[derive(Debug)]
 pub struct Keystore {
@@ -149,8 +148,8 @@ impl Keystore {
         let key = PublicKey::from_bytes(public_key).expect("Wrong public key!");
         let signature = Signature::from_bytes(signature).unwrap();
         match key.verify(message, &signature) {
-            Ok(_) => { true }
-            Err(_) => { false }
+            Ok(_) => true,
+            Err(_) => false
         }
     }
 
@@ -161,7 +160,7 @@ impl Keystore {
 
     pub fn decrypt(&self, message: &[u8]) -> Bytes {
         match self.crypto_box.reveal(message) {
-            Ok(decrypted) => { Bytes::from_bytes(&decrypted) }
+            Ok(decrypted) => Bytes::from_bytes(&decrypted),
             Err(_) => {
                 warn!("Decryption failed");
                 Bytes::default()

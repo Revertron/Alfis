@@ -8,7 +8,7 @@ use derive_more::{Display, Error, From};
 #[derive(Debug, Display, From, Error)]
 pub enum BufferError {
     Io(std::io::Error),
-    EndOfBuffer,
+    EndOfBuffer
 }
 
 type Result<T> = std::result::Result<T, BufferError>;
@@ -155,16 +155,12 @@ pub trait PacketBuffer {
 pub struct VectorPacketBuffer {
     pub buffer: Vec<u8>,
     pub pos: usize,
-    pub label_lookup: BTreeMap<String, usize>,
+    pub label_lookup: BTreeMap<String, usize>
 }
 
 impl VectorPacketBuffer {
     pub fn new() -> VectorPacketBuffer {
-        VectorPacketBuffer {
-            buffer: Vec::new(),
-            pos: 0,
-            label_lookup: BTreeMap::new(),
-        }
+        VectorPacketBuffer { buffer: Vec::new(), pos: 0, label_lookup: BTreeMap::new() }
     }
 }
 
@@ -222,10 +218,11 @@ impl PacketBuffer for VectorPacketBuffer {
     }
 }
 
-pub struct StreamPacketBuffer<'a, T> where T: Read {
+pub struct StreamPacketBuffer<'a, T>
+where T: Read {
     pub stream: &'a mut T,
     pub buffer: Vec<u8>,
-    pub pos: usize,
+    pub pos: usize
 }
 
 impl<'a, T> StreamPacketBuffer<'a, T> where T: Read + 'a {
@@ -305,15 +302,12 @@ impl<'a, T> PacketBuffer for StreamPacketBuffer<'a, T> where T: Read + 'a {
 
 pub struct BytePacketBuffer {
     pub buf: [u8; 512],
-    pub pos: usize,
+    pub pos: usize
 }
 
 impl BytePacketBuffer {
     pub fn new() -> BytePacketBuffer {
-        BytePacketBuffer {
-            buf: [0; 512],
-            pos: 0,
-        }
+        BytePacketBuffer { buf: [0; 512], pos: 0 }
     }
 }
 
@@ -401,7 +395,7 @@ mod tests {
         // First write the standard string
         match buffer.write_qname(&instr1) {
             Ok(_) => {}
-            Err(_) => panic!(),
+            Err(_) => panic!()
         }
 
         // Then we set up a slight variation with relies on a jump back to the data of
@@ -410,7 +404,7 @@ mod tests {
         for b in &crafted_data {
             match buffer.write_u8(*b) {
                 Ok(_) => {}
-                Err(_) => panic!(),
+                Err(_) => panic!()
             }
         }
 
@@ -421,7 +415,7 @@ mod tests {
         let mut outstr1 = String::new();
         match buffer.read_qname(&mut outstr1) {
             Ok(_) => {}
-            Err(_) => panic!(),
+            Err(_) => panic!()
         }
 
         assert_eq!(instr1, outstr1);
@@ -430,7 +424,7 @@ mod tests {
         let mut outstr2 = String::new();
         match buffer.read_qname(&mut outstr2) {
             Ok(_) => {}
-            Err(_) => panic!(),
+            Err(_) => panic!()
         }
 
         assert_eq!(instr2, outstr2);
@@ -445,24 +439,24 @@ mod tests {
 
         match buffer.write_qname(&"ns1.google.com".to_string()) {
             Ok(_) => {}
-            Err(_) => panic!(),
+            Err(_) => panic!()
         }
         match buffer.write_qname(&"ns2.google.com".to_string()) {
             Ok(_) => {}
-            Err(_) => panic!(),
+            Err(_) => panic!()
         }
 
         assert_eq!(22, buffer.pos());
 
         match buffer.seek(0) {
             Ok(_) => {}
-            Err(_) => panic!(),
+            Err(_) => panic!()
         }
 
         let mut str1 = String::new();
         match buffer.read_qname(&mut str1) {
             Ok(_) => {}
-            Err(_) => panic!(),
+            Err(_) => panic!()
         }
 
         assert_eq!("ns1.google.com", str1);
@@ -470,7 +464,7 @@ mod tests {
         let mut str2 = String::new();
         match buffer.read_qname(&mut str2) {
             Ok(_) => {}
-            Err(_) => panic!(),
+            Err(_) => panic!()
         }
 
         assert_eq!("ns2.google.com", str2);

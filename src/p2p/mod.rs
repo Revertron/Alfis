@@ -1,12 +1,11 @@
-pub mod network;
 pub mod message;
-pub mod state;
+pub mod network;
 pub mod peer;
 pub mod peers;
+pub mod state;
 
-pub use network::Network;
 pub use message::Message;
-pub use state::State;
+pub use network::Network;
 pub use peer::Peer;
 pub use peers::Peers;
-
+pub use state::State;

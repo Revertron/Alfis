@@ -1,7 +1,8 @@
-use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
-use chacha20poly1305::aead::{Aead, NewAead, Error};
-use std::fmt::{Debug, Formatter};
 use std::fmt;
+use std::fmt::{Debug, Formatter};
+
+use chacha20poly1305::aead::{Aead, Error, NewAead};
+use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
 
 pub const ZERO_NONCE: [u8; 12] = [0u8; 12];
 
@@ -45,7 +46,7 @@ impl Debug for Chacha {
 #[cfg(test)]
 mod tests {
     use crate::crypto::Chacha;
-    use crate::{to_hex};
+    use crate::to_hex;
 
     #[test]
     pub fn test_chacha() {

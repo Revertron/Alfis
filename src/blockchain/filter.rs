@@ -1,10 +1,12 @@
-use crate::Context;
-use std::sync::{Mutex, Arc};
-use crate::dns::filter::DnsFilter;
-use crate::dns::protocol::{DnsPacket, QueryType, DnsRecord, DnsQuestion, ResultCode, TransientTtl};
+use std::sync::{Arc, Mutex};
+
 #[allow(unused_imports)]
-use log::{trace, debug, info, warn, error};
+use log::{debug, error, info, trace, warn};
+
 use crate::blockchain::transaction::DomainData;
+use crate::dns::filter::DnsFilter;
+use crate::dns::protocol::{DnsPacket, DnsQuestion, DnsRecord, QueryType, ResultCode, TransientTtl};
+use crate::Context;
 
 pub struct BlockchainFilter {
     context: Arc<Mutex<Context>>
@@ -16,8 +18,8 @@ impl BlockchainFilter {
     }
 }
 
-const NAME_SERVER: & str = "ns.alfis.name";
-const SERVER_ADMIN: & str = "admin.alfis.name";
+const NAME_SERVER: &str = "ns.alfis.name";
+const SERVER_ADMIN: &str = "admin.alfis.name";
 
 impl DnsFilter for BlockchainFilter {
     fn lookup(&self, qname: &str, qtype: QueryType) -> Option<DnsPacket> {
@@ -64,8 +66,10 @@ impl DnsFilter for BlockchainFilter {
             Some(data) => {
                 trace!("Found data for domain {}", &search);
                 let mut data: DomainData = match serde_json::from_str(&data) {
-                    Err(_) => { return None; }
-                    Ok(data) => { data }
+                    Err(_) => {
+                        return None;
+                    }
+                    Ok(data) => data
                 };
                 let mut answers: Vec<DnsRecord> = Vec::new();
                 let a_record = qtype == QueryType::A || qtype == QueryType::AAAA;
@@ -153,11 +157,7 @@ impl DnsFilter for BlockchainFilter {
                     for answer in answers {
                         packet.answers.push(answer);
                     }
-                    packet.authorities.push( DnsRecord::NS {
-                        domain: zone,
-                        host: String::from(NAME_SERVER),
-                        ttl: TransientTtl(600)
-                    });
+                    packet.authorities.push(DnsRecord::NS { domain: zone, host: String::from(NAME_SERVER), ttl: TransientTtl(600) });
                     //trace!("Returning packet: {:?}", &packet);
                     Some(packet)
                 } else {
@@ -170,7 +170,7 @@ impl DnsFilter for BlockchainFilter {
                     BlockchainFilter::add_soa_record(zone, serial, &mut packet);
                     //trace!("Returning packet: {:?}", &packet);
                     Some(packet)
-                }
+                };
             }
         }
 
@@ -189,7 +189,7 @@ impl BlockchainFilter {
             retry: 300,
             expire: 604800,
             minimum: 60,
-            ttl: TransientTtl(60),
+            ttl: TransientTtl(60)
         });
     }
 

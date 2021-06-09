@@ -15,7 +15,7 @@ use crate::dns::protocol::{DnsPacket, DnsRecord, QueryType, ResultCode};
 #[derive(Debug, Display, From, Error)]
 pub enum CacheError {
     Io(std::io::Error),
-    PoisonedLock,
+    PoisonedLock
 }
 
 type Result<T> = std::result::Result<T, CacheError>;
@@ -23,13 +23,13 @@ type Result<T> = std::result::Result<T, CacheError>;
 pub enum CacheState {
     PositiveCache,
     NegativeCache,
-    NotCached,
+    NotCached
 }
 
 #[derive(Clone, Eq, Debug, Serialize, Deserialize)]
 pub struct RecordEntry {
     pub record: DnsRecord,
-    pub timestamp: DateTime<Local>,
+    pub timestamp: DateTime<Local>
 }
 
 impl PartialEq<RecordEntry> for RecordEntry {
@@ -47,7 +47,7 @@ impl Hash for RecordEntry {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum RecordSet {
     NoRecords { qtype: QueryType, ttl: u32, timestamp: DateTime<Local> },
-    Records { qtype: QueryType, records: HashSet<RecordEntry> },
+    Records { qtype: QueryType, records: HashSet<RecordEntry> }
 }
 
 #[derive(Clone, Debug)]
@@ -55,7 +55,7 @@ pub struct DomainEntry {
     pub domain: String,
     pub record_types: HashMap<QueryType, RecordSet>,
     pub hits: u32,
-    pub updates: u32,
+    pub updates: u32
 }
 
 impl DomainEntry {
@@ -128,7 +128,7 @@ impl DomainEntry {
                     CacheState::NegativeCache
                 }
             }
-            None => CacheState::NotCached,
+            None => CacheState::NotCached
         }
     }
 
@@ -137,7 +137,7 @@ impl DomainEntry {
 
         let current_set = match self.record_types.get(&qtype) {
             Some(x) => x,
-            None => return,
+            None => return
         };
 
         if let RecordSet::Records { ref records, .. } = *current_set {
@@ -158,7 +158,7 @@ impl DomainEntry {
 
 #[derive(Default)]
 pub struct Cache {
-    domain_entries: BTreeMap<String, Arc<DomainEntry>>,
+    domain_entries: BTreeMap<String, Arc<DomainEntry>>
 }
 
 impl Cache {
@@ -169,11 +169,11 @@ impl Cache {
     fn get_cache_state(&mut self, qname: &str, qtype: QueryType) -> CacheState {
         match self.domain_entries.get(qname) {
             Some(x) => x.get_cache_state(qtype),
-            None => CacheState::NotCached,
+            None => CacheState::NotCached
         }
     }
 
-    fn fill_queryresult(&mut self,qname: &str, qtype: QueryType, result_vec: &mut Vec<DnsRecord>, increment_stats: bool) {
+    fn fill_queryresult(&mut self, qname: &str, qtype: QueryType, result_vec: &mut Vec<DnsRecord>, increment_stats: bool) {
         if let Some(domain_entry) = self.domain_entries.get_mut(qname).and_then(Arc::get_mut) {
             if increment_stats {
                 domain_entry.hits += 1
@@ -198,7 +198,7 @@ impl Cache {
 
                 Some(qr)
             }
-            CacheState::NotCached => None,
+            CacheState::NotCached => None
         }
     }
 
@@ -206,7 +206,7 @@ impl Cache {
         for rec in records {
             let domain = match rec.get_domain() {
                 Some(x) => x,
-                None => continue,
+                None => continue
             };
 
             if let Some(ref mut rs) = self.domain_entries.get_mut(&domain).and_then(Arc::get_mut) {
@@ -234,7 +234,7 @@ impl Cache {
 
 #[derive(Default)]
 pub struct SynchronizedCache {
-    pub cache: RwLock<Cache>,
+    pub cache: RwLock<Cache>
 }
 
 impl SynchronizedCache {
@@ -257,7 +257,7 @@ impl SynchronizedCache {
     pub fn lookup(&self, qname: &str, qtype: QueryType) -> Option<DnsPacket> {
         let mut cache = match self.cache.write() {
             Ok(x) => x,
-            Err(_) => return None,
+            Err(_) => return None
         };
 
         cache.lookup(qname, qtype)
@@ -284,7 +284,6 @@ impl SynchronizedCache {
 mod tests {
 
     use super::*;
-
     use crate::dns::protocol::{DnsRecord, QueryType, ResultCode, TransientTtl};
 
     #[test]
@@ -318,17 +317,17 @@ mod tests {
         records.push(DnsRecord::A {
             domain: "www.google.com".to_string(),
             addr: "127.0.0.1".parse().unwrap(),
-            ttl: TransientTtl(3600),
+            ttl: TransientTtl(3600)
         });
         records.push(DnsRecord::A {
             domain: "www.yahoo.com".to_string(),
             addr: "127.0.0.2".parse().unwrap(),
-            ttl: TransientTtl(0),
+            ttl: TransientTtl(0)
         });
         records.push(DnsRecord::CNAME {
             domain: "www.microsoft.com".to_string(),
             host: "www.somecdn.com".to_string(),
-            ttl: TransientTtl(3600),
+            ttl: TransientTtl(3600)
         });
 
         cache.store(&records);
@@ -361,7 +360,7 @@ mod tests {
         records2.push(DnsRecord::A {
             domain: "www.yahoo.com".to_string(),
             addr: "127.0.0.2".parse().unwrap(),
-            ttl: TransientTtl(3600),
+            ttl: TransientTtl(3600)
         });
 
         cache.store(&records2);
@@ -373,53 +372,11 @@ mod tests {
 
         // Check stat counter behavior
         assert_eq!(3, cache.domain_entries.len());
-        assert_eq!(
-            1,
-            cache
-                .domain_entries
-                .get(&"www.google.com".to_string())
-                .unwrap()
-                .hits
-        );
-        assert_eq!(
-            2,
-            cache
-                .domain_entries
-                .get(&"www.google.com".to_string())
-                .unwrap()
-                .updates
-        );
-        assert_eq!(
-            1,
-            cache
-                .domain_entries
-                .get(&"www.yahoo.com".to_string())
-                .unwrap()
-                .hits
-        );
-        assert_eq!(
-            3,
-            cache
-                .domain_entries
-                .get(&"www.yahoo.com".to_string())
-                .unwrap()
-                .updates
-        );
-        assert_eq!(
-            1,
-            cache
-                .domain_entries
-                .get(&"www.microsoft.com".to_string())
-                .unwrap()
-                .updates
-        );
-        assert_eq!(
-            1,
-            cache
-                .domain_entries
-                .get(&"www.microsoft.com".to_string())
-                .unwrap()
-                .hits
-        );
+        assert_eq!(1, cache.domain_entries.get(&"www.google.com".to_string()).unwrap().hits);
+        assert_eq!(2, cache.domain_entries.get(&"www.google.com".to_string()).unwrap().updates);
+        assert_eq!(1, cache.domain_entries.get(&"www.yahoo.com".to_string()).unwrap().hits);
+        assert_eq!(3, cache.domain_entries.get(&"www.yahoo.com".to_string()).unwrap().updates);
+        assert_eq!(1, cache.domain_entries.get(&"www.microsoft.com".to_string()).unwrap().updates);
+        assert_eq!(1, cache.domain_entries.get(&"www.microsoft.com".to_string()).unwrap().hits);
     }
 }

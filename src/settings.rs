@@ -1,9 +1,9 @@
 use std::fs::File;
 use std::io::Read;
 
-use serde::{Deserialize, Serialize};
 #[allow(unused_imports)]
-use log::{debug, error, info, LevelFilter, trace, warn};
+use log::{debug, error, info, trace, warn, LevelFilter};
+use serde::{Deserialize, Serialize};
 
 use crate::Bytes;
 
@@ -20,7 +20,7 @@ pub struct Settings {
     #[serde(default)]
     pub dns: Dns,
     #[serde(default)]
-    pub mining: Mining,
+    pub mining: Mining
 }
 
 impl Settings {
@@ -34,9 +34,7 @@ impl Settings {
                 }
                 None
             }
-            Err(..) => {
-                None
-            }
+            Err(..) => None
         }
     }
 
@@ -70,7 +68,7 @@ pub struct Dns {
     pub threads: usize,
     pub forwarders: Vec<String>,
     #[serde(default)]
-    pub hosts: Vec<String>,
+    pub hosts: Vec<String>
 }
 
 impl Default for Dns {
@@ -101,7 +99,7 @@ pub struct Net {
     #[serde(default)]
     pub public: bool,
     #[serde(default)]
-    pub yggdrasil_only: bool,
+    pub yggdrasil_only: bool
 }
 
 impl Default for Net {

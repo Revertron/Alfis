@@ -1,9 +1,11 @@
-use std::net::SocketAddr;
 use std::collections::HashMap;
+use std::net::SocketAddr;
+
 use mio::net::TcpStream;
+
+use crate::crypto::Chacha;
 use crate::p2p::State;
 use crate::Block;
-use crate::crypto::Chacha;
 
 #[derive(Debug)]
 pub struct Peer {
@@ -49,8 +51,8 @@ impl Peer {
 
     pub fn get_nonce(&self) -> &[u8; 12] {
         match &self.cipher {
-            None => { &crate::crypto::ZERO_NONCE }
-            Some(chacha) => { chacha.get_nonce() }
+            None => &crate::crypto::ZERO_NONCE,
+            Some(chacha) => chacha.get_nonce()
         }
     }
 

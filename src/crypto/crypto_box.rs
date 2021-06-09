@@ -1,12 +1,14 @@
-use ecies_ed25519::{SecretKey, PublicKey, Error, encrypt, decrypt};
-use rand_old::{CryptoRng, RngCore};
-use std::fmt::{Debug, Formatter};
-use crate::{to_hex, from_hex};
 use std::fmt;
+use std::fmt::{Debug, Formatter};
+
+use ecies_ed25519::{decrypt, encrypt, Error, PublicKey, SecretKey};
+use rand_old::{CryptoRng, RngCore};
+
+use crate::{from_hex, to_hex};
 
 pub struct CryptoBox {
     pub(crate) secret: SecretKey,
-    pub(crate) public: PublicKey,
+    pub(crate) public: PublicKey
 }
 
 impl CryptoBox {
@@ -67,6 +69,7 @@ impl Clone for CryptoBox {
 #[cfg(test)]
 mod tests {
     use rand::RngCore;
+
     use crate::crypto::CryptoBox;
 
     const TEXT: &str = "Some very secret message";

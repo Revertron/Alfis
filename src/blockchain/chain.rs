@@ -10,15 +10,15 @@ use chrono::Utc;
 use log::{debug, error, info, trace, warn};
 use sqlite::{Connection, State, Statement};
 
-use crate::{Block, Bytes, check_domain, get_domain_zone, is_yggdrasil_record, Keystore, Transaction};
 use crate::blockchain::hash_utils::*;
 use crate::blockchain::transaction::DomainData;
-use crate::blockchain::types::{BlockQuality, MineResult, Options, ZoneData};
 use crate::blockchain::types::BlockQuality::*;
 use crate::blockchain::types::MineResult::*;
+use crate::blockchain::types::{BlockQuality, MineResult, Options, ZoneData};
 use crate::commons::constants::*;
 use crate::keystore::check_public_key_strength;
 use crate::settings::Settings;
+use crate::{check_domain, get_domain_zone, is_yggdrasil_record, Block, Bytes, Keystore, Transaction};
 use rand::prelude::IteratorRandom;
 
 const TEMP_DB_NAME: &str = ":memory:";
@@ -43,7 +43,7 @@ const SQL_GET_USERS_COUNT: &str = "SELECT count(DISTINCT pub_key) FROM blocks;";
 const SQL_GET_OPTIONS: &str = "SELECT * FROM options;";
 
 /// Max possible block index
-const MAX:u64 = i64::MAX as u64;
+const MAX: u64 = i64::MAX as u64;
 
 pub struct Chain {
     origin: Bytes,
@@ -52,7 +52,7 @@ pub struct Chain {
     max_height: u64,
     db: Connection,
     zones: Vec<ZoneData>,
-    signers: RefCell<SignersCache>,
+    signers: RefCell<SignersCache>
 }
 
 impl Chain {
@@ -104,8 +104,8 @@ impl Chain {
             last_block = self.get_block(start - 1);
             if let Some(last) = &last_block {
                 last_full_block = match &last.transaction {
-                    None => { self.get_last_full_block(last.index, None) }
-                    Some(_) => { Some(last.clone()) }
+                    None => self.get_last_full_block(last.index, None),
+                    Some(_) => Some(last.clone())
                 };
             }
         }
@@ -271,8 +271,10 @@ impl Chain {
         }
 
         let block = match self.last_full_block {
-            None => { return None; }
-            Some(ref block) => { block.clone() }
+            None => {
+                return None;
+            }
+            Some(ref block) => block.clone()
         };
         // TODO maybe make some config option to mine signing blocks above?
         let sign_count = self.get_height() - block.index;
@@ -293,7 +295,8 @@ impl Chain {
 
         let signers: HashSet<Bytes> = self.get_block_signers(&block).into_iter().collect();
         let mut rng = rand::thread_rng();
-        let keystore = keys.iter()
+        let keystore = keys
+            .iter()
             .filter(|keystore| signers.contains(&keystore.get_public()))
             .filter(|keystore| {
                 for index in block.index..=self.get_height() {
@@ -304,7 +307,8 @@ impl Chain {
                     }
                 }
                 true
-            }).choose(&mut rng);
+            })
+            .choose(&mut rng);
         if let Some(keystore) = keystore {
             info!("We have an honor to mine signing block!");
             let mut block = Block::new(None, Bytes::default(), last_hash, SIGNER_DIFFICULTY);
@@ -356,7 +360,9 @@ impl Chain {
         statement.bind(5, block.random as i64)?;
         statement.bind(6, block.nonce as i64)?;
         match &block.transaction {
-            None => { statement.bind(7, "")?; }
+            None => {
+                statement.bind(7, "")?;
+            }
             Some(transaction) => {
                 statement.bind(7, transaction.to_string().as_str())?;
             }
@@ -417,7 +423,9 @@ impl Chain {
         if let Some(block) = &self.last_full_block {
             if block.index < before {
                 match pub_key {
-                    None => { return Some(block.clone()); }
+                    None => {
+                        return Some(block.clone());
+                    }
                     Some(key) => {
                         if block.pub_key.deref().eq(key) {
                             return Some(block.clone());
@@ -500,7 +508,7 @@ impl Chain {
         let zones: Vec<_> = zones_text.split("\n").collect();
         for zone in zones {
             let yggdrasil = zone == "ygg" || zone == "anon";
-            result.push(ZoneData {name: zone.to_owned(), yggdrasil})
+            result.push(ZoneData { name: zone.to_owned(), yggdrasil })
         }
         result
     }
@@ -553,7 +561,7 @@ impl Chain {
             let new_id = !self.is_domain_in_blockchain(height, &identity_hash);
             let time = last.timestamp + NEW_DOMAINS_INTERVAL - Utc::now().timestamp();
             if new_id && time > 0 {
-                return Cooldown { time }
+                return Cooldown { time };
             }
         }
 
@@ -598,8 +606,8 @@ impl Chain {
 
     pub fn get_domain_info(&self, domain: &str) -> Option<String> {
         match self.get_domain_transaction(domain) {
-            None => { None }
-            Some(transaction) => { Some(transaction.data) }
+            None => None,
+            Some(transaction) => Some(transaction.data)
         }
     }
 
@@ -668,30 +676,28 @@ impl Chain {
 
     pub fn get_height(&self) -> u64 {
         match self.last_block {
-            None => { 0u64 }
-            Some(ref block) => {
-                block.index
-            }
+            None => 0u64,
+            Some(ref block) => block.index
         }
     }
 
     pub fn get_last_hash(&self) -> Bytes {
         match &self.last_block {
-            None => { Bytes::default() }
-            Some(block) => { block.hash.clone() }
+            None => Bytes::default(),
+            Some(block) => block.hash.clone()
         }
     }
 
     pub fn get_soa_serial(&self) -> u32 {
         match &self.last_full_block {
-            None => { 0 }
-            Some(block) => { block.timestamp as u32 }
+            None => 0,
+            Some(block) => block.timestamp as u32
         }
     }
 
     pub fn next_allowed_full_block(&self) -> u64 {
         match self.last_full_block {
-            None => { self.get_height() + 1 }
+            None => self.get_height() + 1,
             Some(ref block) => {
                 if block.index < BLOCK_SIGNERS_START {
                     self.get_height() + 1
@@ -743,7 +749,7 @@ impl Chain {
                     SIGNER_DIFFICULTY
                 }
             }
-            Some(t) => { self.get_difficulty_for_transaction(&t) }
+            Some(t) => self.get_difficulty_for_transaction(&t)
         };
         if block.difficulty < difficulty {
             warn!("Block difficulty is lower than needed");
@@ -776,8 +782,8 @@ impl Chain {
 
         if let Some(transaction) = &block.transaction {
             let current_height = match last_block {
-                None => { 0 }
-                Some(block) => { block.index }
+                None => 0,
+                Some(block) => block.index
             };
             // If this domain is available to this public key
             if !self.is_id_available(current_height, &transaction.identity, &block.pub_key) {
@@ -921,17 +927,15 @@ impl Chain {
         match transaction.class.as_ref() {
             CLASS_DOMAIN => {
                 return match serde_json::from_str::<DomainData>(&transaction.data) {
-                    Ok(_) => {
-                        DOMAIN_DIFFICULTY
-                    }
+                    Ok(_) => DOMAIN_DIFFICULTY,
                     Err(_) => {
                         warn!("Error parsing DomainData from {:?}", transaction);
                         u32::MAX
                     }
                 }
             }
-            CLASS_ORIGIN => { ORIGIN_DIFFICULTY }
-            _ => { u32::MAX }
+            CLASS_ORIGIN => ORIGIN_DIFFICULTY,
+            _ => u32::MAX
         }
     }
 
@@ -1009,11 +1013,11 @@ impl SignersCache {
 #[cfg(test)]
 pub mod tests {
     use log::LevelFilter;
-    use simplelog::{ColorChoice, ConfigBuilder, TerminalMode, TermLogger};
     #[allow(unused_imports)]
     use log::{debug, error, info, trace, warn};
+    use simplelog::{ColorChoice, ConfigBuilder, TermLogger, TerminalMode};
 
-    use crate::{Chain, Settings, Block};
+    use crate::{Block, Chain, Settings};
 
     fn init_logger() {
         let config = ConfigBuilder::new()

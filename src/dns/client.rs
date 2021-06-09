@@ -2,7 +2,7 @@
 
 use std::io::Write;
 use std::marker::{Send, Sync};
-use std::net::{TcpStream, UdpSocket, ToSocketAddrs, SocketAddr};
+use std::net::{SocketAddr, TcpStream, ToSocketAddrs, UdpSocket};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
@@ -22,7 +22,7 @@ pub enum ClientError {
     Io(std::io::Error),
     PoisonedLock,
     LookupFailed,
-    TimeOut,
+    TimeOut
 }
 
 type Result<T> = std::result::Result<T, ClientError>;
@@ -56,7 +56,7 @@ pub struct DnsNetworkClient {
     socket_ipv6: UdpSocket,
 
     /// Queries in progress
-    pending_queries: Arc<Mutex<Vec<PendingQuery>>>,
+    pending_queries: Arc<Mutex<Vec<PendingQuery>>>
 }
 
 /// A query in progress. This struct holds the `id` if the request, and a channel
@@ -65,7 +65,7 @@ pub struct DnsNetworkClient {
 struct PendingQuery {
     seq: u16,
     timestamp: DateTime<Local>,
-    tx: Sender<Option<DnsPacket>>,
+    tx: Sender<Option<DnsPacket>>
 }
 
 unsafe impl Send for DnsNetworkClient {}
@@ -80,7 +80,7 @@ impl DnsNetworkClient {
             seq: AtomicUsize::new(0),
             socket_ipv4: UdpSocket::bind(format!("0.0.0.0:{}", port)).expect("Error binding IPv4"),
             socket_ipv6: UdpSocket::bind(format!("[::]:{}", port + 1)).expect("Error binding IPv6"),
-            pending_queries: Arc::new(Mutex::new(Vec::new())),
+            pending_queries: Arc::new(Mutex::new(Vec::new()))
         }
     }
 
@@ -331,7 +331,7 @@ impl DnsClient for DnsNetworkClient {
         Ok(())
     }
 
-    fn send_query(&self,qname: &str, qtype: QueryType, server: &str, recursive: bool) -> Result<DnsPacket> {
+    fn send_query(&self, qname: &str, qtype: QueryType, server: &str, recursive: bool) -> Result<DnsPacket> {
         let packet = self.send_udp_query(qname, qtype, server, recursive)?;
         if !packet.header.truncated_message {
             return Ok(packet);
@@ -350,7 +350,7 @@ pub mod tests {
     pub type StubCallback = dyn Fn(&str, QueryType, &str, bool) -> Result<DnsPacket>;
 
     pub struct DnsStubClient {
-        callback: Box<StubCallback>,
+        callback: Box<StubCallback>
     }
 
     impl<'a> DnsStubClient {
@@ -376,7 +376,7 @@ pub mod tests {
             Ok(())
         }
 
-        fn send_query(&self,qname: &str, qtype: QueryType, server: &str, recursive: bool) -> Result<DnsPacket> {
+        fn send_query(&self, qname: &str, qtype: QueryType, server: &str, recursive: bool) -> Result<DnsPacket> {
             (self.callback)(qname, qtype, server, recursive)
         }
     }
@@ -386,9 +386,7 @@ pub mod tests {
         let client = DnsNetworkClient::new(31456);
         client.run().unwrap();
 
-        let res = client
-            .send_udp_query("google.com", QueryType::A, ("8.8.8.8", 53), true)
-            .unwrap();
+        let res = client.send_udp_query("google.com", QueryType::A, ("8.8.8.8", 53), true).unwrap();
 
         assert_eq!(res.questions[0].name, "google.com");
         assert!(res.answers.len() > 0);
@@ -397,16 +395,14 @@ pub mod tests {
             DnsRecord::A { ref domain, .. } => {
                 assert_eq!("google.com", domain);
             }
-            _ => panic!(),
+            _ => panic!()
         }
     }
 
     #[test]
     pub fn test_tcp_client() {
         let client = DnsNetworkClient::new(31458);
-        let res = client
-            .send_tcp_query("google.com", QueryType::A, ("8.8.8.8", 53), true)
-            .unwrap();
+        let res = client.send_tcp_query("google.com", QueryType::A, ("8.8.8.8", 53), true).unwrap();
 
         assert_eq!(res.questions[0].name, "google.com");
         assert!(res.answers.len() > 0);
@@ -415,7 +411,7 @@ pub mod tests {
             DnsRecord::A { ref domain, .. } => {
                 assert_eq!("google.com", domain);
             }
-            _ => panic!(),
+            _ => panic!()
         }
     }
 }

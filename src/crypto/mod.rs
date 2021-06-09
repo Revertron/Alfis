@@ -1,6 +1,5 @@
-mod crypto_box;
 mod chacha;
+mod crypto_box;
 
+pub use chacha::{Chacha, ZERO_NONCE};
 pub use crypto_box::CryptoBox;
-pub use chacha::Chacha;
-pub use chacha::ZERO_NONCE;

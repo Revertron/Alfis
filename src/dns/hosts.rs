@@ -1,11 +1,12 @@
-use std::net::IpAddr;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
-use crate::dns::filter::DnsFilter;
-use crate::dns::protocol::{DnsPacket, QueryType, DnsRecord, TransientTtl, DnsQuestion};
+use std::net::IpAddr;
 
-const NAME_SERVER: & str = "hosts";
+use crate::dns::filter::DnsFilter;
+use crate::dns::protocol::{DnsPacket, DnsQuestion, DnsRecord, QueryType, TransientTtl};
+
+const NAME_SERVER: &str = "hosts";
 
 pub struct HostsFilter {
     hosts: HashMap<String, Vec<IpAddr>>
@@ -33,16 +34,14 @@ impl HostsFilter {
                     let domain = parts[1].trim().to_owned();
                     if let Ok(addr) = ip.parse::<IpAddr>() {
                         if !domain.is_empty() {
-                            map.entry(domain).or_insert(vec!(addr));
+                            map.entry(domain).or_insert(vec![addr]);
                         }
                     }
                 }
 
                 map
             }
-            Err(..) => {
-                HashMap::new()
-            }
+            Err(..) => HashMap::new()
         };
         HostsFilter { hosts }
     }
@@ -70,7 +69,11 @@ impl DnsFilter for HostsFilter {
 
             packet.header.authoritative_answer = true;
             packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
-            packet.authorities.push(DnsRecord::NS { domain: String::from("hosts"), host: String::from(NAME_SERVER), ttl: TransientTtl(600) });
+            packet.authorities.push(DnsRecord::NS {
+                domain: String::from("hosts"),
+                host: String::from(NAME_SERVER),
+                ttl: TransientTtl(600)
+            });
             return Some(packet);
         }
 
@@ -80,8 +83,9 @@ impl DnsFilter for HostsFilter {
 
 #[cfg(test)]
 mod tests {
-    use crate::dns::hosts::HostsFilter;
     use std::env;
+
+    use crate::dns::hosts::HostsFilter;
 
     #[test]
     #[ignore]

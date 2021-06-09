@@ -4,15 +4,14 @@ extern crate serde_json;
 use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::fmt;
-use std::fmt::{Formatter, Error};
+use std::fmt::{Error, Formatter};
+use std::hash::{Hash, Hasher};
+use std::ops::Deref;
 
 use num_bigint::BigUint;
-
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 // For deserialization
 use serde::de::{Error as DeError, Visitor};
-use std::ops::Deref;
-use std::hash::{Hash, Hasher};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Clone)]
 pub struct Bytes {
@@ -132,8 +131,7 @@ impl fmt::Debug for Bytes {
 }
 
 impl Serialize for Bytes {
-    fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> where
-        S: Serializer {
+    fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> where S: Serializer {
         serializer.serialize_str(&crate::commons::to_hex(&self.data))
     }
 }
@@ -147,7 +145,7 @@ impl<'de> Visitor<'de> for BytesVisitor {
         formatter.write_str("bytes in HEX format")
     }
 
-    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E> where E: DeError, {
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E> where E: DeError {
         if !value.is_empty() && value.len() % 2 == 0 {
             Ok(Bytes::new(crate::from_hex(value).unwrap()))
         } else if value.is_empty() {
@@ -157,7 +155,7 @@ impl<'de> Visitor<'de> for BytesVisitor {
         }
     }
 
-    fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E> where E: DeError, {
+    fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E> where E: DeError {
         if !value.is_empty() {
             Ok(Bytes::from_bytes(value))
         } else {
@@ -174,8 +172,8 @@ impl<'dd> Deserialize<'dd> for Bytes {
 
 #[cfg(test)]
 mod tests {
-    use crate::bytes::Bytes;
     use crate::blockchain::hash_utils::same_hash;
+    use crate::bytes::Bytes;
 
     #[test]
     pub fn test_tail_bytes() {
@@ -186,6 +184,6 @@ mod tests {
     #[test]
     pub fn test_deref() {
         let bytes = Bytes::zero32();
-        assert!(same_hash(&bytes, &vec!(0u8,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)));
+        assert!(same_hash(&bytes, &vec!(0u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)));
     }
 }

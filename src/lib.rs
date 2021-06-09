@@ -12,15 +12,14 @@ pub use crate::p2p::Network;
 pub use crate::settings::Settings;
 
 pub mod blockchain;
+pub mod bytes;
 pub mod commons;
-pub mod keystore;
-pub mod miner;
 pub mod context;
-pub mod event;
-pub mod p2p;
+pub mod crypto;
 pub mod dns;
 pub mod dns_utils;
+pub mod event;
+pub mod keystore;
+pub mod miner;
+pub mod p2p;
 pub mod settings;
-pub mod bytes;
-pub mod crypto;
-

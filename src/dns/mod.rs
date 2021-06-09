@@ -19,10 +19,10 @@ pub mod buffer;
 pub mod cache;
 pub mod client;
 pub mod context;
+pub mod filter;
+pub mod hosts;
 pub mod protocol;
 pub mod resolve;
 pub mod server;
-pub mod filter;
-pub mod hosts;
 
 mod netutil;

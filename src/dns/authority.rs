@@ -6,9 +6,9 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::{LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
+use derive_more::{Display, Error, From};
 #[allow(unused_imports)]
-use log::{trace, debug, info, warn, error};
-use derive_more::{Display, From, Error};
+use log::{debug, error, info, trace, warn};
 
 use crate::dns::buffer::{PacketBuffer, StreamPacketBuffer, VectorPacketBuffer};
 use crate::dns::protocol::{DnsPacket, DnsRecord, QueryType, ResultCode, TransientTtl};
@@ -18,7 +18,7 @@ pub enum AuthorityError {
     Buffer(crate::dns::buffer::BufferError),
     Protocol(crate::dns::protocol::ProtocolError),
     Io(std::io::Error),
-    PoisonedLock,
+    PoisonedLock
 }
 
 type Result<T> = std::result::Result<T, AuthorityError>;
@@ -33,7 +33,7 @@ pub struct Zone {
     pub retry: u32,
     pub expire: u32,
     pub minimum: u32,
-    pub records: BTreeSet<DnsRecord>,
+    pub records: BTreeSet<DnsRecord>
 }
 
 impl Zone {
@@ -62,19 +62,17 @@ impl Zone {
 
 #[derive(Default)]
 pub struct Zones {
-    zones: BTreeMap<String, Zone>,
+    zones: BTreeMap<String, Zone>
 }
 
 impl<'a> Zones {
     pub fn new() -> Zones {
-        Zones {
-            zones: BTreeMap::new(),
-        }
+        Zones { zones: BTreeMap::new() }
     }
 
     pub fn load(&mut self) -> Result<()> {
         let zones_dir = match Path::new("zones").read_dir() {
-            Ok(result) => { result }
+            Ok(result) => result,
             Err(_) => {
                 debug!("Authority dir (zones) not found, skipping.");
                 return Ok(());
@@ -84,12 +82,12 @@ impl<'a> Zones {
         for wrapped_filename in zones_dir {
             let filename = match wrapped_filename {
                 Ok(x) => x,
-                Err(_) => continue,
+                Err(_) => continue
             };
 
             let mut zone_file = match File::open(filename.path()) {
                 Ok(x) => x,
-                Err(_) => continue,
+                Err(_) => continue
             };
 
             let mut buffer = StreamPacketBuffer::new(&mut zone_file);
@@ -171,14 +169,12 @@ impl<'a> Zones {
 
 #[derive(Default)]
 pub struct Authority {
-    zones: RwLock<Zones>,
+    zones: RwLock<Zones>
 }
 
 impl Authority {
     pub fn new() -> Authority {
-        Authority {
-            zones: RwLock::new(Zones::new()),
-        }
+        Authority { zones: RwLock::new(Zones::new()) }
     }
 
     pub fn load(&self) -> Result<()> {
@@ -194,7 +190,7 @@ impl Authority {
     pub fn query(&self, qname: &str, qtype: QueryType) -> Option<DnsPacket> {
         let zones = match self.zones.read().ok() {
             Some(x) => x,
-            None => return None,
+            None => return None
         };
 
         let mut best_match = None;
@@ -214,7 +210,7 @@ impl Authority {
 
         let zone = match best_match {
             Some((_, zone)) => zone,
-            None => return None,
+            None => return None
         };
 
         let mut packet = DnsPacket::new();
@@ -223,7 +219,7 @@ impl Authority {
         for rec in &zone.records {
             let domain = match rec.get_domain() {
                 Some(x) => x,
-                None => continue,
+                None => continue
             };
 
             if &domain != qname {
@@ -248,7 +244,7 @@ impl Authority {
                 retry: zone.retry,
                 expire: zone.expire,
                 minimum: zone.minimum,
-                ttl: TransientTtl(zone.minimum),
+                ttl: TransientTtl(zone.minimum)
             });
         }
 

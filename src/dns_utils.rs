@@ -1,13 +1,14 @@
-use std::sync::{Arc, Mutex};
 use std::env;
+use std::sync::{Arc, Mutex};
 
-use crate::{Context, Settings};
-use crate::blockchain::filter::BlockchainFilter;
-use crate::dns::server::{DnsServer, DnsUdpServer, DnsTcpServer};
-use crate::dns::context::{ServerContext, ResolveStrategy};
 #[allow(unused_imports)]
-use log::{debug, error, info, LevelFilter, trace, warn};
+use log::{debug, error, info, trace, warn, LevelFilter};
+
+use crate::blockchain::filter::BlockchainFilter;
+use crate::dns::context::{ResolveStrategy, ServerContext};
 use crate::dns::hosts::HostsFilter;
+use crate::dns::server::{DnsServer, DnsTcpServer, DnsUdpServer};
+use crate::{Context, Settings};
 
 /// Starts UDP and TCP DNS-servers
 pub fn start_dns_server(context: &Arc<Mutex<Context>>, settings: &Settings) {
@@ -34,8 +35,8 @@ fn create_server_context(context: Arc<Mutex<Context>>, settings: &Settings) -> A
     server_context.allow_recursive = true;
     server_context.dns_listen = settings.dns.listen.clone();
     server_context.resolve_strategy = match settings.dns.forwarders.is_empty() {
-        true => { ResolveStrategy::Recursive }
-        false => { ResolveStrategy::Forward { upstreams: settings.dns.forwarders.clone() } }
+        true => ResolveStrategy::Recursive,
+        false => ResolveStrategy::Forward { upstreams: settings.dns.forwarders.clone() }
     };
     // Add host filters
     for host in &settings.dns.hosts {

@@ -2,11 +2,13 @@ extern crate serde;
 extern crate serde_json;
 
 use std::fmt::Debug;
-use serde::{Serialize, Deserialize};
-use crate::bytes::Bytes;
-use crate::Transaction;
+
+use serde::{Deserialize, Serialize};
+
 use crate::blockchain::hash_utils::{hash_difficulty, key_hash_difficulty};
 use crate::blockchain::transaction::TransactionType;
+use crate::bytes::Bytes;
+use crate::Transaction;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Block {
@@ -25,7 +27,7 @@ pub struct Block {
     #[serde(default, skip_serializing_if = "Bytes::is_zero")]
     pub signature: Bytes,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub transaction: Option<Transaction>,
+    pub transaction: Option<Transaction>
 }
 
 impl Block {

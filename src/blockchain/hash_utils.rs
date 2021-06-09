@@ -1,8 +1,9 @@
+use std::convert::TryInto;
+
 use blakeout::Blakeout;
+use sha2::{Digest, Sha256};
 
 use crate::{Block, Bytes, Keystore};
-use sha2::{Sha256, Digest};
-use std::convert::TryInto;
 
 /// Checks block's hash and returns true on valid hash or false otherwise
 pub fn check_block_hash(block: &Block) -> bool {
@@ -32,7 +33,7 @@ pub fn hash_identity(identity: &str, key: Option<&Bytes>) -> Bytes {
     let base = hash_sha256(identity.as_bytes());
     let identity = hash_sha256(&base);
     match key {
-        None => { Bytes::from_bytes(&identity) }
+        None => Bytes::from_bytes(&identity),
         Some(key) => {
             let mut buf = Vec::new();
             buf.append(&mut base.clone());
@@ -85,8 +86,9 @@ pub fn hash_sha256(data: &[u8]) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use crate::blockchain::hash_utils::hash_sha256;
     use std::convert::TryInto;
+
+    use crate::blockchain::hash_utils::hash_sha256;
 
     #[test]
     #[ignore]
@@ -111,7 +113,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_hash_is_good() {
-        let hash = vec!(0u8,0u8,0u8,255,255,255,255,255);
+        let hash = vec![0u8, 0u8, 0u8, 255, 255, 255, 255, 255];
         let bytes: [u8; 8] = hash[..8].try_into().unwrap();
         let int = u64::from_be_bytes(bytes);
         println!("int = {}", int);

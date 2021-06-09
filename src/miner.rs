@@ -1,22 +1,22 @@
-use std::sync::{Arc, Condvar, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
+use std::thread::sleep;
 use std::time::{Duration, Instant};
 
+use blakeout::Blakeout;
 use chrono::Utc;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use num_cpus;
 
-use crate::{Block, Bytes, Context, Keystore, setup_miner_thread};
-use crate::commons::*;
-use crate::blockchain::types::BlockQuality;
 use crate::blockchain::hash_utils::*;
-use crate::keystore::check_public_key_strength;
+use crate::blockchain::types::BlockQuality;
+use crate::commons::*;
 use crate::event::Event;
-use blakeout::Blakeout;
-use std::thread::sleep;
-use crate::eventbus::{register, post};
+use crate::eventbus::{post, register};
+use crate::keystore::check_public_key_strength;
+use crate::{setup_miner_thread, Block, Bytes, Context, Keystore};
 
 #[derive(Clone)]
 pub struct MineJob {
@@ -98,7 +98,7 @@ impl Miner {
             match e {
                 Event::ActionQuit => { running.store(false, Ordering::Relaxed); }
                 Event::NewBlockReceived => {}
-                Event::BlockchainChanged {..} => {}
+                Event::BlockchainChanged { .. } => {}
                 Event::ActionStopMining => {
                     mining.store(false, Ordering::SeqCst);
                 }
@@ -231,8 +231,8 @@ impl Miner {
         } else {
             job.block.index = context.lock().unwrap().chain.get_height() + 1;
             job.block.prev_block_hash = match context.lock().unwrap().chain.last_block() {
-                None => { Bytes::default() }
-                Some(block) => { block.hash }
+                None => Bytes::default(),
+                Some(block) => block.hash
             };
         }
 
@@ -276,7 +276,7 @@ impl Miner {
                             }
                             post(Event::MinerStopped { success: false, full });
                         }
-                    },
+                    }
                     Some(mut block) => {
                         let index = block.index;
                         let mut context = context.lock().unwrap();
@@ -298,7 +298,7 @@ impl Miner {
                         context.miner_state.mining = false;
                         post(Event::MinerStopped { success, full });
                         mining.store(false, Ordering::SeqCst);
-                    },
+                    }
                 }
             });
             thread::sleep(thread_spawn_interval);

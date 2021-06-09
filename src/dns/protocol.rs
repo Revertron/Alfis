@@ -15,7 +15,7 @@ use crate::dns::buffer::{PacketBuffer, VectorPacketBuffer};
 #[derive(Debug, Display, From, Error)]
 pub enum ProtocolError {
     Buffer(crate::dns::buffer::BufferError),
-    Io(std::io::Error),
+    Io(std::io::Error)
 }
 
 type Result<T> = std::result::Result<T, ProtocolError>;
@@ -91,10 +91,7 @@ impl PartialOrd<TransientTtl> for TransientTtl {
 }
 
 impl Hash for TransientTtl {
-    fn hash<H>(&self, _: &mut H)
-    where
-        H: Hasher,
-    {
+    fn hash<H>(&self, _: &mut H) where H: Hasher {
         // purposely left empty
     }
 }
@@ -110,22 +107,22 @@ pub enum DnsRecord {
         domain: String,
         qtype: u16,
         data_len: u16,
-        ttl: TransientTtl,
+        ttl: TransientTtl
     }, // 0
     A {
         domain: String,
         addr: Ipv4Addr,
-        ttl: TransientTtl,
+        ttl: TransientTtl
     }, // 1
     NS {
         domain: String,
         host: String,
-        ttl: TransientTtl,
+        ttl: TransientTtl
     }, // 2
     CNAME {
         domain: String,
         host: String,
-        ttl: TransientTtl,
+        ttl: TransientTtl
     }, // 5
     SOA {
         domain: String,
@@ -136,28 +133,28 @@ pub enum DnsRecord {
         retry: u32,
         expire: u32,
         minimum: u32,
-        ttl: TransientTtl,
+        ttl: TransientTtl
     }, // 6
     PTR {
         domain: String,
         data: String,
-        ttl: TransientTtl,
+        ttl: TransientTtl
     }, // 12
     MX {
         domain: String,
         priority: u16,
         host: String,
-        ttl: TransientTtl,
+        ttl: TransientTtl
     }, // 15
     TXT {
         domain: String,
         data: String,
-        ttl: TransientTtl,
+        ttl: TransientTtl
     }, // 16
     AAAA {
         domain: String,
         addr: Ipv6Addr,
-        ttl: TransientTtl,
+        ttl: TransientTtl
     }, // 28
     SRV {
         domain: String,
@@ -165,12 +162,12 @@ pub enum DnsRecord {
         weight: u16,
         port: u16,
         host: String,
-        ttl: TransientTtl,
+        ttl: TransientTtl
     }, // 33
     OPT {
         packet_len: u16,
         flags: u32,
-        data: String,
+        data: String
     }, // 41
 }
 
@@ -192,14 +189,10 @@ impl DnsRecord {
                     ((raw_addr >> 24) & 0xFF) as u8,
                     ((raw_addr >> 16) & 0xFF) as u8,
                     ((raw_addr >> 8) & 0xFF) as u8,
-                    ((raw_addr >> 0) & 0xFF) as u8,
+                    ((raw_addr >> 0) & 0xFF) as u8
                 );
 
-                Ok(DnsRecord::A {
-                    domain,
-                    addr,
-                    ttl: TransientTtl(ttl),
-                })
+                Ok(DnsRecord::A { domain, addr, ttl: TransientTtl(ttl) })
             }
             QueryType::AAAA => {
                 let raw_addr1 = buffer.read_u32()?;
@@ -214,34 +207,22 @@ impl DnsRecord {
                     ((raw_addr3 >> 16) & 0xFFFF) as u16,
                     ((raw_addr3 >> 0) & 0xFFFF) as u16,
                     ((raw_addr4 >> 16) & 0xFFFF) as u16,
-                    ((raw_addr4 >> 0) & 0xFFFF) as u16,
+                    ((raw_addr4 >> 0) & 0xFFFF) as u16
                 );
 
-                Ok(DnsRecord::AAAA {
-                    domain,
-                    addr,
-                    ttl: TransientTtl(ttl),
-                })
+                Ok(DnsRecord::AAAA { domain, addr, ttl: TransientTtl(ttl) })
             }
             QueryType::NS => {
                 let mut ns = String::new();
                 buffer.read_qname(&mut ns)?;
 
-                Ok(DnsRecord::NS {
-                    domain,
-                    host: ns,
-                    ttl: TransientTtl(ttl),
-                })
+                Ok(DnsRecord::NS { domain, host: ns, ttl: TransientTtl(ttl) })
             }
             QueryType::CNAME => {
                 let mut cname = String::new();
                 buffer.read_qname(&mut cname)?;
 
-                Ok(DnsRecord::CNAME {
-                    domain,
-                    host: cname,
-                    ttl: TransientTtl(ttl),
-                })
+                Ok(DnsRecord::CNAME { domain, host: cname, ttl: TransientTtl(ttl) })
             }
             QueryType::SRV => {
                 let priority = buffer.read_u16()?;
@@ -251,36 +232,20 @@ impl DnsRecord {
                 let mut srv = String::new();
                 buffer.read_qname(&mut srv)?;
 
-                Ok(DnsRecord::SRV {
-                    domain,
-                    priority,
-                    weight,
-                    port,
-                    host: srv,
-                    ttl: TransientTtl(ttl),
-                })
+                Ok(DnsRecord::SRV { domain, priority, weight, port, host: srv, ttl: TransientTtl(ttl) })
             }
             QueryType::PTR => {
                 let mut ptr = String::new();
                 buffer.read_qname(&mut ptr)?;
 
-                Ok(DnsRecord::PTR {
-                    domain,
-                    data: ptr,
-                    ttl: TransientTtl(ttl),
-                })
+                Ok(DnsRecord::PTR { domain, data: ptr, ttl: TransientTtl(ttl) })
             }
             QueryType::MX => {
                 let priority = buffer.read_u16()?;
                 let mut mx = String::new();
                 buffer.read_qname(&mut mx)?;
 
-                Ok(DnsRecord::MX {
-                    domain,
-                    priority,
-                    host: mx,
-                    ttl: TransientTtl(ttl),
-                })
+                Ok(DnsRecord::MX { domain, priority, host: mx, ttl: TransientTtl(ttl) })
             }
             QueryType::SOA => {
                 let mut m_name = String::new();
@@ -295,58 +260,31 @@ impl DnsRecord {
                 let expire = buffer.read_u32()?;
                 let minimum = buffer.read_u32()?;
 
-                Ok(DnsRecord::SOA {
-                    domain,
-                    m_name,
-                    r_name,
-                    serial,
-                    refresh,
-                    retry,
-                    expire,
-                    minimum,
-                    ttl: TransientTtl(ttl),
-                })
+                Ok(DnsRecord::SOA { domain, m_name, r_name, serial, refresh, retry, expire, minimum, ttl: TransientTtl(ttl) })
             }
             QueryType::TXT => {
                 let mut txt = String::new();
 
                 let cur_pos = buffer.pos();
-                txt.push_str(&String::from_utf8_lossy(
-                    buffer.get_range(cur_pos, data_len as usize)?,
-                ));
+                txt.push_str(&String::from_utf8_lossy(buffer.get_range(cur_pos, data_len as usize)?));
 
                 buffer.step(data_len as usize)?;
 
-                Ok(DnsRecord::TXT {
-                    domain,
-                    data: txt,
-                    ttl: TransientTtl(ttl),
-                })
+                Ok(DnsRecord::TXT { domain, data: txt, ttl: TransientTtl(ttl) })
             }
             QueryType::OPT => {
                 let mut data = String::new();
 
                 let cur_pos = buffer.pos();
-                data.push_str(&String::from_utf8_lossy(
-                    buffer.get_range(cur_pos, data_len as usize)?,
-                ));
+                data.push_str(&String::from_utf8_lossy(buffer.get_range(cur_pos, data_len as usize)?));
                 buffer.step(data_len as usize)?;
 
-                Ok(DnsRecord::OPT {
-                    packet_len: class,
-                    flags: ttl,
-                    data,
-                })
+                Ok(DnsRecord::OPT { packet_len: class, flags: ttl, data })
             }
             QueryType::UNKNOWN(_) => {
                 buffer.step(data_len as usize)?;
 
-                Ok(DnsRecord::UNKNOWN {
-                    domain,
-                    qtype: qtype_num,
-                    data_len,
-                    ttl: TransientTtl(ttl),
-                })
+                Ok(DnsRecord::UNKNOWN { domain, qtype: qtype_num, data_len, ttl: TransientTtl(ttl) })
             }
         }
     }
@@ -355,11 +293,7 @@ impl DnsRecord {
         let start_pos = buffer.pos();
 
         match *self {
-            DnsRecord::A {
-                ref domain,
-                ref addr,
-                ttl: TransientTtl(ttl),
-            } => {
+            DnsRecord::A { ref domain, ref addr, ttl: TransientTtl(ttl) } => {
                 buffer.write_qname(domain)?;
                 buffer.write_u16(QueryType::A.to_num())?;
                 buffer.write_u16(1)?;
@@ -372,11 +306,7 @@ impl DnsRecord {
                 buffer.write_u8(octets[2])?;
                 buffer.write_u8(octets[3])?;
             }
-            DnsRecord::AAAA {
-                ref domain,
-                ref addr,
-                ttl: TransientTtl(ttl),
-            } => {
+            DnsRecord::AAAA { ref domain, ref addr, ttl: TransientTtl(ttl) } => {
                 buffer.write_qname(domain)?;
                 buffer.write_u16(QueryType::AAAA.to_num())?;
                 buffer.write_u16(1)?;
@@ -387,11 +317,7 @@ impl DnsRecord {
                     buffer.write_u16(*octet)?;
                 }
             }
-            DnsRecord::NS {
-                ref domain,
-                ref host,
-                ttl: TransientTtl(ttl),
-            } => {
+            DnsRecord::NS { ref domain, ref host, ttl: TransientTtl(ttl) } => {
                 buffer.write_qname(domain)?;
                 buffer.write_u16(QueryType::NS.to_num())?;
                 buffer.write_u16(1)?;
@@ -405,11 +331,7 @@ impl DnsRecord {
                 let size = buffer.pos() - (pos + 2);
                 buffer.set_u16(pos, size as u16)?;
             }
-            DnsRecord::CNAME {
-                ref domain,
-                ref host,
-                ttl: TransientTtl(ttl),
-            } => {
+            DnsRecord::CNAME { ref domain, ref host, ttl: TransientTtl(ttl) } => {
                 buffer.write_qname(domain)?;
                 buffer.write_u16(QueryType::CNAME.to_num())?;
                 buffer.write_u16(1)?;
@@ -423,14 +345,7 @@ impl DnsRecord {
                 let size = buffer.pos() - (pos + 2);
                 buffer.set_u16(pos, size as u16)?;
             }
-            DnsRecord::SRV {
-                ref domain,
-                priority,
-                weight,
-                port,
-                ref host,
-                ttl: TransientTtl(ttl),
-            } => {
+            DnsRecord::SRV { ref domain, priority, weight, port, ref host, ttl: TransientTtl(ttl) } => {
                 buffer.write_qname(domain)?;
                 buffer.write_u16(QueryType::SRV.to_num())?;
                 buffer.write_u16(1)?;
@@ -461,12 +376,7 @@ impl DnsRecord {
                 let size = buffer.pos() - (pos + 2);
                 buffer.set_u16(pos, size as u16)?;
             }
-            DnsRecord::MX {
-                ref domain,
-                priority,
-                ref host,
-                ttl: TransientTtl(ttl),
-            } => {
+            DnsRecord::MX { ref domain, priority, ref host, ttl: TransientTtl(ttl) } => {
                 buffer.write_qname(domain)?;
                 buffer.write_u16(QueryType::MX.to_num())?;
                 buffer.write_u16(1)?;
@@ -481,17 +391,7 @@ impl DnsRecord {
                 let size = buffer.pos() - (pos + 2);
                 buffer.set_u16(pos, size as u16)?;
             }
-            DnsRecord::SOA {
-                ref domain,
-                ref m_name,
-                ref r_name,
-                serial,
-                refresh,
-                retry,
-                expire,
-                minimum,
-                ttl: TransientTtl(ttl),
-            } => {
+            DnsRecord::SOA { ref domain, ref m_name, ref r_name, serial, refresh, retry, expire, minimum, ttl: TransientTtl(ttl) } => {
                 buffer.write_qname(domain)?;
                 buffer.write_u16(QueryType::SOA.to_num())?;
                 buffer.write_u16(1)?;
@@ -511,11 +411,7 @@ impl DnsRecord {
                 let size = buffer.pos() - (pos + 2);
                 buffer.set_u16(pos, size as u16)?;
             }
-            DnsRecord::TXT {
-                ref domain,
-                ref data,
-                ttl: TransientTtl(ttl),
-            } => {
+            DnsRecord::TXT { ref domain, ref data, ttl: TransientTtl(ttl) } => {
                 buffer.write_qname(domain)?;
                 buffer.write_u16(QueryType::TXT.to_num())?;
                 buffer.write_u16(1)?;
@@ -590,47 +486,17 @@ impl DnsRecord {
 
     pub fn get_ttl(&self) -> u32 {
         match *self {
-            DnsRecord::A {
-                ttl: TransientTtl(ttl),
-                ..
-            }
-            | DnsRecord::AAAA {
-                ttl: TransientTtl(ttl),
-                ..
-            }
-            | DnsRecord::NS {
-                ttl: TransientTtl(ttl),
-                ..
-            }
-            | DnsRecord::CNAME {
-                ttl: TransientTtl(ttl),
-                ..
-            }
-            | DnsRecord::SRV {
-                ttl: TransientTtl(ttl),
-                ..
-            }
-            | DnsRecord::PTR {
-                ttl: TransientTtl(ttl),
-                ..
-            }
-            | DnsRecord::MX {
-                ttl: TransientTtl(ttl),
-                ..
-            }
-            | DnsRecord::UNKNOWN {
-                ttl: TransientTtl(ttl),
-                ..
-            }
-            | DnsRecord::SOA {
-                ttl: TransientTtl(ttl),
-                ..
-            }
-            | DnsRecord::TXT {
-                ttl: TransientTtl(ttl),
-                ..
-            } => ttl,
-            DnsRecord::OPT { .. } => 0,
+            DnsRecord::A { ttl: TransientTtl(ttl), .. }
+            | DnsRecord::AAAA { ttl: TransientTtl(ttl), .. }
+            | DnsRecord::NS { ttl: TransientTtl(ttl), .. }
+            | DnsRecord::CNAME { ttl: TransientTtl(ttl), .. }
+            | DnsRecord::SRV { ttl: TransientTtl(ttl), .. }
+            | DnsRecord::PTR { ttl: TransientTtl(ttl), .. }
+            | DnsRecord::MX { ttl: TransientTtl(ttl), .. }
+            | DnsRecord::UNKNOWN { ttl: TransientTtl(ttl), .. }
+            | DnsRecord::SOA { ttl: TransientTtl(ttl), .. }
+            | DnsRecord::TXT { ttl: TransientTtl(ttl), .. } => ttl,
+            DnsRecord::OPT { .. } => 0
         }
     }
 }
@@ -643,7 +509,7 @@ pub enum ResultCode {
     SERVFAIL = 2,
     NXDOMAIN = 3,
     NOTIMP = 4,
-    REFUSED = 5,
+    REFUSED = 5
 }
 
 impl Default for ResultCode {
@@ -660,7 +526,7 @@ impl ResultCode {
             3 => ResultCode::NXDOMAIN,
             4 => ResultCode::NOTIMP,
             5 => ResultCode::REFUSED,
-            0 | _ => ResultCode::NOERROR,
+            0 | _ => ResultCode::NOERROR
         }
     }
 }
@@ -685,7 +551,7 @@ pub struct DnsHeader {
     pub questions: u16,             // 16 bits
     pub answers: u16,               // 16 bits
     pub authoritative_entries: u16, // 16 bits
-    pub resource_entries: u16,      // 16 bits
+    pub resource_entries: u16       // 16 bits
 }
 
 impl DnsHeader {
@@ -708,7 +574,7 @@ impl DnsHeader {
             questions: 0,
             answers: 0,
             authoritative_entries: 0,
-            resource_entries: 0,
+            resource_entries: 0
         }
     }
 
@@ -720,7 +586,7 @@ impl DnsHeader {
                 | ((self.truncated_message as u8) << 1)
                 | ((self.authoritative_answer as u8) << 2)
                 | (self.opcode << 3)
-                | ((self.response as u8) << 7) as u8,
+                | ((self.response as u8) << 7) as u8
         )?;
 
         buffer.write_u8(
@@ -728,7 +594,7 @@ impl DnsHeader {
                 | ((self.checking_disabled as u8) << 4)
                 | ((self.authed_data as u8) << 5)
                 | ((self.z as u8) << 6)
-                | ((self.recursion_available as u8) << 7),
+                | ((self.recursion_available as u8) << 7)
         )?;
 
         buffer.write_u16(self.questions)?;
@@ -778,11 +644,7 @@ impl fmt::Display for DnsHeader {
 
         write!(f, "\trecursion_desired: {0}\n", self.recursion_desired)?;
         write!(f, "\ttruncated_message: {0}\n", self.truncated_message)?;
-        write!(
-            f,
-            "\tauthoritative_answer: {0}\n",
-            self.authoritative_answer
-        )?;
+        write!(f, "\tauthoritative_answer: {0}\n", self.authoritative_answer)?;
         write!(f, "\topcode: {0}\n", self.opcode)?;
         write!(f, "\tresponse: {0}\n", self.response)?;
 
@@ -794,11 +656,7 @@ impl fmt::Display for DnsHeader {
 
         write!(f, "\tquestions: {0}\n", self.questions)?;
         write!(f, "\tanswers: {0}\n", self.answers)?;
-        write!(
-            f,
-            "\tauthoritative_entries: {0}\n",
-            self.authoritative_entries
-        )?;
+        write!(f, "\tauthoritative_entries: {0}\n", self.authoritative_entries)?;
         write!(f, "\tresource_entries: {0}\n", self.resource_entries)?;
 
         Ok(())
@@ -809,7 +667,7 @@ impl fmt::Display for DnsHeader {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DnsQuestion {
     pub name: String,
-    pub qtype: QueryType,
+    pub qtype: QueryType
 }
 
 impl DnsQuestion {
@@ -818,10 +676,7 @@ impl DnsQuestion {
     }
 
     pub fn binary_len(&self) -> usize {
-        self.name
-            .split('.')
-            .map(|x| x.len() + 1)
-            .fold(1, |x, y| x + y)
+        self.name.split('.').map(|x| x.len() + 1).fold(1, |x, y| x + y)
     }
 
     pub fn write<T: PacketBuffer>(&self, buffer: &mut T) -> Result<()> {
@@ -864,18 +719,12 @@ pub struct DnsPacket {
     pub questions: Vec<DnsQuestion>,
     pub answers: Vec<DnsRecord>,
     pub authorities: Vec<DnsRecord>,
-    pub resources: Vec<DnsRecord>,
+    pub resources: Vec<DnsRecord>
 }
 
 impl DnsPacket {
     pub fn new() -> DnsPacket {
-        DnsPacket {
-            header: DnsHeader::new(),
-            questions: Vec::new(),
-            answers: Vec::new(),
-            authorities: Vec::new(),
-            resources: Vec::new(),
-        }
+        DnsPacket { header: DnsHeader::new(), questions: Vec::new(), answers: Vec::new(), authorities: Vec::new(), resources: Vec::new() }
     }
 
     pub fn from_buffer<T: PacketBuffer>(buffer: &mut T) -> Result<DnsPacket> {
@@ -977,32 +826,18 @@ impl DnsPacket {
     pub fn get_resolved_ns(&self, qname: &str) -> Option<String> {
         let mut new_authorities = Vec::new();
         for auth in &self.authorities {
-            if let DnsRecord::NS {
-                ref domain,
-                ref host,
-                ..
-            } = *auth
-            {
+            if let DnsRecord::NS { ref domain, ref host, .. } = *auth {
                 if !qname.ends_with(domain) {
                     continue;
                 }
 
                 for rsrc in &self.resources {
-                    if let DnsRecord::A {
-                        ref domain,
-                        ref addr,
-                        ttl: TransientTtl(ttl),
-                    } = *rsrc
-                    {
+                    if let DnsRecord::A { ref domain, ref addr, ttl: TransientTtl(ttl) } = *rsrc {
                         if domain != host {
                             continue;
                         }
 
-                        let rec = DnsRecord::A {
-                            domain: host.clone(),
-                            addr: *addr,
-                            ttl: TransientTtl(ttl),
-                        };
+                        let rec = DnsRecord::A { domain: host.clone(), addr: *addr, ttl: TransientTtl(ttl) };
 
                         new_authorities.push(rec);
                     }
@@ -1023,12 +858,7 @@ impl DnsPacket {
     pub fn get_unresolved_ns(&self, qname: &str) -> Option<String> {
         let mut new_authorities = Vec::new();
         for auth in &self.authorities {
-            if let DnsRecord::NS {
-                ref domain,
-                ref host,
-                ..
-            } = *auth
-            {
+            if let DnsRecord::NS { ref domain, ref host, .. } = *auth {
                 if !qname.ends_with(domain) {
                     continue;
                 }
@@ -1056,13 +886,7 @@ impl DnsPacket {
 
         let mut record_count = self.answers.len() + self.authorities.len() + self.resources.len();
 
-        for (i, rec) in self
-            .answers
-            .iter()
-            .chain(self.authorities.iter())
-            .chain(self.resources.iter())
-            .enumerate()
-        {
+        for (i, rec) in self.answers.iter().chain(self.authorities.iter()).chain(self.resources.iter()).enumerate() {
             size += rec.write(&mut test_buffer)?;
             if size > max_size {
                 record_count = i;
@@ -1085,13 +909,7 @@ impl DnsPacket {
             question.write(buffer)?;
         }
 
-        for rec in self
-            .answers
-            .iter()
-            .chain(self.authorities.iter())
-            .chain(self.resources.iter())
-            .take(record_count)
-        {
+        for rec in self.answers.iter().chain(self.authorities.iter()).chain(self.resources.iter()).take(record_count) {
             rec.write(buffer)?;
         }
 
@@ -1111,29 +929,27 @@ mod tests {
         packet.header.id = 1337;
         packet.header.response = true;
 
-        packet
-            .questions
-            .push(DnsQuestion::new("google.com".to_string(), QueryType::NS));
+        packet.questions.push(DnsQuestion::new("google.com".to_string(), QueryType::NS));
         //packet.answers.push(DnsRecord::A("ns1.google.com".to_string(), "127.0.0.1".parse::<Ipv4Addr>().unwrap(), 3600));
         packet.answers.push(DnsRecord::NS {
             domain: "google.com".to_string(),
             host: "ns1.google.com".to_string(),
-            ttl: TransientTtl(3600),
+            ttl: TransientTtl(3600)
         });
         packet.answers.push(DnsRecord::NS {
             domain: "google.com".to_string(),
             host: "ns2.google.com".to_string(),
-            ttl: TransientTtl(3600),
+            ttl: TransientTtl(3600)
         });
         packet.answers.push(DnsRecord::NS {
             domain: "google.com".to_string(),
             host: "ns3.google.com".to_string(),
-            ttl: TransientTtl(3600),
+            ttl: TransientTtl(3600)
         });
         packet.answers.push(DnsRecord::NS {
             domain: "google.com".to_string(),
             host: "ns4.google.com".to_string(),
-            ttl: TransientTtl(3600),
+            ttl: TransientTtl(3600)
         });
 
         let mut buffer = VectorPacketBuffer::new();

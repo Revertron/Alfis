@@ -8,25 +8,23 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use chrono::{DateTime, Local};
-#[allow(unused_imports)]
-use log::{debug, error, info, LevelFilter, trace, warn};
-use serde::{Serialize, Deserialize};
-use web_view::Content;
-
-use alfis::{Block, Bytes, Context, Keystore, Transaction};
-use alfis::keystore;
 use alfis::blockchain::transaction::DomainData;
 use alfis::blockchain::types::MineResult;
 use alfis::commons::*;
+use alfis::crypto::CryptoBox;
 use alfis::dns::protocol::DnsRecord;
 use alfis::event::Event;
+use alfis::eventbus::{post, register};
 use alfis::miner::Miner;
+use alfis::{keystore, Block, Bytes, Context, Keystore, Transaction};
+use chrono::{DateTime, Local};
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn, LevelFilter};
+use serde::{Deserialize, Serialize};
+use web_view::Content;
 use Cmd::*;
 
 use self::web_view::{Handle, WebView};
-use alfis::crypto::CryptoBox;
-use alfis::eventbus::{register, post};
 
 pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let file_content = include_str!("webview/index.html");
@@ -117,7 +115,10 @@ fn action_check_record(web_view: &mut WebView<()>, data: String) {
                 }
             }
         }
-        Err(e) => { web_view.eval("recordOkay(false)").expect("Error evaluating!"); dbg!(e); }
+        Err(e) => {
+            web_view.eval("recordOkay(false)").expect("Error evaluating!");
+            dbg!(e);
+        }
     }
 }
 
@@ -238,7 +239,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                     event_handle_info(&handle, "Mining started");
                     String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
                 }
-                Event::MinerStopped { success, full} => {
+                Event::MinerStopped { success, full } => {
                     status.mining = false;
                     status.max_diff = 0;
                     let mut s = if status.syncing {
@@ -310,12 +311,12 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                         format!("setLeftStatusBarText('Idle'); setStats({}, {}, {}, {});", blocks, domains, keys, nodes)
                     }
                 }
-                Event::BlockchainChanged {index} => {
+                Event::BlockchainChanged { index } => {
                     debug!("Current blockchain height is {}", index);
                     event_handle_info(&handle, &format!("Blockchain changed, current block count is {} now.", index));
                     String::new() // Nothing
                 }
-                _ => { String::new() }
+                _ => String::new()
             };
 
             if !eval.is_empty() {
@@ -343,7 +344,8 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
         let _ = web_view.eval(&format!("zonesChanged('{}');", &zones));
     }
     send_keys_to_ui(&c, &web_view.handle());
-    if let Err(e) = web_view.eval(&format!("setStats({}, {}, {}, {});", c.chain.get_height(), c.chain.get_domains_count(), c.chain.get_users_count(), 0)) {
+    let command = format!("setStats({}, {}, {}, {});", c.chain.get_height(), c.chain.get_domains_count(), c.chain.get_users_count(), 0);
+    if let Err(e) = web_view.eval(&command) {
         error!("Error evaluating stats: {}", e);
     }
     event_info(web_view, "Application loaded");
@@ -404,7 +406,7 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
     let keystore = context.get_keystore().unwrap().clone();
     let pub_key = keystore.get_public();
     let data = match serde_json::from_str::<DomainData>(&data) {
-        Ok(data) => { data }
+        Ok(data) => data,
         Err(e) => {
             show_warning(web_view, "Something wrong with domain data. I cannot mine it.");
             let _ = web_view.eval("domainMiningUnavailable();");
@@ -587,7 +589,7 @@ pub enum Cmd {
     MineDomain { name: String, data: String, signing: String, encryption: String },
     TransferDomain { name: String, owner: String },
     StopMining,
-    Open { link: String },
+    Open { link: String }
 }
 
 struct Status {

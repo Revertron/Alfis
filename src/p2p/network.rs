@@ -1,30 +1,31 @@
 extern crate serde;
 extern crate serde_json;
 
-use std::{io, thread};
 use std::cmp::max;
-use std::io::{Read, Write, Error, ErrorKind};
+use std::collections::{HashMap, HashSet};
+use std::io::{Error, ErrorKind, Read, Write};
 use std::net::{IpAddr, Shutdown, SocketAddr, SocketAddrV4};
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
+use std::{io, thread};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use mio::{Events, Interest, Poll, Registry, Token};
 use mio::event::Event;
 use mio::net::{TcpListener, TcpStream};
-use rand::{random, RngCore, Rng};
+use mio::{Events, Interest, Poll, Registry, Token};
+use rand::{random, Rng, RngCore};
 use rand_old::prelude::thread_rng;
-use x25519_dalek::{StaticSecret, PublicKey};
+use x25519_dalek::{PublicKey, StaticSecret};
 
-use crate::{Block, Context, p2p::Message, p2p::Peer, p2p::Peers, p2p::State};
 use crate::blockchain::types::BlockQuality;
 use crate::commons::*;
-use crate::eventbus::{register, post};
 use crate::crypto::Chacha;
-use std::collections::{HashMap, HashSet};
+use crate::eventbus::{post, register};
+use crate::p2p::{Message, Peer, Peers, State};
+use crate::{Block, Context};
 
 const SERVER: Token = Token(0);
 
@@ -36,7 +37,7 @@ pub struct Network {
     // States of peer connections, and some data to send when sockets become writable
     peers: Peers,
     // Orphan blocks from future
-    future_blocks: HashMap<u64, Block>,
+    future_blocks: HashMap<u64, Block>
 }
 
 impl Network {
@@ -116,7 +117,9 @@ impl Network {
 
                                 if yggdrasil_only && !is_yggdrasil(&address.ip()) {
                                     debug!("Dropping connection from Internet");
-                                    stream.shutdown(Shutdown::Both).unwrap_or_else(|e|{ warn!("Error in shutdown, {}", e); });
+                                    stream.shutdown(Shutdown::Both).unwrap_or_else(|e| {
+                                        warn!("Error in shutdown, {}", e);
+                                    });
                                     let _ = poll.registry().reregister(&mut server, SERVER, Interest::READABLE);
                                     continue;
                                 }
@@ -137,8 +140,8 @@ impl Network {
                         if !self.handle_connection_event(&poll.registry(), &event) {
                             let _ = self.peers.close_peer(poll.registry(), &token);
                             let blocks = self.context.lock().unwrap().chain.get_height();
-                            let keys =  self.context.lock().unwrap().chain.get_users_count();
-                            let domains =  self.context.lock().unwrap().chain.get_domains_count();
+                            let keys = self.context.lock().unwrap().chain.get_users_count();
+                            let domains = self.context.lock().unwrap().chain.get_domains_count();
                             post(crate::event::Event::NetworkStatus { blocks, domains, keys, nodes: self.peers.get_peers_active_count() });
                         }
                     }
@@ -165,8 +168,8 @@ impl Network {
                     let nodes = self.peers.get_peers_active_count();
                     let banned = self.peers.get_peers_banned_count();
 
-                    let keys =  context.chain.get_users_count();
-                    let domains =  context.chain.get_domains_count();
+                    let keys = context.chain.get_users_count();
+                    let domains = context.chain.get_domains_count();
                     post(crate::event::Event::NetworkStatus { blocks, domains, keys, nodes });
 
                     if log_timer.elapsed().as_secs() > LOG_REFRESH_DELAY_SEC {
@@ -237,7 +240,7 @@ impl Network {
                                         debug!("Error reading client handshake from {}.", peer.get_addr());
                                         false
                                     }
-                                }
+                                };
                             }
                             State::ServerHandshake => {
                                 let mut stream = peer.get_stream();
@@ -264,7 +267,7 @@ impl Network {
                                         debug!("Error reading client handshake from {}", peer.get_addr());
                                         false
                                     }
-                                }
+                                };
                             }
                             _ => {
                                 let mut stream = peer.get_stream();
@@ -281,9 +284,7 @@ impl Network {
                         Some(peer) => {
                             let data = data.unwrap();
                             match decode_message(&data, peer.get_cipher()) {
-                                Ok(data) => {
-                                    data
-                                }
+                                Ok(data) => data,
                                 Err(_) => {
                                     vec![]
                                 }
@@ -344,8 +345,8 @@ impl Network {
             } else {
                 let error = data.err().unwrap();
                 let addr = match self.peers.get_peer(&event.token()) {
-                    None => { String::from("unknown") }
-                    Some(peer) => { peer.get_addr().to_string() }
+                    None => String::from("unknown"),
+                    Some(peer) => peer.get_addr().to_string()
                 };
                 debug!("Error reading message from {}, error = {}", addr, error);
                 return false;
@@ -475,7 +476,7 @@ impl Network {
                     State::idle()
                 }
             }
-            Message::Error => { State::Error }
+            Message::Error => State::Error,
             Message::Ping { height, hash } => {
                 let peer = self.peers.get_mut_peer(token).unwrap();
                 peer.set_height(height);
@@ -546,7 +547,7 @@ impl Network {
                     Ok(block) => block,
                     Err(e) => {
                         warn!("Error deserializing block! {}", e);
-                        return State::Banned
+                        return State::Banned;
                     }
                 };
                 if index != block.index {
@@ -555,8 +556,8 @@ impl Network {
                 info!("Received block {} with hash {:?}", block.index, &block.hash);
                 self.handle_block(token, block)
             }
-            Message::Twin => { State::Twin }
-            Message::Loop => { State::Loop }
+            Message::Twin => State::Twin,
+            Message::Loop => State::Loop
         };
         answer
     }
@@ -658,13 +659,10 @@ fn subscribe_to_bus(running: Arc<AtomicBool>) {
     });
 }
 
-
 fn encode_bytes(data: &Vec<u8>, cipher: &Option<Chacha>) -> Result<Vec<u8>, chacha20poly1305::aead::Error> {
     match cipher {
-        None => { Ok(data.clone()) }
-        Some(chacha) => {
-            chacha.encrypt(data.as_slice())
-        }
+        None => Ok(data.clone()),
+        Some(chacha) => chacha.encrypt(data.as_slice())
     }
 }
 
@@ -691,10 +689,8 @@ fn encode_message(message: &Message, cipher: &Option<Chacha>) -> Result<Vec<u8>,
 
 fn decode_message(data: &Vec<u8>, cipher: &Option<Chacha>) -> Result<Vec<u8>, chacha20poly1305::aead::Error> {
     match cipher {
-        None => { Ok(data.clone()) }
-        Some(chacha) => {
-            chacha.decrypt(data.as_slice())
-        }
+        None => Ok(data.clone()),
+        Some(chacha) => chacha.decrypt(data.as_slice())
     }
 }
 
@@ -727,22 +723,24 @@ fn send_client_handshake(stream: &mut TcpStream, public_key: &[u8]) -> io::Resul
 fn read_client_handshake(stream: &mut TcpStream) -> Result<Vec<u8>, Error> {
     // First, we read garbage size
     let data_size = match stream.read_u8() {
-        Ok(size) => { (size ^ 0xA) as usize }
+        Ok(size) => (size ^ 0xA) as usize,
         Err(e) => {
             error!("Error reading from socket! {}", e);
-            return Err(e)
+            return Err(e);
         }
     };
     // Read the garbage
     let mut buf = vec![0u8; data_size];
     match stream.read_exact(&mut buf) {
         Ok(_) => {}
-        Err(e) => { return Err(e); }
+        Err(e) => {
+            return Err(e);
+        }
     }
     // Then we have public key for ECDH
     let mut buf = vec![0u8; 32];
     match stream.read_exact(&mut buf) {
-        Ok(_) => { Ok(buf) }
+        Ok(_) => Ok(buf),
         Err(e) => {
             warn!("Error reading handshake!");
             Err(e)
@@ -773,22 +771,24 @@ fn send_server_handshake(peer: &mut Peer, public_key: &[u8]) -> io::Result<()> {
 fn read_server_handshake(stream: &mut TcpStream) -> Result<Vec<u8>, Error> {
     // First, we read garbage size
     let data_size = match stream.read_u8() {
-        Ok(size) => { (size ^ 0xA) as usize }
+        Ok(size) => (size ^ 0xA) as usize,
         Err(e) => {
             error!("Error reading from socket! {}", e);
-            return Err(e)
+            return Err(e);
         }
     };
     // Read the garbage
     let mut buf = vec![0u8; data_size];
     match stream.read_exact(&mut buf) {
         Ok(_) => {}
-        Err(e) => { return Err(e); }
+        Err(e) => {
+            return Err(e);
+        }
     }
     // Then we have public key for ECDH, plus nonce 12 bytes
     let mut buf = vec![0u8; 32 + 12];
     match stream.read_exact(&mut buf) {
-        Ok(_) => { Ok(buf) }
+        Ok(_) => Ok(buf),
         Err(e) => {
             warn!("Error reading handshake!");
             Err(e)

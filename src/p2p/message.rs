@@ -2,12 +2,13 @@ extern crate serde;
 extern crate serde_json;
 
 use serde::{Deserialize, Serialize};
+
 use crate::Bytes;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Message {
     Error,
-    Hand { app_version: String, origin: String, version: u32, public: bool, rand_id: String, },
+    Hand { app_version: String, origin: String, version: u32, public: bool, rand_id: String },
     Shake { app_version: String, origin: String, version: u32, public: bool, rand_id: String, height: u64 },
     Ping { height: u64, hash: Bytes },
     Pong { height: u64, hash: Bytes },
@@ -16,7 +17,7 @@ pub enum Message {
     GetPeers,
     Peers { peers: Vec<String> },
     GetBlock { index: u64 },
-    Block { index: u64, block: Vec<u8> },
+    Block { index: u64, block: Vec<u8> }
 }
 
 impl Message {

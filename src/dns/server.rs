@@ -2,16 +2,15 @@
 
 use std::collections::VecDeque;
 use std::io::Write;
-use std::net::SocketAddr;
-use std::net::{Shutdown, TcpListener, TcpStream, UdpSocket};
+use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream, UdpSocket};
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::Builder;
 
 use derive_more::{Display, Error, From};
+use log::{debug, error, warn};
 use rand::random;
-use log::{error, warn, debug};
 
 use crate::dns::buffer::{BytePacketBuffer, PacketBuffer, StreamPacketBuffer, VectorPacketBuffer};
 use crate::dns::context::ServerContext;
@@ -21,7 +20,7 @@ use crate::dns::resolve::DnsResolver;
 
 #[derive(Debug, Display, From, Error)]
 pub enum ServerError {
-    Io(std::io::Error),
+    Io(std::io::Error)
 }
 
 type Result<T> = std::result::Result<T, ServerError>;
@@ -61,7 +60,7 @@ pub trait DnsServer {
 
 /// Utility function for resolving domains referenced in for example CNAME or SRV
 /// records. This usually spares the client from having to perform additional lookups.
-fn resolve_cnames(lookup_list: &[DnsRecord], results: &mut Vec<DnsPacket>, resolver: &mut Box<dyn DnsResolver>, depth: u16,) {
+fn resolve_cnames(lookup_list: &[DnsRecord], results: &mut Vec<DnsPacket>, resolver: &mut Box<dyn DnsResolver>, depth: u16) {
     if depth > 10 {
         return;
     }
@@ -161,17 +160,12 @@ pub struct DnsUdpServer {
     context: Arc<ServerContext>,
     request_queue: Arc<Mutex<VecDeque<(SocketAddr, DnsPacket)>>>,
     request_cond: Arc<Condvar>,
-    thread_count: usize,
+    thread_count: usize
 }
 
 impl DnsUdpServer {
     pub fn new(context: Arc<ServerContext>, thread_count: usize) -> DnsUdpServer {
-        DnsUdpServer {
-            context,
-            request_queue: Arc::new(Mutex::new(VecDeque::new())),
-            request_cond: Arc::new(Condvar::new()),
-            thread_count,
-        }
+        DnsUdpServer { context, request_queue: Arc::new(Mutex::new(VecDeque::new())), request_cond: Arc::new(Condvar::new()), thread_count }
     }
 }
 
@@ -292,7 +286,7 @@ impl DnsServer for DnsUdpServer {
 pub struct DnsTcpServer {
     context: Arc<ServerContext>,
     senders: Vec<Sender<TcpStream>>,
-    thread_count: usize,
+    thread_count: usize
 }
 
 impl DnsTcpServer {
@@ -318,7 +312,7 @@ impl DnsServer for DnsTcpServer {
                 loop {
                     let mut stream = match rx.recv() {
                         Ok(x) => x,
-                        Err(_) => continue,
+                        Err(_) => continue
                     };
 
                     let _ = context.statistics.tcp_query_count.fetch_add(1, Ordering::Release);
@@ -392,22 +386,16 @@ mod tests {
     use std::net::Ipv4Addr;
     use std::sync::Arc;
 
-    use crate::dns::protocol::{
-        DnsPacket, DnsQuestion, DnsRecord, QueryType, ResultCode, TransientTtl,
-    };
-
     use super::*;
-
     use crate::dns::context::tests::create_test_context;
     use crate::dns::context::ResolveStrategy;
+    use crate::dns::protocol::{DnsPacket, DnsQuestion, DnsRecord, QueryType, ResultCode, TransientTtl};
 
     fn build_query(qname: &str, qtype: QueryType) -> DnsPacket {
         let mut query_packet = DnsPacket::new();
         query_packet.header.recursion_desired = true;
 
-        query_packet
-            .questions
-            .push(DnsQuestion::new(qname.into(), qtype));
+        query_packet.questions.push(DnsQuestion::new(qname.into(), qtype));
 
         query_packet
     }
@@ -422,30 +410,30 @@ mod tests {
                 packet.answers.push(DnsRecord::A {
                     domain: "google.com".to_string(),
                     addr: "127.0.0.1".parse::<Ipv4Addr>().unwrap(),
-                    ttl: TransientTtl(3600),
+                    ttl: TransientTtl(3600)
                 });
             } else if qname == "www.facebook.com" && qtype == QueryType::CNAME {
                 packet.answers.push(DnsRecord::CNAME {
                     domain: "www.facebook.com".to_string(),
                     host: "cdn.facebook.com".to_string(),
-                    ttl: TransientTtl(3600),
+                    ttl: TransientTtl(3600)
                 });
                 packet.answers.push(DnsRecord::A {
                     domain: "cdn.facebook.com".to_string(),
                     addr: "127.0.0.1".parse::<Ipv4Addr>().unwrap(),
-                    ttl: TransientTtl(3600),
+                    ttl: TransientTtl(3600)
                 });
             } else if qname == "www.microsoft.com" && qtype == QueryType::CNAME {
                 packet.answers.push(DnsRecord::CNAME {
                     domain: "www.microsoft.com".to_string(),
                     host: "cdn.microsoft.com".to_string(),
-                    ttl: TransientTtl(3600),
+                    ttl: TransientTtl(3600)
                 });
             } else if qname == "cdn.microsoft.com" && qtype == QueryType::A {
                 packet.answers.push(DnsRecord::A {
                     domain: "cdn.microsoft.com".to_string(),
                     addr: "127.0.0.1".parse::<Ipv4Addr>().unwrap(),
-                    ttl: TransientTtl(3600),
+                    ttl: TransientTtl(3600)
                 });
             } else {
                 packet.header.rescode = ResultCode::NXDOMAIN;
@@ -456,11 +444,9 @@ mod tests {
 
         match Arc::get_mut(&mut context) {
             Some(mut ctx) => {
-                ctx.resolve_strategy = ResolveStrategy::Forward {
-                    upstreams: vec![String::from("127.0.0.1:53")]
-                };
+                ctx.resolve_strategy = ResolveStrategy::Forward { upstreams: vec![String::from("127.0.0.1:53")] };
             }
-            None => panic!(),
+            None => panic!()
         }
 
         // A successful resolve
@@ -472,53 +458,47 @@ mod tests {
                 DnsRecord::A { ref domain, .. } => {
                     assert_eq!("google.com", domain);
                 }
-                _ => panic!(),
+                _ => panic!()
             }
         };
 
         // A successful resolve, that also resolves a CNAME without recursive lookup
         {
-            let res = execute_query(
-                Arc::clone(&context),
-                &build_query("www.facebook.com", QueryType::CNAME),
-            );
+            let res = execute_query(Arc::clone(&context), &build_query("www.facebook.com", QueryType::CNAME));
             assert_eq!(2, res.answers.len());
 
             match res.answers[0] {
                 DnsRecord::CNAME { ref domain, .. } => {
                     assert_eq!("www.facebook.com", domain);
                 }
-                _ => panic!(),
+                _ => panic!()
             }
 
             match res.answers[1] {
                 DnsRecord::A { ref domain, .. } => {
                     assert_eq!("cdn.facebook.com", domain);
                 }
-                _ => panic!(),
+                _ => panic!()
             }
         };
 
         // A successful resolve, that also resolves a CNAME through recursive lookup
         {
-            let res = execute_query(
-                Arc::clone(&context),
-                &build_query("www.microsoft.com", QueryType::CNAME),
-            );
+            let res = execute_query(Arc::clone(&context), &build_query("www.microsoft.com", QueryType::CNAME));
             assert_eq!(2, res.answers.len());
 
             match res.answers[0] {
                 DnsRecord::CNAME { ref domain, .. } => {
                     assert_eq!("www.microsoft.com", domain);
                 }
-                _ => panic!(),
+                _ => panic!()
             }
 
             match res.answers[1] {
                 DnsRecord::A { ref domain, .. } => {
                     assert_eq!("cdn.microsoft.com", domain);
                 }
-                _ => panic!(),
+                _ => panic!()
             }
         };
 
@@ -534,7 +514,7 @@ mod tests {
             Some(mut ctx) => {
                 ctx.allow_recursive = false;
             }
-            None => panic!(),
+            None => panic!()
         }
 
         // This should generate an error code, since recursive resolves are
@@ -555,19 +535,14 @@ mod tests {
 
         // Now construct a context where the dns client will return a failure
         let mut context2 = create_test_context(Box::new(|_, _, _, _| {
-            Err(crate::dns::client::ClientError::Io(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Fail",
-            )))
+            Err(crate::dns::client::ClientError::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "Fail")))
         }));
 
         match Arc::get_mut(&mut context2) {
             Some(mut ctx) => {
-                ctx.resolve_strategy = ResolveStrategy::Forward {
-                    upstreams: vec![String::from("127.0.0.1:53")]
-                };
+                ctx.resolve_strategy = ResolveStrategy::Forward { upstreams: vec![String::from("127.0.0.1:53")] };
             }
-            None => panic!(),
+            None => panic!()
         }
 
         // We expect this to set the server failure rescode

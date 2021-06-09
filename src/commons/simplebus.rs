@@ -1,5 +1,6 @@
-use uuid::Uuid;
 use std::collections::HashMap;
+
+use uuid::Uuid;
 
 pub struct Bus<T> {
     listeners: HashMap<Uuid, Box<dyn FnMut(&Uuid, T) -> bool + Send + Sync>>
@@ -33,8 +34,8 @@ mod tests {
     use std::thread;
     use std::time::Duration;
 
-    use crate::Bus;
     use crate::event::Event;
+    use crate::Bus;
 
     #[test]
     fn test1() {

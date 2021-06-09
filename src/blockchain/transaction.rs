@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::blockchain::hash_utils::*;
 use crate::bytes::Bytes;
 use crate::dns::protocol::DnsRecord;
-use crate::{CLASS_ORIGIN, CLASS_DOMAIN};
+use crate::{CLASS_DOMAIN, CLASS_ORIGIN};
 
 extern crate serde;
 extern crate serde_json;
@@ -23,7 +23,7 @@ pub struct Transaction {
     #[serde(default, skip_serializing_if = "Bytes::is_zero")]
     pub encryption: Bytes,
     #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub data: String,
+    pub data: String
 }
 
 impl Transaction {
@@ -64,7 +64,7 @@ impl Transaction {
     pub fn get_domain_data(&self) -> Option<DomainData> {
         if self.class == CLASS_DOMAIN {
             if let Ok(data) = serde_json::from_str::<DomainData>(&self.data) {
-                return Some(data)
+                return Some(data);
             }
         }
         None
@@ -73,7 +73,7 @@ impl Transaction {
     /// Gets a type of transaction
     pub fn get_type(what: &Option<Transaction>) -> TransactionType {
         match what {
-            None => { TransactionType::Signing }
+            None => TransactionType::Signing,
             Some(transaction) => {
                 if transaction.class == CLASS_DOMAIN {
                     return TransactionType::Domain;
@@ -116,7 +116,7 @@ pub struct DomainData {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub records: Vec<DnsRecord>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub contacts: Vec<ContactsData>,
+    pub contacts: Vec<ContactsData>
 }
 
 impl DomainData {

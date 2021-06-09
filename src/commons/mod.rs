@@ -1,17 +1,16 @@
 use std::net::IpAddr;
 use std::num;
 
+pub use constants::*;
 use rand::Rng;
 #[cfg(not(target_os = "macos"))]
 use thread_priority::*;
 
-pub use constants::*;
-
 use crate::dns::protocol::DnsRecord;
 
 pub mod constants;
-pub mod simplebus;
 pub mod eventbus;
+pub mod simplebus;
 
 /// Convert bytes array to HEX format
 pub fn to_hex(buf: &[u8]) -> String {
@@ -120,14 +119,14 @@ pub fn is_yggdrasil(addr: &IpAddr) -> bool {
 pub fn is_yggdrasil_record(record: &DnsRecord) -> bool {
     match record {
         DnsRecord::UNKNOWN { .. } => {}
-        DnsRecord::A { .. } => { return false }
+        DnsRecord::A { .. } => return false,
         DnsRecord::NS { .. } => {}
         DnsRecord::CNAME { .. } => {}
         DnsRecord::SOA { .. } => {}
         DnsRecord::PTR { .. } => {}
         DnsRecord::MX { .. } => {}
         DnsRecord::TXT { .. } => {}
-        DnsRecord::AAAA { addr, .. } => { return is_yggdrasil(&IpAddr::from(*addr))}
+        DnsRecord::AAAA { addr, .. } => return is_yggdrasil(&IpAddr::from(*addr)),
         DnsRecord::SRV { .. } => {}
         DnsRecord::OPT { .. } => {}
     }

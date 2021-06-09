@@ -1,7 +1,8 @@
-use crate::{Chain, Keystore, Settings, Bytes};
 #[allow(unused_imports)]
-use log::{trace, debug, info, warn, error};
+use log::{debug, error, info, trace, warn};
+
 use crate::miner::MinerState;
+use crate::{Bytes, Chain, Keystore, Settings};
 
 pub struct Context {
     pub app_version: String,
@@ -9,20 +10,13 @@ pub struct Context {
     pub keystores: Vec<Keystore>,
     active_key: usize,
     pub chain: Chain,
-    pub miner_state: MinerState,
+    pub miner_state: MinerState
 }
 
 impl Context {
     /// Creating an essential context to work with
     pub fn new(app_version: String, settings: Settings, keystores: Vec<Keystore>, chain: Chain) -> Context {
-        Context {
-            app_version,
-            settings,
-            keystores,
-            active_key: 0,
-            chain,
-            miner_state: MinerState { mining: false, full: false }
-        }
+        Context { app_version, settings, keystores, active_key: 0, chain, miner_state: MinerState { mining: false, full: false } }
     }
 
     pub fn get_keystore(&self) -> Option<&Keystore> {

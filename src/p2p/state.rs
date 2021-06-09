@@ -1,4 +1,5 @@
 use std::time::Instant;
+
 use crate::p2p::Message;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -14,7 +15,7 @@ pub enum State {
     SendLoop,
     Loop,
     Twin,
-    Offline { from: Instant },
+    Offline { from: Instant }
 }
 
 impl State {
@@ -33,34 +34,34 @@ impl State {
 
     pub fn is_idle(&self) -> bool {
         match self {
-            State::Idle { .. } => { true }
-            _ => { false }
+            State::Idle { .. } => true,
+            _ => false
         }
     }
 
     pub fn is_loop(&self) -> bool {
         match self {
-            State::Loop { .. } => { true }
-            State::SendLoop { .. } => { true }
-            _ => { false }
+            State::Loop { .. } => true,
+            State::SendLoop { .. } => true,
+            _ => false
         }
     }
 
     pub fn disabled(&self) -> bool {
         match self {
-            State::Error => { true }
-            State::Banned => { true }
-            State::Offline { from} => {
+            State::Error => true,
+            State::Banned => true,
+            State::Offline { from } => {
                 from.elapsed().as_secs() < 60 // We check offline peers to become online every 5 minutes
             }
-            _ => { false }
+            _ => false
         }
     }
 
     pub fn need_reconnect(&self) -> bool {
         match self {
-            State::Offline { from } => { from.elapsed().as_secs() > 60 }
-            _ => { false }
+            State::Offline { from } => from.elapsed().as_secs() > 60,
+            _ => false
         }
     }
 }

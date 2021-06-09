@@ -1,19 +1,19 @@
+use std::cmp::min;
 use std::collections::{HashMap, HashSet};
+use std::io;
 use std::net::{IpAddr, Shutdown, SocketAddr, ToSocketAddrs};
 
 use chrono::Utc;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use mio::{Interest, Registry, Token};
 use mio::net::TcpStream;
+use mio::{Interest, Registry, Token};
 use rand::random;
 use rand::seq::IteratorRandom;
 
-use crate::{Bytes, commons};
 use crate::commons::*;
 use crate::p2p::{Message, Peer, State};
-use std::io;
-use std::cmp::min;
+use crate::{commons, Bytes};
 
 const PING_PERIOD: u64 = 30;
 
@@ -22,7 +22,7 @@ pub struct Peers {
     new_peers: Vec<SocketAddr>,
     ignored: HashSet<IpAddr>,
     my_id: String,
-    behind_ping_sent_time: i64,
+    behind_ping_sent_time: i64
 }
 
 impl Peers {
@@ -383,7 +383,7 @@ impl Peers {
         for peer in peers_addrs.iter() {
             info!("Resolving address {}", peer);
             let mut addresses: Vec<SocketAddr> = match peer.to_socket_addrs() {
-                Ok(peers) => { peers.collect() }
+                Ok(peers) => peers.collect(),
                 Err(_) => { error!("Can't resolve address {}", &peer); continue; }
             };
             info!("Got addresses: {:?}", &addresses);
@@ -424,7 +424,7 @@ impl Peers {
         }
         trace!("Connecting to peer {}", &addr);
         match TcpStream::connect(addr.clone()) {
-            Ok(mut stream ) => {
+            Ok(mut stream) => {
                 //stream.set_nodelay(true)?;
                 let token = next(unique_token);
                 trace!("Created connection {}, to peer {}", &token.0, &addr);
@@ -434,7 +434,7 @@ impl Peers {
                 self.peers.insert(token, peer);
                 Ok(())
             }
-            Err(e) => { Err(e) }
+            Err(e) => Err(e)
         }
     }
 

@@ -3,28 +3,30 @@
 // See https://msdn.microsoft.com/en-us/library/4cc7ya5b.aspx for more details.
 #![windows_subsystem = "windows"]
 
-use std::env;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::thread;
 use std::time::Duration;
+use std::{env, thread};
 
-use getopts::{Options, Matches};
+use getopts::{Matches, Options};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn, LevelFilter};
 use simplelog::*;
 #[cfg(windows)]
-use winapi::um::wincon::{ATTACH_PARENT_PROCESS, AttachConsole, FreeConsole};
+use winapi::um::wincon::{AttachConsole, FreeConsole, ATTACH_PARENT_PROCESS};
 extern crate lazy_static;
 
-use alfis::{Block, Bytes, Chain, Miner, Context, Network, Settings, dns_utils, Keystore, ORIGIN_DIFFICULTY, ALFIS_DEBUG, DB_NAME, Transaction};
-use alfis::event::Event;
 use std::fs::OpenOptions;
-use std::process::exit;
 use std::io::{Seek, SeekFrom};
+use std::process::exit;
 use std::sync::atomic::{AtomicBool, Ordering};
-use alfis::keystore::create_key;
+
+use alfis::event::Event;
 use alfis::eventbus::register;
+use alfis::keystore::create_key;
+use alfis::{
+    dns_utils, Block, Bytes, Chain, Context, Keystore, Miner, Network, Settings, Transaction, ALFIS_DEBUG, DB_NAME, ORIGIN_DIFFICULTY
+};
 
 #[cfg(feature = "webgui")]
 mod web_ui;
@@ -60,7 +62,7 @@ fn main() {
 
     let opt_matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
-        Err(f) => panic!("{}", f.to_string()),
+        Err(f) => panic!("{}", f.to_string())
     };
 
     if opt_matches.opt_present("h") {
@@ -101,8 +103,8 @@ fn main() {
         env::set_current_dir(Path::new(&path)).expect(&format!("Unable to change working directory to '{}'", &path));
     }
     let config_name = match opt_matches.opt_str("c") {
-        None => { SETTINGS_FILENAME.to_owned() }
-        Some(path) => { path }
+        None => SETTINGS_FILENAME.to_owned(),
+        Some(path) => path
     };
 
     setup_logger(&opt_matches);
@@ -125,7 +127,9 @@ fn main() {
     if settings.key_files.len() > 0 {
         for name in &settings.key_files {
             match Keystore::from_file(name, "") {
-                None => { warn!("Error loading keyfile from {}", name); }
+                None => {
+                    warn!("Error loading keyfile from {}", name);
+                }
                 Some(keystore) => {
                     info!("Successfully loaded keyfile {}", name);
                     keys.push(keystore);
@@ -144,7 +148,7 @@ fn main() {
         let context_copy = Arc::clone(&context);
         // Register key-mined event listener
         register(move |_uuid, e| {
-            if matches!(e, Event::KeyCreated {..}) {
+            if matches!(e, Event::KeyCreated { .. }) {
                 let context_copy = Arc::clone(&context_copy);
                 let mining_copy = Arc::clone(&mining_copy);
                 let filename = filename.clone();
@@ -172,8 +176,12 @@ fn main() {
     if let Ok(mut context) = context.lock() {
         context.chain.check_chain(settings_copy.check_blocks);
         match context.chain.get_block(1) {
-            None => { info!(target: LOG_TARGET_MAIN, "No blocks found in DB"); }
-            Some(block) => { trace!(target: LOG_TARGET_MAIN, "Loaded DB with origin {:?}", &block.hash); }
+            None => {
+                info!(target: LOG_TARGET_MAIN, "No blocks found in DB");
+            }
+            Some(block) => {
+                trace!(target: LOG_TARGET_MAIN, "Loaded DB with origin {:?}", &block.hash);
+            }
         }
     }
 
@@ -240,12 +248,11 @@ fn setup_logger(opt_matches: &Matches) {
                     exit(1);
                 }
             };
-            CombinedLogger::init(
-                vec![
-                    TermLogger::new(level, config.clone(), TerminalMode::Stdout, ColorChoice::Auto),
-                    WriteLogger::new(level, config, file),
-                ]
-            ).unwrap();
+            CombinedLogger::init(vec![
+                TermLogger::new(level, config.clone(), TerminalMode::Stdout, ColorChoice::Auto),
+                WriteLogger::new(level, config, file),
+            ])
+            .unwrap();
         }
     }
 }
