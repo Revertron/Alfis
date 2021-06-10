@@ -2,6 +2,7 @@ use std::cmp::min;
 use std::collections::{HashMap, HashSet};
 use std::io;
 use std::net::{IpAddr, Shutdown, SocketAddr, ToSocketAddrs};
+use std::time::Instant;
 
 use chrono::Utc;
 #[allow(unused_imports)]
@@ -21,6 +22,7 @@ pub struct Peers {
     peers: HashMap<Token, Peer>,
     new_peers: Vec<SocketAddr>,
     ignored: HashSet<IpAddr>,
+    ignore_timer: Instant,
     my_id: String,
     behind_ping_sent_time: i64
 }
@@ -31,6 +33,7 @@ impl Peers {
             peers: HashMap::new(),
             new_peers: Vec::new(),
             ignored: HashSet::new(),
+            ignore_timer: Instant::now(),
             my_id: commons::random_string(6),
             behind_ping_sent_time: 0
         }
@@ -268,6 +271,12 @@ impl Peers {
                 }
                 _ => {}
             }
+        }
+
+        // Just purging ignored/banned IPs every 10 minutes
+        // TODO make it individual
+        if self.ignore_timer.elapsed().as_secs() >= 600 {
+            self.ignored.clear();
         }
 
         // If someone has more blocks we sync
