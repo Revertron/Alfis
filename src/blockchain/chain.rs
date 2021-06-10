@@ -39,6 +39,7 @@ const SQL_GET_DOMAIN_BY_ID: &str = "SELECT * FROM domains WHERE identity = ? ORD
 const SQL_GET_DOMAINS_BY_KEY: &str = "SELECT * FROM domains WHERE signing = ? ORDER BY id;";
 const SQL_GET_DOMAINS_COUNT: &str = "SELECT count(DISTINCT identity) FROM domains;";
 const SQL_GET_USERS_COUNT: &str = "SELECT count(DISTINCT pub_key) FROM blocks;";
+const SQL_GET_USER_BLOCK_COUNT: &str = "SELECT count(pub_key) FROM blocks WHERE pub_key = ?";
 
 const SQL_GET_OPTIONS: &str = "SELECT * FROM options;";
 
@@ -627,6 +628,15 @@ impl Chain {
         0
     }
 
+    pub fn get_user_block_count(&self, pub_key: &Bytes) -> i64 {
+        let mut statement = self.db.prepare(SQL_GET_USER_BLOCK_COUNT).unwrap();
+        statement.bind(1, pub_key.as_slice()).expect("Error in bind");
+        if let State::Row = statement.next().unwrap() {
+            return statement.read::<i64>(0).unwrap();
+        }
+        0i64
+    }
+
     pub fn get_my_domains(&self, keystore: Option<&Keystore>) -> HashMap<Bytes, (String, i64, DomainData)> {
         if keystore.is_none() {
             return HashMap::new();
@@ -942,6 +952,11 @@ impl Chain {
     /// Gets public keys of a node that needs to mine "signature" block above this block
     /// block - last full block
     pub fn get_block_signers(&self, block: &Block) -> Vec<Bytes> {
+        let minimum_block_count = if block.index < 855 {
+            1i64
+        } else {
+            block.index as i64 / 100
+        };
         let mut result = Vec::new();
         if block.index < BLOCK_SIGNERS_START || self.get_height() < block.index {
             return result;
@@ -959,6 +974,12 @@ impl Chain {
         while set.len() < BLOCK_SIGNERS_ALL as usize {
             let index = (tail.wrapping_mul(count) % window) + 1; // We want it to start from 1
             if let Some(b) = self.get_block(index) {
+                let block_count = self.get_user_block_count(&b.pub_key);
+                if block_count < minimum_block_count {
+                    //debug!("Skipping public key {:?} from block {}, it has too little {} blocks", &b.pub_key, index, block_count);
+                    count += 1;
+                    continue;
+                }
                 if b.pub_key != block.pub_key && !set.contains(&b.pub_key) {
                     result.push(b.pub_key.clone());
                     set.insert(b.pub_key);
