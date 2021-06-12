@@ -9,6 +9,7 @@ use chrono::Utc;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use sqlite::{Connection, State, Statement};
+use lazy_static::lazy_static;
 
 use crate::blockchain::hash_utils::*;
 use crate::blockchain::transaction::DomainData;
@@ -18,7 +19,7 @@ use crate::blockchain::types::{BlockQuality, MineResult, Options, ZoneData};
 use crate::commons::constants::*;
 use crate::keystore::check_public_key_strength;
 use crate::settings::Settings;
-use crate::{check_domain, get_domain_zone, is_yggdrasil_record, Block, Bytes, Keystore, Transaction};
+use crate::{check_domain, get_domain_zone, is_yggdrasil_record, Block, Bytes, Keystore, Transaction, from_hex};
 use rand::prelude::IteratorRandom;
 
 const TEMP_DB_NAME: &str = ":memory:";
@@ -39,9 +40,16 @@ const SQL_GET_DOMAIN_BY_ID: &str = "SELECT * FROM domains WHERE identity = ? ORD
 const SQL_GET_DOMAINS_BY_KEY: &str = "SELECT * FROM domains WHERE signing = ? ORDER BY id;";
 const SQL_GET_DOMAINS_COUNT: &str = "SELECT count(DISTINCT identity) FROM domains;";
 const SQL_GET_USERS_COUNT: &str = "SELECT count(DISTINCT pub_key) FROM blocks;";
-const SQL_GET_USER_BLOCK_COUNT: &str = "SELECT count(pub_key) FROM blocks WHERE pub_key = ?";
+const SQL_GET_USER_BLOCK_COUNT: &str = "SELECT count(pub_key) FROM blocks WHERE pub_key = ? AND id < ?";
 
 const SQL_GET_OPTIONS: &str = "SELECT * FROM options;";
+
+lazy_static! {
+    static ref WRONG_HASHES: Vec<Bytes> = vec![
+        Bytes::from_bytes(&from_hex("5B2D63CD8BD854B23A34A49AD850BF520BDD8D4514F9B20A3DF01430A59F0000").unwrap()),
+        Bytes::from_bytes(&from_hex("4448E0582878FCB982C0DDAFEB441A03A30FB62FA6ECD1EA4D51C29A30980000").unwrap())
+    ];
+}
 
 /// Max possible block index
 const MAX: u64 = i64::MAX as u64;
@@ -126,6 +134,19 @@ impl Chain {
                         debug!("Block {} with hash {:?} is good!", block.index, &block.hash);
                         last_block = Some(block);
                         continue;
+                    }
+
+                    if WRONG_HASHES.contains(&block.hash)  {
+                        error!("Block {} has bad hash:\n{:?}", block.index, &block);
+                        info!("Truncating database from block {}...", block.index);
+                        match self.truncate_db_from_block(block.index) {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("{}", e);
+                                panic!("Error truncating database! Please, delete 'blockchain.db' and restart.");
+                            }
+                        }
+                        break;
                     }
 
                     //let last = self.last_block.clone().unwrap();
@@ -628,9 +649,10 @@ impl Chain {
         0
     }
 
-    pub fn get_user_block_count(&self, pub_key: &Bytes) -> i64 {
+    pub fn get_user_block_count(&self, pub_key: &Bytes, max_height: u64) -> i64 {
         let mut statement = self.db.prepare(SQL_GET_USER_BLOCK_COUNT).unwrap();
         statement.bind(1, pub_key.as_slice()).expect("Error in bind");
+        statement.bind(2, max_height as i64).expect("Error in bind");
         if let State::Row = statement.next().unwrap() {
             return statement.read::<i64>(0).unwrap();
         }
@@ -734,6 +756,10 @@ impl Chain {
     pub fn check_block(&self, block: &Block, last_block: &Option<Block>, last_full_block: &Option<Block>) -> BlockQuality {
         if block.version > CHAIN_VERSION {
             warn!("Ignoring block from unsupported version:\n{:?}", &block);
+            return Bad;
+        }
+        if WRONG_HASHES.contains(&block.hash) {
+            warn!("Got block with hash from wrong hashes.");
             return Bad;
         }
         let timestamp = Utc::now().timestamp();
@@ -974,7 +1000,7 @@ impl Chain {
         while set.len() < BLOCK_SIGNERS_ALL as usize {
             let index = (tail.wrapping_mul(count) % window) + 1; // We want it to start from 1
             if let Some(b) = self.get_block(index) {
-                let block_count = self.get_user_block_count(&b.pub_key);
+                let block_count = self.get_user_block_count(&b.pub_key, block.index);
                 if block_count < minimum_block_count {
                     //debug!("Skipping public key {:?} from block {}, it has too little {} blocks", &b.pub_key, index, block_count);
                     count += 1;
