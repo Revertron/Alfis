@@ -37,7 +37,7 @@ rand = { version = "0.8.3", package = "rand" }
 rand-old = { package = "rand", version = "0.7.0" } # For ed25519-dalek
 sqlite = "0.26.0"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
-mio = { version = "0.7.11", features = ["os-poll", "net"] }
+mio = { version = "0.7.13", features = ["os-poll", "net"] }
 derive_more = "0.99.14"
 lazy_static = "1.4.0"
 
