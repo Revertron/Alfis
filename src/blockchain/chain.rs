@@ -785,7 +785,7 @@ impl Chain {
                     SIGNER_DIFFICULTY
                 }
             }
-            Some(t) => self.get_difficulty_for_transaction(&t)
+            Some(t) => self.get_difficulty_for_transaction(&t, block.index)
         };
         if block.difficulty < difficulty {
             warn!("Block difficulty is lower than needed");
@@ -821,7 +821,7 @@ impl Chain {
                 None => 0,
                 Some(block) => block.index
             };
-            // If this domain is available to this public key
+            // If this domain is not available to this public key
             if !self.is_id_available(current_height, &transaction.identity, &block.pub_key) {
                 warn!("Block {:?} is trying to spoof an identity!", &block);
                 return Bad;
@@ -959,11 +959,16 @@ impl Chain {
         true
     }
 
-    fn get_difficulty_for_transaction(&self, transaction: &Transaction) -> u32 {
+    fn get_difficulty_for_transaction(&self, transaction: &Transaction, index: u64) -> u32 {
         match transaction.class.as_ref() {
             CLASS_DOMAIN => {
+                // If this domain is already in blockchain we approve slightly smaller difficulty
+                let discount = match self.is_domain_in_blockchain(index, &transaction.identity) {
+                    true => { 1 }
+                    false => { 0 }
+                };
                 return match serde_json::from_str::<DomainData>(&transaction.data) {
-                    Ok(_) => DOMAIN_DIFFICULTY,
+                    Ok(_) => DOMAIN_DIFFICULTY - discount,
                     Err(_) => {
                         warn!("Error parsing DomainData from {:?}", transaction);
                         u32::MAX

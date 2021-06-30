@@ -560,7 +560,7 @@ fn format_event_now(kind: &str, message: &str) -> String {
     format!("addEvent('{}', '{}', '{}');", kind, time.format("%d.%m.%y %X"), message)
 }
 
-fn create_domain(_context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, class: &str, name: &str, mut data: DomainData, difficulty: u32, keystore: &Keystore, signing: Bytes, encryption: Bytes) {
+fn create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, class: &str, name: &str, mut data: DomainData, difficulty: u32, keystore: &Keystore, signing: Bytes, encryption: Bytes) {
     let name = name.to_owned();
     let encrypted = CryptoBox::encrypt(encryption.as_slice(), name.as_bytes()).expect("Error encrypting domain name!");
     data.encrypted = Bytes::from_bytes(&encrypted);
@@ -572,7 +572,15 @@ fn create_domain(_context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, class:
         (signing, encryption)
     };
     let transaction = Transaction::from_str(name, class.to_owned(), data, signing, encryption);
-    let block = Block::new(Some(transaction), keystore.get_public(), Bytes::default(), difficulty);
+    // If this domain is already in blockchain we approve slightly smaller difficulty
+    let discount = {
+        let context = context.lock().unwrap();
+        match context.chain.is_domain_in_blockchain(context.chain.get_height(), &transaction.identity) {
+            true => { 1 }
+            false => { 0 }
+        }
+    };
+    let block = Block::new(Some(transaction), keystore.get_public(), Bytes::default(), difficulty - discount);
     miner.lock().unwrap().add_block(block, keystore.clone());
 }
 
