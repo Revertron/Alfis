@@ -33,7 +33,7 @@ base64 = "0.13.0"
 num-bigint = "0.4.0"
 num-traits = "0.2.14"
 chrono = { version = "0.4.19", features = ["serde"] }
-rand = { version = "0.8.3", package = "rand" }
+rand = { version = "0.8.4", package = "rand" }
 rand-old = { package = "rand", version = "0.7.0" } # For ed25519-dalek
 sqlite = "0.26.0"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
