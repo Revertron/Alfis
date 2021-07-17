@@ -8,7 +8,7 @@ check_blocks = 8
 # Network settings
 [net]
 # All bootstap nodes
-peers = ["test-ip4.alfis.name:4244", "test-ip6.alfis.name:4244"]
+peers = ["peer-v4.alfis.name:4244", "peer-v6.alfis.name:4244", "peer-ygg.alfis.name:4244"]
 # Your node will listen on that address for other nodes to connect
 listen = "[::]:4244"
 # Set true if you want your IP to participate in peer-exchange, or false otherwise
@@ -21,7 +21,7 @@ yggdrasil_only = false
 # Your DNS resolver will be listening on this address and port (Usual port is 53)
 listen = "127.0.0.1:53"
 # How many threads to spawn by DNS server
-threads = 20
+threads = 50
 # AdGuard DNS servers to filter ads and trackers
 forwarders = ["94.140.14.14:53", "94.140.15.15:53"]
 # Cloudflare servers

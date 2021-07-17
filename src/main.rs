@@ -185,7 +185,9 @@ fn main() {
         }
     }
 
-    dns_utils::start_dns_server(&context, &settings_copy);
+    if settings_copy.dns.threads > 0 {
+        dns_utils::start_dns_server(&context, &settings_copy);
+    }
 
     let mut miner_obj = Miner::new(Arc::clone(&context));
     miner_obj.start_mining_thread();
