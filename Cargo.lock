@@ -225,9 +225,9 @@ dependencies = [
 
 [[package]]
 name = "chacha20poly1305"
-version = "0.8.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1580317203210c517b6d44794abfbe600698276db18127e37ad3e69bf5e848e5"
+checksum = "175a11316f33592cf2b71416ee65283730b5b7849813c4891d02a12906ed9acc"
 dependencies = [
  "aead 0.4.1",
  "chacha20",
