@@ -7,7 +7,7 @@ use derive_more::{Display, Error, From};
 
 use crate::dns::authority::Authority;
 use crate::dns::cache::SynchronizedCache;
-use crate::dns::client::{DnsClient, DnsNetworkClient};
+use crate::dns::client::{DnsClient, DnsNetworkClient, HttpsDnsClient};
 use crate::dns::filter::DnsFilter;
 use crate::dns::resolve::{DnsResolver, ForwardingDnsResolver, RecursiveDnsResolver};
 
@@ -44,7 +44,8 @@ pub struct ServerContext {
     pub authority: Authority,
     pub cache: SynchronizedCache,
     pub filters: Vec<Box<dyn DnsFilter + Sync + Send>>,
-    pub client: Box<dyn DnsClient + Sync + Send>,
+    pub old_client: Box<dyn DnsClient + Sync + Send>,
+    pub doh_client: Box<dyn DnsClient + Sync + Send>,
     pub dns_listen: String,
     pub api_port: u16,
     pub resolve_strategy: ResolveStrategy,
@@ -68,7 +69,8 @@ impl ServerContext {
             authority: Authority::new(),
             cache: SynchronizedCache::new(),
             filters: Vec::new(),
-            client: Box::new(DnsNetworkClient::new(10000 + (rand::random::<u16>() % 20000))),
+            old_client: Box::new(DnsNetworkClient::new(10000 + (rand::random::<u16>() % 20000))),
+            doh_client: Box::new(HttpsDnsClient::new()),
             dns_listen: String::from("0.0.0.0:53"),
             api_port: 5380,
             resolve_strategy: ResolveStrategy::Recursive,
@@ -83,7 +85,9 @@ impl ServerContext {
 
     pub fn initialize(&mut self) -> Result<()> {
         // Start UDP client thread
-        self.client.run()?;
+        self.old_client.run()?;
+        // Start DoH client
+        self.doh_client.run()?;
 
         // Load authority data
         self.authority.load()?;
@@ -117,7 +121,8 @@ pub mod tests {
             authority: Authority::new(),
             cache: SynchronizedCache::new(),
             filters: Vec::new(),
-            client: Box::new(DnsStubClient::new(callback)),
+            old_client: Box::new(DnsStubClient::new(callback)),
+            doh_client: Box::new(HttpsDnsClient::new()),
             dns_listen: String::from("0.0.0.0:53"),
             api_port: 5380,
             resolve_strategy: ResolveStrategy::Recursive,

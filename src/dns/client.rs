@@ -1,6 +1,6 @@
 //! client for sending DNS queries to other servers
 
-use std::io::Write;
+use std::io::{Write, Read};
 use std::marker::{Send, Sync};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs, UdpSocket};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -12,7 +12,10 @@ use std::time::Duration as SleepDuration;
 use chrono::*;
 use derive_more::{Display, Error, From};
 
-use crate::dns::buffer::{BytePacketBuffer, PacketBuffer, StreamPacketBuffer};
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+
+use crate::dns::buffer::{BytePacketBuffer, PacketBuffer, StreamPacketBuffer, VectorPacketBuffer};
 use crate::dns::netutil::{read_packet_length, write_packet_length};
 use crate::dns::protocol::{DnsPacket, DnsQuestion, QueryType};
 
@@ -38,7 +41,7 @@ pub trait DnsClient {
 /// The UDP client
 ///
 /// This includes a fair bit of synchronization due to the stateless nature of UDP.
-/// When many queries are sent in parallell, the response packets can come back
+/// When many queries are sent in parallel, the response packets can come back
 /// in any order. For that reason, we fire off replies on the sending thread, but
 /// handle replies on a single thread. A channel is created for every response,
 /// and the caller will block on the channel until the a response is received.
@@ -337,8 +340,97 @@ impl DnsClient for DnsNetworkClient {
             return Ok(packet);
         }
 
-        println!("Truncated response - resending as TCP");
+        info!("Truncated response - resending as TCP");
         self.send_tcp_query(qname, qtype, server, recursive)
+    }
+}
+
+pub struct HttpsDnsClient {
+    agent: ureq::Agent,
+    /// Counter for assigning packet ids
+    seq: AtomicUsize,
+}
+
+impl HttpsDnsClient {
+    pub(crate) fn new() -> Self {
+        let client_name = format!("ALFIS/{}", env!("CARGO_PKG_VERSION"));
+        let agent = ureq::AgentBuilder::new()
+            .user_agent(&client_name)
+            .timeout(std::time::Duration::from_secs(3))
+            .build();
+        Self { agent, seq: AtomicUsize::new(1) }
+    }
+}
+
+impl DnsClient for HttpsDnsClient {
+    fn get_sent_count(&self) -> usize {
+        // No statistics for now
+        0
+    }
+
+    fn get_failed_count(&self) -> usize {
+        // No statistics for now
+        0
+    }
+
+    fn run(&self) -> Result<()> {
+        debug!("Started DoH client");
+        Ok(())
+    }
+
+    fn send_query(&self, qname: &str, qtype: QueryType, doh_url: &str, recursive: bool) -> Result<DnsPacket> {
+        // Create DnsPacket
+        let mut packet = DnsPacket::new();
+        packet.header.id = self.seq.fetch_add(1, Ordering::SeqCst) as u16;
+        if packet.header.id + 1 == 0xFFFF {
+            let _ = self.seq.compare_exchange(0xFFFF, 0, Ordering::SeqCst, Ordering::SeqCst);
+        }
+
+        packet.header.questions = 1;
+        packet.header.recursion_desired = recursive;
+        packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
+
+        let mut req_buffer = VectorPacketBuffer::new();
+        packet.write(&mut req_buffer, 512).expect("Preparing DnsPacket failed!");
+
+        let response = self.agent
+            .post(doh_url)
+            .set("Content-Type", "application/dns-message")
+            .send_bytes(&req_buffer.buffer.as_slice());
+
+        match response {
+            Ok(response) => {
+                trace!("Response: Code {}, Type: {}, Headers: {:?}", response.status(), response.content_type(), response.headers_names());
+                match response.status() {
+                    200 => {
+                        match response.header("Content-Length") {
+                            None => warn!("No 'Content-Length' header in DoH response!"),
+                            Some(str) => {
+                                match str.parse::<usize>() {
+                                    Ok(size) => {
+                                        let mut bytes: Vec<u8> = Vec::with_capacity(size);
+                                        response.into_reader()
+                                            .take(4096)
+                                            .read_to_end(&mut bytes)?;
+                                        let mut buffer = VectorPacketBuffer::new();
+                                        buffer.buffer.extend_from_slice(&bytes.as_slice());
+                                        if let Ok(packet) = DnsPacket::from_buffer(&mut buffer) {
+                                            trace!("Packet parsed successfully: {:?}", &packet);
+                                            return Ok(packet);
+                                        }
+                                        warn!("Error parsing DoH result!");
+                                    }
+                                    Err(e) => warn!("Error parsing 'Content-Length' in DoH response! {}", e)
+                                }
+                            }
+                        }
+                    }
+                    _ => warn!("Error getting DoH response")
+                }
+            }
+            Err(e) => warn!("DoH error: {}", &e.to_string())
+        }
+        Err(ClientError::LookupFailed)
     }
 }
 
