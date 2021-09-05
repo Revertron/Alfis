@@ -31,9 +31,8 @@ pub fn start_dns_server(context: &Arc<Mutex<Context>>, settings: &Settings) {
 
 /// Creates DNS-context with all needed settings
 fn create_server_context(context: Arc<Mutex<Context>>, settings: &Settings) -> Arc<ServerContext> {
-    let mut server_context = ServerContext::new();
+    let mut server_context = ServerContext::new(settings.dns.listen.clone(), settings.dns.bootstraps.clone());
     server_context.allow_recursive = true;
-    server_context.dns_listen = settings.dns.listen.clone();
     server_context.resolve_strategy = match settings.dns.forwarders.is_empty() {
         true => ResolveStrategy::Recursive,
         false => ResolveStrategy::Forward { upstreams: settings.dns.forwarders.clone() }

@@ -87,7 +87,13 @@ impl DnsResolver for ForwardingDnsResolver {
         let mut random = rand::thread_rng();
         let upstream = self.upstreams.iter().choose(&mut random).unwrap();
         let result = match self.context.cache.lookup(qname, qtype) {
-            None => self.context.client.send_query(qname, qtype, upstream, true)?,
+            None => {
+                if is_url(upstream) {
+                    self.context.doh_client.send_query(qname, qtype, upstream, true)?
+                } else {
+                    self.context.old_client.send_query(qname, qtype, upstream, true)?
+                }
+            },
             Some(packet) => packet
         };
 
@@ -150,7 +156,7 @@ impl DnsResolver for RecursiveDnsResolver {
             let ns_copy = ns.clone();
 
             let server = format!("{}:{}", ns_copy.as_str(), 53);
-            let response = self.context.client.send_query(qname, qtype.clone(), &server, false)?;
+            let response = self.context.old_client.send_query(qname, qtype.clone(), &server, false)?;
 
             // If we've got an actual answer, we're done!
             if !response.answers.is_empty() && response.header.rescode == ResultCode::NOERROR {
@@ -196,6 +202,10 @@ impl DnsResolver for RecursiveDnsResolver {
             }
         }
     }
+}
+
+fn is_url(url: &str) -> bool {
+    url.starts_with("https://")
 }
 
 #[cfg(test)]

@@ -67,6 +67,8 @@ pub struct Dns {
     #[serde(default = "default_threads")]
     pub threads: usize,
     pub forwarders: Vec<String>,
+    #[serde(default = "default_dns_bootstraps")]
+    pub bootstraps: Vec<String>,
     #[serde(default)]
     pub hosts: Vec<String>
 }
@@ -77,6 +79,7 @@ impl Default for Dns {
             listen: String::from("127.0.0.1:53"),
             threads: 20,
             forwarders: vec![String::from("94.140.14.14:53"), String::from("94.140.15.15:53")],
+            bootstraps: default_dns_bootstraps(),
             hosts: Vec::new()
         }
     }
@@ -137,4 +140,8 @@ fn default_key_files() -> Vec<String> {
         String::from("key4.toml"),
         String::from("key5.toml"),
     ]
+}
+
+fn default_dns_bootstraps() -> Vec<String> {
+    vec![String::from("9.9.9.9:53"), String::from("94.140.14.140:53")]
 }

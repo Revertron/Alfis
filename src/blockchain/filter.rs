@@ -44,7 +44,7 @@ impl DnsFilter for BlockchainFilter {
                 subdomain = String::from(parts[2]);
             }
         }
-        trace!("Searching record type '{:?}', name '{}' for domain '{}'", &qtype, &subdomain, &search);
+        //trace!("Searching record type '{:?}', name '{}' for domain '{}'", &qtype, &subdomain, &search);
 
         let data = self.context.lock().unwrap().chain.get_domain_info(&search);
         let zone = parts[0].to_owned();

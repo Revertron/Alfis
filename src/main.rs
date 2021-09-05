@@ -227,6 +227,8 @@ fn setup_logger(opt_matches: &Matches) {
     }
     let config = ConfigBuilder::new()
         .add_filter_ignore_str("mio::poll")
+        .add_filter_ignore_str("rustls::client")
+        .add_filter_ignore_str("ureq::")
         .set_thread_level(LevelFilter::Off)
         .set_location_level(LevelFilter::Off)
         .set_target_level(LevelFilter::Error)
