@@ -122,7 +122,7 @@ pub mod tests {
             cache: SynchronizedCache::new(),
             filters: Vec::new(),
             old_client: Box::new(DnsStubClient::new(callback)),
-            doh_client: Box::new(HttpsDnsClient::new()),
+            doh_client: Box::new(HttpsDnsClient::new(Vec::new())),
             dns_listen: String::from("0.0.0.0:53"),
             api_port: 5380,
             resolve_strategy: ResolveStrategy::Recursive,
