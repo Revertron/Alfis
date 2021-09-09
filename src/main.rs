@@ -229,10 +229,11 @@ fn setup_logger(opt_matches: &Matches) {
         .add_filter_ignore_str("mio::poll")
         .add_filter_ignore_str("rustls::client")
         .add_filter_ignore_str("ureq::")
-        .set_thread_level(LevelFilter::Off)
+        .set_thread_level(LevelFilter::Error)
         .set_location_level(LevelFilter::Off)
         .set_target_level(LevelFilter::Error)
         .set_time_level(LevelFilter::Error)
+        .set_time_format_str("%F %T%.3f")
         .set_time_to_local(true)
         .build();
     match opt_matches.opt_str("l") {

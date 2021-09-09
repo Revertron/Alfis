@@ -422,7 +422,17 @@ impl DnsRecord {
                     buffer.write_u8(*b)?;
                 }
             }
-            DnsRecord::OPT { .. } => {}
+            DnsRecord::OPT { packet_len, flags, ref data } => {
+                buffer.write_u8(0)?;
+                buffer.write_u16(QueryType::OPT.to_num())?;
+                buffer.write_u16(packet_len)?;
+                buffer.write_u32(flags)?;
+                buffer.write_u16(data.len() as u16)?;
+
+                for b in data.as_bytes() {
+                    buffer.write_u8(*b)?;
+                }
+            }
             DnsRecord::UNKNOWN { .. } => {
                 println!("Skipping record: {:?}", self);
             }

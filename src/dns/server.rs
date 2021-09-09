@@ -113,9 +113,9 @@ pub fn execute_query(context: Arc<ServerContext>, request: &DnsPacket) -> DnsPac
         packet.questions.push(question.clone());
 
         let mut resolver = context.create_resolver(Arc::clone(&context));
-        let rescode = match resolver.resolve(&question.name, question.qtype, request.header.recursion_desired) {
+        let res_code = match resolver.resolve(&question.name, question.qtype, request.header.recursion_desired) {
             Ok(result) => {
-                let rescode = result.header.rescode;
+                let res_code = result.header.rescode;
                 if result.header.authoritative_answer {
                     packet.header.authoritative_answer = true;
                 }
@@ -125,7 +125,7 @@ pub fn execute_query(context: Arc<ServerContext>, request: &DnsPacket) -> DnsPac
 
                 resolve_cnames(&unmatched, &mut results, &mut resolver, 0);
 
-                rescode
+                res_code
             }
             Err(err) => {
                 error!("Failed to resolve {:?} {}: {:?}", question.qtype, question.name, err);
@@ -133,7 +133,7 @@ pub fn execute_query(context: Arc<ServerContext>, request: &DnsPacket) -> DnsPac
             }
         };
 
-        packet.header.rescode = rescode;
+        packet.header.rescode = res_code;
 
         for result in results {
             for rec in result.answers {
@@ -246,7 +246,7 @@ impl DnsServer for DnsUdpServer {
                         Ok(x) => x,
                         Err(err) => {
                             if let Some(code) = err.raw_os_error() {
-                                if code == 10004 {
+                                if code == 10004 || code == 10093 {
                                     debug!("UDP service loop has finished");
                                     break;
                                 }

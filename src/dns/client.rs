@@ -369,7 +369,9 @@ impl HttpsDnsClient {
 
         let agent = ureq::AgentBuilder::new()
             .user_agent(&client_name)
-            .timeout(std::time::Duration::from_secs(3))
+            .timeout(std::time::Duration::from_secs(5))
+            .max_idle_connections_per_host(8)
+            .max_idle_connections(16)
             .resolver(move |addr: &str| {
                 let addr = match addr.find(":") {
                     Some(index) => addr[0..index].to_string(),
@@ -468,6 +470,7 @@ impl DnsClient for HttpsDnsClient {
             }
             Err(e) => warn!("DoH error: {}", &e.to_string())
         }
+        warn!("Lookup of {} failed", qname);
         Err(ClientError::LookupFailed)
     }
 }
