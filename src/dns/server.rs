@@ -17,6 +17,8 @@ use crate::dns::context::ServerContext;
 use crate::dns::netutil::{read_packet_length, write_packet_length};
 use crate::dns::protocol::{DnsPacket, DnsRecord, QueryType, ResultCode};
 use crate::dns::resolve::DnsResolver;
+use lru::LruCache;
+use chrono::Utc;
 
 #[derive(Debug, Display, From, Error)]
 pub enum ServerError {
@@ -237,6 +239,7 @@ impl DnsServer for DnsUdpServer {
         let _ = Builder::new()
             .name("DnsUdpServer-incoming".into())
             .spawn(move || {
+                let mut working_ids: LruCache<(SocketAddr, u16), i64> = LruCache::new(256);
                 loop {
                     let _ = self.context.statistics.udp_query_count.fetch_add(1, Ordering::Release);
 
@@ -264,6 +267,15 @@ impl DnsServer for DnsUdpServer {
                             continue;
                         }
                     };
+                    // If we got a request resent in 100ms interval, then we just skip it
+                    let key = (src.clone(), request.header.id);
+                    let cur_time = Utc::now().timestamp_millis();
+                    if let Some(time) = working_ids.get(&key) {
+                        if time + 100 > cur_time {
+                            continue;
+                        }
+                    }
+                    working_ids.put(key, cur_time);
 
                     // Acquire lock, add request to queue, and notify waiting threads using the condition.
                     match self.request_queue.lock() {
