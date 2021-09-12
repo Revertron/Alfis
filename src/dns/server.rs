@@ -62,7 +62,7 @@ pub trait DnsServer {
 
 /// Utility function for resolving domains referenced in for example CNAME or SRV
 /// records. This usually spares the client from having to perform additional lookups.
-fn resolve_cnames(lookup_list: &[DnsRecord], results: &mut Vec<DnsPacket>, resolver: &mut Box<dyn DnsResolver>, depth: u16) {
+fn resolve_cnames(lookup_list: &[DnsRecord], results: &mut Vec<DnsPacket>, resolver: &mut Box<dyn DnsResolver>, qtype: QueryType, depth: u16) {
     if depth > 10 {
         return;
     }
@@ -70,17 +70,11 @@ fn resolve_cnames(lookup_list: &[DnsRecord], results: &mut Vec<DnsPacket>, resol
     for ref rec in lookup_list {
         match **rec {
             DnsRecord::CNAME { ref host, .. } | DnsRecord::SRV { ref host, .. } => {
-                if let Ok(result2) = resolver.resolve(host, QueryType::A, true) {
-                    let new_unmatched = result2.get_unresolved_cnames();
+                if let Ok(result2) = resolver.resolve(host, qtype, true) {
+                    let new_unmatched = result2.get_unresolved_cnames(qtype);
                     results.push(result2);
 
-                    resolve_cnames(&new_unmatched, results, resolver, depth + 1);
-                }
-                if let Ok(result2) = resolver.resolve(host, QueryType::AAAA, true) {
-                    let new_unmatched = result2.get_unresolved_cnames();
-                    results.push(result2);
-
-                    resolve_cnames(&new_unmatched, results, resolver, depth + 1);
+                    resolve_cnames(&new_unmatched, results, resolver, qtype, depth + 1);
                 }
             }
             _ => {}
@@ -122,10 +116,10 @@ pub fn execute_query(context: Arc<ServerContext>, request: &DnsPacket) -> DnsPac
                     packet.header.authoritative_answer = true;
                 }
 
-                let unmatched = result.get_unresolved_cnames();
+                let unmatched = result.get_unresolved_cnames(question.qtype);
                 results.push(result);
 
-                resolve_cnames(&unmatched, &mut results, &mut resolver, 0);
+                resolve_cnames(&unmatched, &mut results, &mut resolver, question.qtype, 0);
 
                 res_code
             }
@@ -139,13 +133,19 @@ pub fn execute_query(context: Arc<ServerContext>, request: &DnsPacket) -> DnsPac
 
         for result in results {
             for rec in result.answers {
-                packet.answers.push(rec);
+                if !packet.answers.contains(&rec) {
+                    packet.answers.push(rec);
+                }
             }
             for rec in result.authorities {
-                packet.authorities.push(rec);
+                if !packet.authorities.contains(&rec) {
+                    packet.authorities.push(rec);
+                }
             }
             for rec in result.resources {
-                packet.resources.push(rec);
+                if !packet.resources.contains(&rec) {
+                    packet.resources.push(rec);
+                }
             }
         }
     }
@@ -212,7 +212,7 @@ impl DnsServer for DnsUdpServer {
                         }
                     };
 
-                    let mut size_limit = 512;
+                    let mut size_limit = 512 - 32; // Minus 32 bytes for the packet header
 
                     // Check for EDNS
                     if request.resources.len() == 1 {

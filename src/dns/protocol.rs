@@ -810,19 +810,34 @@ impl DnsPacket {
         None
     }
 
-    pub fn get_unresolved_cnames(&self) -> Vec<DnsRecord> {
+    pub fn get_unresolved_cnames(&self, qtype: QueryType) -> Vec<DnsRecord> {
         let mut unresolved = Vec::new();
         for answer in &self.answers {
             let mut matched = false;
             if let DnsRecord::CNAME { ref host, .. } = *answer {
                 for answer2 in &self.answers {
-                    if let DnsRecord::A { ref domain, .. } = *answer2 {
-                        if domain == host {
-                            matched = true;
-                            break;
+                    match qtype {
+                        QueryType::A => {
+                            if let DnsRecord::A { ref domain, .. } = *answer2 {
+                                if domain == host {
+                                    matched = true;
+                                    break;
+                                }
+                            }
                         }
+                        QueryType::AAAA => {
+                            if let DnsRecord::AAAA { ref domain, .. } = *answer2 {
+                                if domain == host {
+                                    matched = true;
+                                    break;
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
+            } else {
+                continue;
             }
 
             if !matched {

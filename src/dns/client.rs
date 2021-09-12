@@ -433,7 +433,7 @@ impl DnsClient for HttpsDnsClient {
         packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
 
         let mut req_buffer = VectorPacketBuffer::new();
-        packet.write(&mut req_buffer, 512).expect("Preparing DnsPacket failed!");
+        packet.write(&mut req_buffer, 512 - 32).expect("Preparing DnsPacket failed!");
 
         let response = self.agent
             .post(doh_url)
