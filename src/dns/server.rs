@@ -497,18 +497,12 @@ mod tests {
         // A successful resolve, that also resolves a CNAME through recursive lookup
         {
             let res = execute_query(Arc::clone(&context), &build_query("www.microsoft.com", QueryType::CNAME));
-            assert_eq!(2, res.answers.len());
+            dbg!(&res);
+            assert_eq!(1, res.answers.len());
 
             match res.answers[0] {
-                DnsRecord::CNAME { ref domain, .. } => {
-                    assert_eq!("www.microsoft.com", domain);
-                }
-                _ => panic!()
-            }
-
-            match res.answers[1] {
-                DnsRecord::A { ref domain, .. } => {
-                    assert_eq!("cdn.microsoft.com", domain);
+                DnsRecord::CNAME { ref host, .. } => {
+                    assert_eq!("cdn.microsoft.com", host);
                 }
                 _ => panic!()
             }
