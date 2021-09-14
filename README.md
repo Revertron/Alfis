@@ -54,6 +54,15 @@ Install from available [AUR package](https://aur.archlinux.org/packages/alfis) c
 yay -S alfis
 ```
 
+####  <img src="https://www.gentoo.org/assets/img/logo/icon-192.png" alt="Gentoo Logo" width=16 height=16> On Gentoo Linux
+
+Available in [dm9pZCAq overlay](https://github.com/gentoo-mirror/dm9pZCAq)
+```sh
+eselect repository enable dm9pZCAq
+emerge --sync dm9pZCAq
+emerge net-dns/alfis
+```
+
 ### ![NixOS Logo](https://nixos.org/favicon.ico) On Nix/NixOS
 `nix-shell` in this repo and then run `cargo build --release` and `cargo install` after you have entered the shell.
 
