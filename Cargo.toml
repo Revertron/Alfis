@@ -1,6 +1,6 @@
 [package]
 name = "alfis"
-version = "0.6.6"
+version = "0.6.7"
 authors = ["Revertron <alfis@revertron.com>"]
 edition = "2018"
 build = "build.rs"
@@ -39,7 +39,6 @@ sqlite = "0.26.0"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 mio = { version = "0.7.13", features = ["os-poll", "net"] }
 ureq = "2.2"
-dnsclient = "0.1"
 lru = "0.6"
 derive_more = "0.99.16"
 lazy_static = "1.4.0"
