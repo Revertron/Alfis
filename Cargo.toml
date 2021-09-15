@@ -38,7 +38,7 @@ rand-old = { package = "rand", version = "0.7.0" } # For ed25519-dalek
 sqlite = "0.26.0"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 mio = { version = "0.7.13", features = ["os-poll", "net"] }
-ureq = "2.2"
+ureq = { version = "2.2", optional = true }
 lru = "0.6"
 derive_more = "0.99.16"
 lazy_static = "1.4.0"
@@ -79,4 +79,5 @@ FileDescription="Alternative Free Identity System"
 [features]
 webgui = ["web-view", "tinyfiledialogs", "open"]
 edge = ["webgui", "web-view/edge"]
-default = ["webgui"]
+doh = ["ureq"]
+default = ["webgui", "doh"]

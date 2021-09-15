@@ -1,11 +1,17 @@
 //! client for sending DNS queries to other servers
 
-use std::io::{Write, Read};
+use std::io::Write;
+#[cfg(feature = "doh")]
+use std::io::Read;
 use std::marker::{Send, Sync};
-use std::net::{SocketAddr, TcpStream, ToSocketAddrs, UdpSocket, IpAddr};
+use std::net::{SocketAddr, TcpStream, ToSocketAddrs, UdpSocket};
+#[cfg(feature = "doh")]
+use std::net::IpAddr;
 use std::sync::atomic::{AtomicUsize, Ordering, AtomicBool};
 use std::sync::mpsc::{channel, Sender};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
+#[cfg(feature = "doh")]
+use std::sync::RwLock;
 use std::thread::{sleep, Builder};
 use std::time::Duration as SleepDuration;
 
@@ -15,9 +21,14 @@ use derive_more::{Display, Error, From};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
-use crate::dns::buffer::{BytePacketBuffer, PacketBuffer, StreamPacketBuffer, VectorPacketBuffer};
+use crate::dns::buffer::{BytePacketBuffer, PacketBuffer, StreamPacketBuffer};
+#[cfg(feature = "doh")]
+use crate::dns::buffer::VectorPacketBuffer;
 use crate::dns::netutil::{read_packet_length, write_packet_length};
-use crate::dns::protocol::{DnsPacket, DnsQuestion, QueryType, DnsRecord};
+use crate::dns::protocol::{DnsPacket, DnsQuestion, QueryType};
+#[cfg(feature = "doh")]
+use crate::dns::protocol::DnsRecord;
+#[cfg(feature = "doh")]
 use lru::LruCache;
 
 #[derive(Debug, Display, From, Error)]
@@ -372,12 +383,14 @@ impl DnsClient for DnsNetworkClient {
     }
 }
 
+#[cfg(feature = "doh")]
 pub struct HttpsDnsClient {
     agent: ureq::Agent,
     /// Counter for assigning packet ids
     seq: AtomicUsize,
 }
 
+#[cfg(feature = "doh")]
 impl HttpsDnsClient {
     pub fn new(bootstraps: Vec<String>) -> Self {
         let client_name = format!("ALFIS/{}", env!("CARGO_PKG_VERSION"));
@@ -444,6 +457,7 @@ impl HttpsDnsClient {
     }
 }
 
+#[cfg(feature = "doh")]
 impl DnsClient for HttpsDnsClient {
     fn get_sent_count(&self) -> usize {
         // No statistics for now

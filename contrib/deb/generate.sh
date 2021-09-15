@@ -23,6 +23,11 @@ PKGREPLACES=alfis
 
 mkdir -p bin
 
+FEATURES = "doh"
+if [ $PKGARCH = "mipsel" ]; then FEATURES=''
+elif [ $PKGARCH = "mips" ]; then FEATURES=''
+fi
+
 TARGET=""
 # Building nogui versions only
 if [ $PKGARCH = "amd64" ]; then TARGET='x86_64-unknown-linux-musl'
@@ -36,7 +41,7 @@ else
   exit 1
 fi
 
-cross build --release --no-default-features --target $TARGET
+cross build --release --no-default-features --features=$FEATURES --target $TARGET
 upx target/$TARGET/release/alfis
 cp target/$TARGET/release/alfis ./alfis
 cp target/$TARGET/release/alfis ./bin/alfis-linux-$PKGARCH-v$PKGVERSION-nogui

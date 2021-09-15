@@ -89,7 +89,12 @@ impl DnsResolver for ForwardingDnsResolver {
         let result = match self.context.cache.lookup(qname, qtype) {
             None => {
                 if is_url(upstream) {
-                    self.context.doh_client.send_query(qname, qtype, upstream, true)?
+                    if let Some(client) = &self.context.doh_client {
+                        client.send_query(qname, qtype, upstream, true)?
+                    } else {
+                        log::error!("This build doesn't support DoH");
+                        return Err(ResolveError::NoServerFound);
+                    }
                 } else {
                     self.context.old_client.send_query(qname, qtype, upstream, true)?
                 }

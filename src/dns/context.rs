@@ -7,7 +7,9 @@ use derive_more::{Display, Error, From};
 
 use crate::dns::authority::Authority;
 use crate::dns::cache::SynchronizedCache;
-use crate::dns::client::{DnsClient, DnsNetworkClient, HttpsDnsClient};
+use crate::dns::client::{DnsClient, DnsNetworkClient};
+#[cfg(feature = "doh")]
+use crate::dns::client::HttpsDnsClient;
 use crate::dns::filter::DnsFilter;
 use crate::dns::resolve::{DnsResolver, ForwardingDnsResolver, RecursiveDnsResolver};
 
@@ -45,7 +47,7 @@ pub struct ServerContext {
     pub cache: SynchronizedCache,
     pub filters: Vec<Box<dyn DnsFilter + Sync + Send>>,
     pub old_client: Box<dyn DnsClient + Sync + Send>,
-    pub doh_client: Box<dyn DnsClient + Sync + Send>,
+    pub doh_client: Option<Box<dyn DnsClient + Sync + Send>>,
     pub dns_listen: String,
     pub api_port: u16,
     pub resolve_strategy: ResolveStrategy,
@@ -64,13 +66,19 @@ impl Default for ServerContext {
 }
 
 impl ServerContext {
+    #[allow(unused_variables)]
     pub fn new(dns_listen: String, bootstraps: Vec<String>) -> ServerContext {
+        #[cfg(not(feature = "doh"))]
+        let doh_client = None;
+        #[cfg(feature = "doh")]
+        let doh_client: Option<Box<dyn DnsClient + Sync + Send>> = Some(Box::new(HttpsDnsClient::new(bootstraps)));
+
         ServerContext {
             authority: Authority::new(),
             cache: SynchronizedCache::new(),
             filters: Vec::new(),
-            old_client: Box::new(DnsNetworkClient::new(10000 + (rand::random::<u16>() % 20000))),
-            doh_client: Box::new(HttpsDnsClient::new(bootstraps)),
+            old_client: Box::new(DnsNetworkClient::new(10000 + (rand::random::<u16>() % 50000))),
+            doh_client,
             dns_listen,
             api_port: 5380,
             resolve_strategy: ResolveStrategy::Recursive,
@@ -87,7 +95,9 @@ impl ServerContext {
         // Start UDP client thread
         self.old_client.run()?;
         // Start DoH client
-        self.doh_client.run()?;
+        if let Some(client) = &self.doh_client {
+            client.run()?;
+        }
 
         // Load authority data
         self.authority.load()?;
@@ -122,7 +132,7 @@ pub mod tests {
             cache: SynchronizedCache::new(),
             filters: Vec::new(),
             old_client: Box::new(DnsStubClient::new(callback)),
-            doh_client: Box::new(HttpsDnsClient::new(Vec::new())),
+            doh_client: Some(Box::new(HttpsDnsClient::new(Vec::new()))),
             dns_listen: String::from("0.0.0.0:53"),
             api_port: 5380,
             resolve_strategy: ResolveStrategy::Recursive,
