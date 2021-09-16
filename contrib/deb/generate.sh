@@ -23,7 +23,7 @@ PKGREPLACES=alfis
 
 mkdir -p bin
 
-FEATURES = "doh"
+FEATURES="doh"
 if [ $PKGARCH = "mipsel" ]; then FEATURES=''
 elif [ $PKGARCH = "mips" ]; then FEATURES=''
 fi
