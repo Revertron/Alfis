@@ -5,6 +5,16 @@
 Alternative Free Identity System
 
 This project represents a minimal blockchain without cryptocurrency, capable of sustaining any number of domain names in a bunch of original alternative zones.
+Not so clear? Hold on.
+
+## This software provides:
+- Very small and [peer-to-peer](https://en.wikipedia.org/wiki/Peer-to-peer) synchronized database of domain names.
+The consistency of this database is based on [blockchain](https://en.wikipedia.org/wiki/Blockchain) technology, that prevents retroactive changing of data, and has strict cryptographical consensus.
+- DNS server with cache, like you have in your Internet-router. It resolves the domains from database and forwards all regular DNS-requests to some other resolver - your router, Google DNS, Cloudflare DNS, or [AdGuard DNS](https://dns.adguard.com/) (if you want to block ads and trackers).
+- Other systems need you to organize and run several DNS-servers to resolve their domains and regular domains, we have both in one.
+Moreover, ALFIS can forward requests of regular domains to [DNS-over-HTTPS](https://en.wikipedia.org/wiki/DNS_over_HTTPS) server. The security and privacy is right here.
+- Convenient graphical user interface to create domains in this alternative domain system. If you want just to use it like a DNS-server you can run it with `-n` flag or just build/download the variant without GUI.
+
 
 ![Screenshot](img/keys.png)
 
