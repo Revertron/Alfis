@@ -206,7 +206,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
         0 => num_cpus::get(),
         _ => threads
     };
-    let status = Arc::new(Mutex::new(Status::new(threads)));
+    let status = Arc::new(Mutex::new(UiStatus::new(threads)));
     let context_copy = Arc::clone(&context);
     let c = context.lock().unwrap();
 
@@ -600,22 +600,20 @@ pub enum Cmd {
     Open { link: String }
 }
 
-struct Status {
+struct UiStatus {
     pub mining: bool,
     pub syncing: bool,
     pub synced_blocks: u64,
     pub sync_height: u64,
-    pub nodes_connected: usize,
-    pub chain_height: u64,
     pub max_diff: u32,
     pub speed: Vec<u64>
 }
 
-impl Status {
+impl UiStatus {
     fn new(threads: usize) -> Self {
         let mut speed = Vec::with_capacity(threads);
         speed.resize(threads, 0u64);
-        Status { mining: false, syncing: false, synced_blocks: 0, sync_height: 0, nodes_connected: 0, chain_height: 0, max_diff: 0, speed }
+        UiStatus { mining: false, syncing: false, synced_blocks: 0, sync_height: 0, max_diff: 0, speed }
     }
 
     fn set_thread_speed(&mut self, thread: u32, speed: u64) {

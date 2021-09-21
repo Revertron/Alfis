@@ -16,8 +16,8 @@ use simplelog::*;
 use winapi::um::wincon::{AttachConsole, FreeConsole, ATTACH_PARENT_PROCESS};
 extern crate lazy_static;
 
-use std::fs::OpenOptions;
-use std::io::{Seek, SeekFrom};
+use std::fs::{File, OpenOptions};
+use std::io::{Seek, SeekFrom, Write};
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -56,6 +56,7 @@ fn main() {
     opts.optflag("g", "generate", "Generate new config file. Generated config will be printed to console.");
     opts.optopt("k", "gen-key", "Generate new keys and save them to file.", "FILE");
     opts.optopt("l", "log", "Write log to file", "FILE");
+    opts.optopt("s", "status", "Write status to file", "FILE");
     opts.optopt("c", "config", "Path to config file", "FILE");
     opts.optopt("w", "work-dir", "Path to working directory", "DIRECTORY");
     opts.optopt("u", "upgrade", "Path to config file that you want to upgrade. Upgraded config will be printed to console.", "FILE");
@@ -108,6 +109,25 @@ fn main() {
     };
 
     setup_logger(&opt_matches);
+    if let Some(status) = opt_matches.opt_str("s") {
+        register(move |_, event| {
+            match event {
+                Event::NetworkStatus { blocks, domains, keys, nodes } => {
+                    match File::create(Path::new(&status)) {
+                        Ok(mut f) => {
+                            let data = format!("{{ \"blocks\":{}, \"domains\":{}, \"keys\":{}, \"nodes\":{} }}", blocks, domains, keys, nodes);
+                            f.write_all(data.as_bytes()).expect("Error writing status file!");
+                            let _ = f.flush();
+                        }
+                        Err(_) => { error!("Error writing status file!"); }
+                    }
+                }
+                _ => {}
+            }
+            true
+        });
+    }
+
     info!(target: LOG_TARGET_MAIN, "Starting ALFIS {}", env!("CARGO_PKG_VERSION"));
 
     let settings = Settings::load(&config_name).expect(&format!("Cannot load settings from {}!", &config_name));
