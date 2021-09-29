@@ -85,7 +85,7 @@ Beware of NetworkManager, it can change your resolvers at will.
 
 1. Download repository public key and add it to your APT
 ```
-wget -O - https://deb.revertron.com/key.txt | sudo apt-key add -
+wget -qO - https://deb.revertron.com/key.txt | sudo apt-key add -
 ```
 2. Add repository path to sources list
 ```
