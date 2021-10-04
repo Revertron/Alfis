@@ -56,7 +56,7 @@ thread-priority = "0.2.4"
 thread-priority = "0.2.4"
 
 [build-dependencies]
-winres = "0.1.11"
+winres = "0.1.12"
 
 [dev-dependencies]
 serde_bytes = "0.11.5"
