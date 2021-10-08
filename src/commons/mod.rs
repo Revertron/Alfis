@@ -129,6 +129,7 @@ pub fn is_yggdrasil_record(record: &DnsRecord) -> bool {
         DnsRecord::AAAA { addr, .. } => return is_yggdrasil(&IpAddr::from(*addr)),
         DnsRecord::SRV { .. } => {}
         DnsRecord::OPT { .. } => {}
+        DnsRecord::TLSA { .. } => {}
     }
     true
 }

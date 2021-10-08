@@ -54,6 +54,7 @@ pub trait DnsResolver {
 
         for filter in context.filters.iter() {
             if let Some(packet) = filter.lookup(qname, qtype) {
+                context.cache.store(&packet.answers)?;
                 return Ok(packet);
             }
         }

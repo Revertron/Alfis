@@ -81,7 +81,7 @@ function refreshRecordsList() {
 function showNewRecordDialog() {
     var button_positive = document.getElementById("new_record_positive_button");
     button_positive.onclick = function() {
-        checkRecord(get_record_from_dialog());
+        checkRecord(getRecordFromDialog());
     };
 
     var button_negative = document.getElementById("new_record_negative_button");
@@ -95,7 +95,7 @@ function showNewRecordDialog() {
     dialog.className = "modal is-active";
 }
 
-function get_record_from_dialog() {
+function getRecordFromDialog() {
     var record_name = document.getElementById("record_name").value.toLowerCase();
     var record_type = document.getElementById("record_type").value;
     var record_ttl = parseInt(document.getElementById("record_ttl").value);
@@ -112,6 +112,12 @@ function get_record_from_dialog() {
         var record_weight = parseInt(document.getElementById("record_weight").value);
         var record_port = parseInt(document.getElementById("record_port").value);
         return { type: record_type, domain: record_name, ttl: record_ttl, priority: record_priority, weight: record_weight, port: record_port, host: record_data }
+    } else if (record_type == "TLSA") {
+        var certificate_usage = parseInt(document.getElementById("record_priority").value);
+        var selector = parseInt(document.getElementById("record_weight").value);
+        var matching_type = parseInt(document.getElementById("record_port").value);
+        record_data = hexToBytes(record_data);
+        return { type: record_type, domain: record_name, ttl: record_ttl, certificate_usage: certificate_usage, selector: selector, matching_type: matching_type, data: record_data }
     }
     return { type: record_type, domain: record_name, ttl: record_ttl, addr: record_data }
 }
@@ -266,7 +272,7 @@ function checkRecord(data) {
 
 function recordOkay(okay) {
     if (okay) {
-        addRecord(get_record_from_dialog()); // It will refresh list
+        addRecord(getRecordFromDialog()); // It will refresh list
         var dialog = document.getElementById("new_record_dialog");
         dialog.className = "modal";
     } else {
@@ -654,4 +660,12 @@ function selectKey(index, event) {
 function keySelected(index) {
     currentSelectedKey = index;
     refreshKeysMenu();
+}
+
+// Convert a hex string to a byte array
+function hexToBytes(hex) {
+    for (var bytes = [], c = 0; c < hex.length; c += 2) {
+        bytes.push(parseInt(hex.substr(c, 2), 16));
+    }
+    return bytes;
 }

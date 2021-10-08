@@ -39,6 +39,7 @@ pub enum QueryType {
     AAAA,  // 28
     SRV,   // 33
     OPT,   // 41
+    TLSA,  // 52
 }
 
 impl QueryType {
@@ -55,6 +56,7 @@ impl QueryType {
             QueryType::AAAA => 28,
             QueryType::SRV => 33,
             QueryType::OPT => 41,
+            QueryType::TLSA => 52,
         }
     }
 
@@ -70,6 +72,7 @@ impl QueryType {
             28 => QueryType::AAAA,
             33 => QueryType::SRV,
             41 => QueryType::OPT,
+            52 => QueryType::TLSA,
             _ => QueryType::UNKNOWN(num),
         }
     }
@@ -169,6 +172,14 @@ pub enum DnsRecord {
         flags: u32,
         data: String
     }, // 41
+    TLSA {
+        domain: String,
+        certificate_usage: u8,
+        selector: u8,
+        matching_type: u8,
+        data: Vec<u8>,
+        ttl: TransientTtl
+    }, // 52
 }
 
 impl DnsRecord {
@@ -280,6 +291,16 @@ impl DnsRecord {
                 buffer.step(data_len as usize)?;
 
                 Ok(DnsRecord::OPT { packet_len: class, flags: ttl, data })
+            }
+            QueryType::TLSA => {
+                let certificate_usage = buffer.read()?;
+                let selector = buffer.read()?;
+                let matching_type = buffer.read()?;
+                let cur_pos = buffer.pos();
+                let data_len = data_len - 3;
+                let data = buffer.get_range(cur_pos, data_len as usize)?.to_vec();
+                buffer.step(data_len as usize)?;
+                Ok(DnsRecord::TLSA { domain, certificate_usage, selector, matching_type, data, ttl: TransientTtl(ttl) })
             }
             QueryType::UNKNOWN(_) => {
                 buffer.step(data_len as usize)?;
@@ -422,6 +443,20 @@ impl DnsRecord {
                     buffer.write_u8(*b)?;
                 }
             }
+            DnsRecord::TLSA { ref domain, certificate_usage, selector, matching_type, ref data, ttl: TransientTtl(ttl) } => {
+                buffer.write_qname(domain)?;
+                buffer.write_u16(QueryType::TLSA.to_num())?;
+                buffer.write_u16(1)?;
+                buffer.write_u32(ttl)?;
+                buffer.write_u16((data.len() + 3) as u16)?;
+                buffer.write_u8(certificate_usage)?;
+                buffer.write_u8(selector)?;
+                buffer.write_u8(matching_type)?;
+
+                for b in data {
+                    buffer.write_u8(*b)?;
+                }
+            }
             DnsRecord::OPT { packet_len, flags, ref data } => {
                 buffer.write_u8(0)?;
                 buffer.write_u16(QueryType::OPT.to_num())?;
@@ -454,6 +489,7 @@ impl DnsRecord {
             DnsRecord::SOA { .. } => QueryType::SOA,
             DnsRecord::TXT { .. } => QueryType::TXT,
             DnsRecord::OPT { .. } => QueryType::OPT,
+            DnsRecord::TLSA { .. } => QueryType::TLSA,
         }
     }
 
@@ -469,7 +505,8 @@ impl DnsRecord {
             | DnsRecord::UNKNOWN { ref domain, .. }
             | DnsRecord::SOA { ref domain, .. }
             | DnsRecord::TXT { ref domain, .. } => Some(domain.clone()),
-            DnsRecord::OPT { .. } => None,
+            DnsRecord::OPT { .. }
+            | DnsRecord::TLSA { .. } => None,
         }
     }
 
@@ -490,6 +527,10 @@ impl DnsRecord {
                 Some(result)
             },
             DnsRecord::UNKNOWN { ref domain, .. } => Some(domain.clone()),
+            DnsRecord::TLSA { ref domain, certificate_usage, selector, matching_type, ref data, .. } => {
+                let data = crate::commons::to_hex(data);
+                Some(format!("{} {} {} {} {}", domain, certificate_usage, selector, matching_type, &data))
+            },
             DnsRecord::OPT { .. } => None,
         }
     }
@@ -506,6 +547,7 @@ impl DnsRecord {
             | DnsRecord::UNKNOWN { ttl: TransientTtl(ttl), .. }
             | DnsRecord::SOA { ttl: TransientTtl(ttl), .. }
             | DnsRecord::TXT { ttl: TransientTtl(ttl), .. } => ttl,
+            | DnsRecord::TLSA { ttl: TransientTtl(ttl), .. } => ttl,
             DnsRecord::OPT { .. } => 0
         }
     }

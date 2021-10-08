@@ -107,6 +107,7 @@ pub fn execute_query(context: Arc<ServerContext>, request: &DnsPacket) -> DnsPac
 
         let question = &request.questions[0];
         packet.questions.push(question.clone());
+        log::trace!("Resolving: {}, type {:?}", &question.name, &question.qtype);
 
         let mut resolver = context.create_resolver(Arc::clone(&context));
         let res_code = match resolver.resolve(&question.name, question.qtype, request.header.recursion_desired) {
