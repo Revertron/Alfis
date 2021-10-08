@@ -282,7 +282,7 @@ impl Peers {
         // If someone has more blocks we sync
         if nodes >= MIN_CONNECTED_NODES_START_SYNC {
             if height < max_height {
-                let count = min(max_height - height, (nodes - 5) as u64);
+                let count = min(max_height - height, nodes as u64);
                 self.ask_blocks_from_peers(registry, height, height + count, have_blocks);
             }
         }
