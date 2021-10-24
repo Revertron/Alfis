@@ -35,11 +35,13 @@ const SETTINGS_FILENAME: &str = "alfis.toml";
 const LOG_TARGET_MAIN: &str = "alfis::Main";
 
 fn main() {
+    #[allow(unused_assignments)]
+    let mut use_logger = true;
     // When linked with the windows subsystem windows won't automatically attach
     // to the console of the parent process, so we do it explicitly. This fails silently if the parent has no console.
     #[cfg(windows)]
     unsafe {
-        AttachConsole(ATTACH_PARENT_PROCESS);
+        use_logger = AttachConsole(ATTACH_PARENT_PROCESS) != 0;
         #[cfg(feature = "webgui")]
         winapi::um::shellscalingapi::SetProcessDpiAwareness(2);
     }
@@ -108,7 +110,9 @@ fn main() {
         Some(path) => path
     };
 
-    setup_logger(&opt_matches);
+    if use_logger {
+        setup_logger(&opt_matches);
+    }
     if let Some(status) = opt_matches.opt_str("s") {
         register(move |_, event| {
             match event {
