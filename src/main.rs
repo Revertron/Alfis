@@ -36,12 +36,12 @@ const LOG_TARGET_MAIN: &str = "alfis::Main";
 
 fn main() {
     #[allow(unused_assignments)]
-    let mut use_logger = true;
+    let mut console_attached = true;
     // When linked with the windows subsystem windows won't automatically attach
     // to the console of the parent process, so we do it explicitly. This fails silently if the parent has no console.
     #[cfg(windows)]
     unsafe {
-        use_logger = AttachConsole(ATTACH_PARENT_PROCESS) != 0;
+        console_attached = AttachConsole(ATTACH_PARENT_PROCESS) != 0;
         #[cfg(feature = "webgui")]
         winapi::um::shellscalingapi::SetProcessDpiAwareness(2);
     }
@@ -110,9 +110,7 @@ fn main() {
         Some(path) => path
     };
 
-    if use_logger {
-        setup_logger(&opt_matches);
-    }
+    setup_logger(&opt_matches, console_attached);
     if let Some(status) = opt_matches.opt_str("s") {
         register(move |_, event| {
             match event {
@@ -244,7 +242,7 @@ fn main() {
 }
 
 /// Sets up logger in accordance with command line options
-fn setup_logger(opt_matches: &Matches) {
+fn setup_logger(opt_matches: &Matches, console_attached: bool) {
     let mut level = LevelFilter::Info;
     if opt_matches.opt_present("d") || env::var(ALFIS_DEBUG).is_ok() {
         level = LevelFilter::Trace;
@@ -262,8 +260,10 @@ fn setup_logger(opt_matches: &Matches) {
         .build();
     match opt_matches.opt_str("l") {
         None => {
-            if let Err(e) = TermLogger::init(level, config, TerminalMode::Stdout, ColorChoice::Auto) {
-                println!("Unable to initialize logger!\n{}", e);
+            if console_attached {
+                if let Err(e) = TermLogger::init(level, config, TerminalMode::Stdout, ColorChoice::Auto) {
+                    println!("Unable to initialize logger!\n{}", e);
+                }
             }
         }
         Some(path) => {
@@ -277,11 +277,17 @@ fn setup_logger(opt_matches: &Matches) {
                     exit(1);
                 }
             };
-            CombinedLogger::init(vec![
-                TermLogger::new(level, config.clone(), TerminalMode::Stdout, ColorChoice::Auto),
-                WriteLogger::new(level, config, file),
-            ])
-            .unwrap();
+            if console_attached {
+                CombinedLogger::init(vec![
+                    TermLogger::new(level, config.clone(), TerminalMode::Stdout, ColorChoice::Auto),
+                    WriteLogger::new(level, config, file),
+                ])
+                .unwrap();
+            } else {
+                if let Err(e) = WriteLogger::init(level, config, file) {
+                    println!("Unable to initialize logger!\n{}", e);
+                }
+            }
         }
     }
 }
