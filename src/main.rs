@@ -257,6 +257,7 @@ fn setup_logger(opt_matches: &Matches, console_attached: bool) {
         .set_time_level(LevelFilter::Error)
         .set_time_format_str("%F %T%.3f")
         .set_time_to_local(true)
+        .set_level_padding(LevelPadding::Right)
         .build();
     match opt_matches.opt_str("l") {
         None => {

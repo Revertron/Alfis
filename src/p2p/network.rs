@@ -76,6 +76,9 @@ impl Network {
         let mut bootstrap_timer = Instant::now();
         let mut connect_timer = Instant::now();
         let mut last_events_time = Instant::now();
+        let mut old_blocks = 0u64;
+        let mut old_nodes = 0usize;
+        let mut old_banned = 0usize;
         loop {
             if self.peers.get_peers_count() == 0 && bootstrap_timer.elapsed().as_secs() > 60 {
                 warn!("Restarting swarm connections...");
@@ -173,9 +176,14 @@ impl Network {
                     post(crate::event::Event::NetworkStatus { blocks, domains, keys, nodes });
 
                     if log_timer.elapsed().as_secs() > LOG_REFRESH_DELAY_SEC {
-                        info!("Active nodes count: {}, banned count: {}, blocks count: {}", nodes, banned, blocks);
+                        if old_nodes != nodes || old_blocks != blocks || old_banned != banned {
+                            info!("Active nodes count: {}, banned count: {}, blocks count: {}", nodes, banned, blocks);
+                            old_nodes = nodes;
+                            old_blocks = blocks;
+                            old_banned = banned;
+                        }
                         let elapsed = last_events_time.elapsed().as_secs();
-                        if elapsed >= 10 {
+                        if elapsed >= 30 {
                             warn!("Last network events time {} seconds ago", elapsed);
                         }
                         log_timer = Instant::now();
@@ -233,7 +241,7 @@ impl Network {
                                         registry.reregister(stream, event.token(), Interest::WRITABLE).unwrap();
                                         peer.set_cipher(chacha);
                                         peer.set_state(State::ServerHandshake);
-                                        trace!("Client hello read successfully");
+                                        //trace!("Client hello read successfully");
                                         true
                                     }
                                     Err(_) => {
@@ -260,7 +268,7 @@ impl Network {
                                         registry.reregister(stream, event.token(), Interest::WRITABLE).unwrap();
                                         peer.set_cipher(chacha);
                                         peer.set_state(State::HandshakeFinished);
-                                        trace!("Server hello read successfully");
+                                        //trace!("Server hello read successfully");
                                         true
                                     }
                                     Err(_) => {
@@ -370,7 +378,7 @@ impl Network {
                                 return false;
                             }
                             peer.set_state(State::HandshakeFinished);
-                            trace!("Server handshake sent");
+                            //trace!("Server handshake sent");
                         }
                         State::HandshakeFinished => {
                             //debug!("Connected to peer {}, sending hello...", &peer.get_addr());

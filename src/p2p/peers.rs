@@ -60,38 +60,38 @@ impl Peers {
                 let _ = registry.deregister(stream);
                 match peer.get_state() {
                     State::Connecting => {
-                        info!("Peer connection {} to {:?} has timed out", &token.0, &peer.get_addr());
+                        debug!("Peer connection {} to {:?} has timed out", &token.0, &peer.get_addr());
                     }
                     State::Connected => {
-                        info!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
+                        debug!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
                     }
                     State::Idle { .. } | State::Message { .. } => {
-                        info!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
+                        debug!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
                     }
                     State::Error => {
-                        info!("Peer connection {} to {:?} has shut down on error", &token.0, &peer.get_addr());
+                        debug!("Peer connection {} to {:?} has shut down on error", &token.0, &peer.get_addr());
                     }
                     State::Banned => {
-                        info!("Peer connection {} to {:?} has shut down, banned", &token.0, &peer.get_addr());
+                        debug!("Peer connection {} to {:?} has shut down, banned", &token.0, &peer.get_addr());
                         self.ignored.insert(peer.get_addr().ip().clone());
                     }
                     State::Offline { .. } => {
-                        info!("Peer connection {} to {:?} is offline", &token.0, &peer.get_addr());
+                        debug!("Peer connection {} to {:?} is offline", &token.0, &peer.get_addr());
                     }
                     State::SendLoop => {
-                        info!("Peer connection {} from {:?} is a loop", &token.0, &peer.get_addr());
+                        debug!("Peer connection {} from {:?} is a loop", &token.0, &peer.get_addr());
                     }
                     State::Loop => {
-                        info!("Peer connection {} to {:?} is a loop", &token.0, &peer.get_addr());
+                        debug!("Peer connection {} to {:?} is a loop", &token.0, &peer.get_addr());
                     }
                     State::Twin => {
-                        info!("Peer connection {} to {:?} is a twin", &token.0, &peer.get_addr());
+                        debug!("Peer connection {} to {:?} is a twin", &token.0, &peer.get_addr());
                     }
                     State::ServerHandshake => {
-                        info!("Peer connection {} from {:?} didn't shake hands", &token.0, &peer.get_addr());
+                        debug!("Peer connection {} from {:?} didn't shake hands", &token.0, &peer.get_addr());
                     }
                     State::HandshakeFinished => {
-                        info!("Peer connection {} from {:?} shaked hands, but then failed", &token.0, &peer.get_addr());
+                        debug!("Peer connection {} from {:?} shook hands, but then failed", &token.0, &peer.get_addr());
                     }
                 }
 
@@ -116,8 +116,7 @@ impl Peers {
                 peers.insert(peer.to_owned());
                 peers
             });
-        debug!("Got {} peers from exchange", peers.len());
-        //debug!("Got {} peers: {:?}", peers.len(), &peers);
+        let mut count = 0;
         // TODO make it return error if these peers are wrong and seem like an attack
         for peer in peers.iter() {
             let addr: SocketAddr = match peer.parse() {
@@ -145,7 +144,7 @@ impl Peers {
             }
 
             if self.ignored.contains(&addr.ip()) {
-                info!("Skipping ignored address from exchange: {}", &addr);
+                debug!("Skipping ignored address from exchange: {}", &addr);
                 continue;
             }
 
@@ -154,6 +153,10 @@ impl Peers {
                 continue; // Return error in future
             }
             self.new_peers.push(addr);
+            count += 1;
+        }
+        if count > 0 {
+            debug!("Got {} new peer(s) from exchange", count);
         }
     }
 
