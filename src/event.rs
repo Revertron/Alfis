@@ -15,4 +15,5 @@ pub enum Event {
     NetworkStatus { blocks: u64, domains: i64, keys: i64, nodes: usize },
     Syncing { have: u64, height: u64 },
     SyncFinished,
+    Error { text: String }
 }

@@ -178,8 +178,7 @@ impl DnsServer for DnsUdpServer {
     /// This method takes ownership of the server, preventing the method from being called multiple times.
     fn run_server(self) -> Result<()> {
         // Bind the socket
-        let socket = UdpSocket::bind(self.context.dns_listen.as_str())
-            .expect(&format!("Cannot start DNS server on {}! Change listen address in config!", self.context.dns_listen.as_str()));
+        let socket = UdpSocket::bind(self.context.dns_listen.as_str())?;
 
         // Spawn threads for handling requests
         for thread_id in 0..self.thread_count {
@@ -310,8 +309,7 @@ impl DnsTcpServer {
 
 impl DnsServer for DnsTcpServer {
     fn run_server(mut self) -> Result<()> {
-        let socket = TcpListener::bind(self.context.dns_listen.as_str())
-            .expect(&format!("Cannot start DNS server on {}! Change listen address in config!", self.context.dns_listen.as_str()));
+        let socket = TcpListener::bind(self.context.dns_listen.as_str())?;
 
         // Spawn threads for handling requests, and create the channels
         for thread_id in 0..self.thread_count {

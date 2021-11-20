@@ -11,22 +11,26 @@ use crate::dns::server::{DnsServer, DnsTcpServer, DnsUdpServer};
 use crate::{Context, Settings};
 
 /// Starts UDP and TCP DNS-servers
-pub fn start_dns_server(context: &Arc<Mutex<Context>>, settings: &Settings) {
+pub fn start_dns_server(context: &Arc<Mutex<Context>>, settings: &Settings) -> bool {
     let server_context = create_server_context(Arc::clone(&context), &settings);
 
+    let mut result = true;
     if server_context.enable_udp {
         let udp_server = DnsUdpServer::new(Arc::clone(&server_context), settings.dns.threads);
         if let Err(e) = udp_server.run_server() {
-            error!("Failed to bind UDP listener: {:?}", e);
+            error!("Failed to bind UDP listener on {}: {:?}", &server_context.dns_listen, e);
+            result = false;
         }
     }
 
     if server_context.enable_tcp {
         let tcp_server = DnsTcpServer::new(Arc::clone(&server_context), settings.dns.threads);
         if let Err(e) = tcp_server.run_server() {
-            error!("Failed to bind TCP listener: {:?}", e);
+            error!("Failed to bind TCP listener on {}: {:?}", &server_context.dns_listen, e);
+            result = false;
         }
     }
+    result
 }
 
 /// Creates DNS-context with all needed settings

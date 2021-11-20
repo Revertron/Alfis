@@ -316,6 +316,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                     event_handle_info(&handle, &format!("Blockchain changed, current block count is {} now.", index));
                     String::new() // Nothing
                 }
+                Event::Error { text } => format!("showError('{}')", &text),
                 _ => String::new()
             };
 

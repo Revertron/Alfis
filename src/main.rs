@@ -22,7 +22,7 @@ use std::process::exit;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use alfis::event::Event;
-use alfis::eventbus::register;
+use alfis::eventbus::{post, register};
 use alfis::keystore::create_key;
 use alfis::{
     dns_utils, Block, Bytes, Chain, Context, Keystore, Miner, Network, Settings, Transaction, ALFIS_DEBUG, DB_NAME, ORIGIN_DIFFICULTY
@@ -207,9 +207,11 @@ fn main() {
         }
     }
 
-    if settings_copy.dns.threads > 0 {
-        dns_utils::start_dns_server(&context, &settings_copy);
-    }
+    let dns_server_ok = if settings_copy.dns.threads > 0 {
+        dns_utils::start_dns_server(&context, &settings_copy)
+    } else {
+        true
+    };
 
     let mut miner_obj = Miner::new(Arc::clone(&context));
     miner_obj.start_mining_thread();
@@ -230,6 +232,12 @@ fn main() {
             thread::sleep(sleep);
         }
     } else {
+        if !dns_server_ok {
+            thread::spawn(|| {
+                thread::sleep(Duration::from_millis(500));
+                post(Event::Error { text: String::from("Error starting DNS-server. Please, check that it&rsquo;s port is not busy.") });
+            });
+        }
         #[cfg(feature = "webgui")]
         web_ui::run_interface(Arc::clone(&context), miner.clone());
     }

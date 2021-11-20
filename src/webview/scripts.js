@@ -472,6 +472,19 @@ function showWarning(text) {
     setTimeout(button.onclick, 5000);
 }
 
+function showError(text) {
+    var warning = document.getElementById("notification_error");
+    var message = document.getElementById("error_text");
+    message.innerHTML = text;
+
+    warning.className = "notification mini is-danger";
+    var button = document.getElementById("error_close");
+    button.onclick = function() {
+        message.value = "";
+        warning.className = "notification mini is-danger is-hidden";
+    }
+}
+
 function showSuccess(text) {
     var warning = document.getElementById("notification_success");
     var message = document.getElementById("success_text");
