@@ -15,7 +15,7 @@ getopts = "0.2.21"
 log = "0.4.14"
 simplelog = "0.11.1"
 toml = "0.5.8"
-digest = "0.10.0"
+digest = "0.10.1"
 sha2 = "0.10.0"
 ed25519-dalek = "1.0"
 x25519-dalek = "1.2"
@@ -25,8 +25,8 @@ signature = "1.3.1"
 blakeout = "0.3.0"
 num_cpus = "1.13.0"
 byteorder = "1.4.3"
-serde = { version = "1.0.131", features = ["derive"] }
-serde_json = "1.0.72"
+serde = { version = "1.0.132", features = ["derive"] }
+serde_json = "1.0.73"
 bincode = "1.3.3"
 serde_cbor = "0.11.2"
 base64 = "0.13.0"
@@ -39,7 +39,7 @@ sqlite = "0.26.0"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 mio = { version = "0.8.0", features = ["os-poll", "net"] }
 ureq = { version = "2.3.1", optional = true }
-lru = "0.7"
+lru = "0.7.1"
 derive_more = "0.99.17"
 lazy_static = "1.4.0"
 

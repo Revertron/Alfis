@@ -36,6 +36,11 @@ You can download and run already built binaries from [releases](https://github.c
 
 You can build Alfis by issuing `cargo build --release` and `cargo run --release` commands in a directory of cloned repository.
 
+If you want to build a version without GUI and without DoH:
+`cargo build --release --no-default-features`
+And this for build without GUI, but with DoH:
+`cargo build --release --no-default-features --features="doh"`
+
 ### ![Windows Logo](/img/windows.svg) On Windows
 You don't need any additional steps to build Alfis, just stick to the MSVC version of Rust.
 
