@@ -42,6 +42,7 @@ pub const LOG_REFRESH_DELAY_SEC: u64 = 60;
 pub const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(500));
 /// We start syncing blocks only when we got 4 and more connected nodes
 pub const MIN_CONNECTED_NODES_START_SYNC: usize = 4;
+pub const MAX_READ_BLOCK_TIME: u128 = 100;
 pub const MAX_RECONNECTS: u32 = 5;
 pub const MAX_IDLE_SECONDS: u64 = 180;
 pub const MAX_NODES: usize = 15;
