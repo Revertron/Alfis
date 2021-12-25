@@ -30,7 +30,7 @@ impl Transaction {
     pub fn from_str(identity: String, method: String, data: String, signing: Bytes, encryption: Bytes) -> Self {
         let hash = hash_identity(&identity, None);
         let confirmation = hash_identity(&identity, Some(&signing));
-        return Self::new(hash, confirmation, method, data, signing, encryption);
+        Self::new(hash, confirmation, method, data, signing, encryption)
     }
 
     pub fn new(identity: Bytes, confirmation: Bytes, method: String, data: String, signing: Bytes, encryption: Bytes) -> Self {
@@ -49,14 +49,15 @@ impl Transaction {
         }
     }
 
+    #[allow(clippy::inherent_to_string)]
     pub fn to_string(&self) -> String {
         // Let it panic if something is not okay
         serde_json::to_string(&self).unwrap()
     }
 
     pub fn check_identity(&self, domain: &str) -> bool {
-        let hash = hash_identity(&domain, None);
-        let confirmation = hash_identity(&domain, Some(&self.signing));
+        let hash = hash_identity(domain, None);
+        let confirmation = hash_identity(domain, Some(&self.signing));
         self.identity.eq(&hash) && self.confirmation.eq(&confirmation)
     }
 

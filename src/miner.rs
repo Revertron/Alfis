@@ -138,7 +138,7 @@ impl Miner {
 
                             mining.store(true, Ordering::SeqCst);
                             current_job = Some(job.clone());
-                            Miner::mine_internal(Arc::clone(&context), job, mining.clone());
+                            Miner::mine_internal(Arc::clone(context), job, mining.clone());
                             continue;
                         } else {
                             debug!("This job will wait for now");
@@ -159,7 +159,7 @@ impl Miner {
                             }
                         }
                     }
-                    let _ = cond_var.wait_timeout(jobs, delay).expect("Error in wait lock!");
+                    let _lock = cond_var.wait_timeout(jobs, delay).expect("Error in wait lock!");
                 }
             } else {
                 let mut jobs = jobs.lock().unwrap();
@@ -169,7 +169,7 @@ impl Miner {
                     if job.is_due() {
                         mining.store(true, Ordering::SeqCst);
                         current_job = Some(job.clone());
-                        Miner::mine_internal(Arc::clone(&context), job, mining.clone());
+                        Miner::mine_internal(Arc::clone(context), job, mining.clone());
                     } else {
                         debug!("This job will wait for now");
                         jobs.insert(0, job);
@@ -187,7 +187,7 @@ impl Miner {
                         }
                     }
                 }
-                let _ = cond_var.wait_timeout(jobs, delay).expect("Error in wait lock!");
+                let _lock = cond_var.wait_timeout(jobs, delay).expect("Error in wait lock!");
             }
 
             if !mining.load(Ordering::Relaxed) {

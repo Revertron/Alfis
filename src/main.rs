@@ -103,7 +103,7 @@ fn main() {
     let no_gui = true;
 
     if let Some(path) = opt_matches.opt_str("w") {
-        env::set_current_dir(Path::new(&path)).expect(&format!("Unable to change working directory to '{}'", &path));
+        env::set_current_dir(Path::new(&path)).unwrap_or_else(|_| panic!("Unable to change working directory to '{}'", &path));
     }
     let config_name = match opt_matches.opt_str("c") {
         None => SETTINGS_FILENAME.to_owned(),
@@ -113,18 +113,16 @@ fn main() {
     setup_logger(&opt_matches, console_attached);
     if let Some(status) = opt_matches.opt_str("s") {
         register(move |_, event| {
-            match event {
-                Event::NetworkStatus { blocks, domains, keys, nodes } => {
-                    match File::create(Path::new(&status)) {
-                        Ok(mut f) => {
-                            let data = format!("{{ \"blocks\":{}, \"domains\":{}, \"keys\":{}, \"nodes\":{} }}", blocks, domains, keys, nodes);
-                            f.write_all(data.as_bytes()).expect("Error writing status file!");
-                            let _ = f.flush();
-                        }
-                        Err(_) => { error!("Error writing status file!"); }
+            // TODO optimize for same data
+            if let Event::NetworkStatus { blocks, domains, keys, nodes } = event {
+                match File::create(Path::new(&status)) {
+                    Ok(mut f) => {
+                        let data = format!("{{ \"blocks\":{}, \"domains\":{}, \"keys\":{}, \"nodes\":{} }}", blocks, domains, keys, nodes);
+                        f.write_all(data.as_bytes()).expect("Error writing status file!");
+                        let _ = f.flush();
                     }
+                    Err(_) => { error!("Error writing status file!"); }
                 }
-                _ => {}
             }
             true
         });
@@ -132,7 +130,7 @@ fn main() {
 
     info!(target: LOG_TARGET_MAIN, "Starting ALFIS {}", env!("CARGO_PKG_VERSION"));
 
-    let settings = Settings::load(&config_name).expect(&format!("Cannot load settings from {}!", &config_name));
+    let settings = Settings::load(&config_name).unwrap_or_else(|| panic!("Cannot load settings from {}!", &config_name));
     debug!(target: LOG_TARGET_MAIN, "Loaded settings: {:?}", &settings);
     let chain: Chain = Chain::new(&settings, DB_NAME);
     if opt_matches.opt_present("b") {
@@ -146,7 +144,7 @@ fn main() {
     info!("Blocks count: {}, domains count: {}, users count: {}", chain.get_height(), chain.get_domains_count(), chain.get_users_count());
     let settings_copy = settings.clone();
     let mut keys = Vec::new();
-    if settings.key_files.len() > 0 {
+    if !settings.key_files.is_empty() {
         for name in &settings.key_files {
             match Keystore::from_file(name, "") {
                 None => {
@@ -239,7 +237,7 @@ fn main() {
             });
         }
         #[cfg(feature = "webgui")]
-        web_ui::run_interface(Arc::clone(&context), miner.clone());
+        web_ui::run_interface(Arc::clone(&context), miner);
     }
 
     // Without explicitly detaching the console cmd won't redraw it's prompt.
@@ -292,10 +290,8 @@ fn setup_logger(opt_matches: &Matches, console_attached: bool) {
                     WriteLogger::new(level, config, file),
                 ])
                 .unwrap();
-            } else {
-                if let Err(e) = WriteLogger::init(level, config, file) {
-                    println!("Unable to initialize logger!\n{}", e);
-                }
+            } else if let Err(e) = WriteLogger::init(level, config, file) {
+                println!("Unable to initialize logger!\n{}", e);
             }
         }
     }

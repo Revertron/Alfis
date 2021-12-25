@@ -23,12 +23,12 @@ impl Chacha {
     }
 
     pub fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, Error> {
-        let nonce = Nonce::from(self.nonce.clone());
+        let nonce = Nonce::from(self.nonce);
         self.cipher.encrypt(&nonce, data.as_ref())
     }
 
     pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, Error> {
-        let nonce = Nonce::from(self.nonce.clone());
+        let nonce = Nonce::from(self.nonce);
         self.cipher.decrypt(&nonce, data.as_ref())
     }
 

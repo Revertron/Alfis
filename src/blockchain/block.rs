@@ -47,6 +47,7 @@ impl Block {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn from_all_params(index: u64, timestamp: i64, version: u32, difficulty: u32, random: u32, nonce: u64, prev_block_hash: Bytes, hash: Bytes, pub_key: Bytes, signature: Bytes, transaction: Option<Transaction>) -> Self {
         Block {
             index,

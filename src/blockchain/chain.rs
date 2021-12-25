@@ -81,6 +81,7 @@ impl Chain {
         if !self.origin.is_zero() && !options.origin.is_empty() && self.origin.to_string() != options.origin {
             self.clear_db();
         }
+        #[allow(clippy::absurd_extreme_comparisons)]
         if options.version < DB_VERSION {
             self.migrate_db(options.version, DB_VERSION);
         }
@@ -278,7 +279,7 @@ impl Chain {
         Ok(())
     }
 
-    pub fn get_sign_block(&self, keys: &Vec<Keystore>) -> Option<(Block, Keystore)> {
+    pub fn get_sign_block(&self, keys: &[Keystore]) -> Option<(Block, Keystore)> {
         if self.get_height() < BLOCK_SIGNERS_START {
             trace!("Too early to start block signings");
             return None;
@@ -419,7 +420,7 @@ impl Chain {
         match self.db.prepare(SQL_GET_BLOCK_BY_ID) {
             Ok(mut statement) => {
                 statement.bind(1, index as i64).expect("Error in bind");
-                while statement.next().unwrap() == State::Row {
+                if statement.next().unwrap() == State::Row {
                     return match Self::get_block_from_statement(&mut statement) {
                         None => {
                             error!("Something wrong with block in DB!");
@@ -470,7 +471,7 @@ impl Chain {
                 statement
             }
         };
-        while statement.next().unwrap() == State::Row {
+        if statement.next().unwrap() == State::Row {
             return match Self::get_block_from_statement(&mut statement) {
                 None => {
                     error!("Something wrong with block in DB!");
@@ -495,10 +496,10 @@ impl Chain {
             return false;
         }
 
-        let parts: Vec<&str> = domain.rsplitn(2, ".").collect();
+        let parts: Vec<&str> = domain.rsplitn(2, '.').collect();
         if parts.len() > 1 {
             // We do not support third level domains
-            if parts.last().unwrap().contains(".") {
+            if parts.last().unwrap().contains('.') {
                 return false;
             }
             return self.is_available_zone(parts.first().unwrap());
@@ -527,7 +528,7 @@ impl Chain {
     fn load_zones() -> Vec<ZoneData> {
         let mut result: Vec<ZoneData> = Vec::new();
         let zones_text = ZONES_TXT.replace("\r", "");
-        let zones: Vec<_> = zones_text.split("\n").collect();
+        let zones: Vec<_> = zones_text.split('\n').collect();
         for zone in zones {
             let yggdrasil = zone == "ygg" || zone == "anon";
             result.push(ZoneData { name: zone.to_owned(), yggdrasil })
@@ -536,7 +537,7 @@ impl Chain {
     }
 
     pub fn get_zones_hash() -> Bytes {
-        Bytes::from_bytes(hash_sha256(&ZONES_TXT.as_bytes()).as_slice())
+        Bytes::from_bytes(hash_sha256(ZONES_TXT.as_bytes()).as_slice())
     }
 
     /// Checks if some zone exists in our blockchain
@@ -556,7 +557,7 @@ impl Chain {
         let mut statement = self.db.prepare(SQL_GET_DOMAIN_OWNER_BY_ID).unwrap();
         statement.bind(1, height as i64).expect("Error in bind");
         statement.bind(2, &***id).expect("Error in bind");
-        while let State::Row = statement.next().unwrap() {
+        if let State::Row = statement.next().unwrap() {
             // If there is such a zone
             return true;
         }
@@ -579,7 +580,7 @@ impl Chain {
         }
         let identity_hash = hash_identity(&name, None);
         // TODO extract method
-        if let Some(last) = self.get_last_full_block(MAX, Some(&pub_key)) {
+        if let Some(last) = self.get_last_full_block(MAX, Some(pub_key)) {
             let new_id = !self.is_domain_in_blockchain(height, &identity_hash);
             let time = last.timestamp + NEW_DOMAINS_INTERVAL - Utc::now().timestamp();
             if new_id && time > 0 {
@@ -593,7 +594,7 @@ impl Chain {
     pub fn get_id_transaction(&self, identity_hash: &Bytes) -> Option<Transaction> {
         let mut statement = self.db.prepare(SQL_GET_DOMAIN_BY_ID).unwrap();
         statement.bind(1, identity_hash.as_slice()).expect("Error in bind");
-        while let State::Row = statement.next().unwrap() {
+        if let State::Row = statement.next().unwrap() {
             let timestamp = statement.read::<i64>(1).unwrap();
             if timestamp < Utc::now().timestamp() - DOMAIN_LIFETIME {
                 // This domain is too old
@@ -635,7 +636,7 @@ impl Chain {
 
     pub fn get_domains_count(&self) -> i64 {
         let mut statement = self.db.prepare(SQL_GET_DOMAINS_COUNT).unwrap();
-        while let State::Row = statement.next().unwrap() {
+        if let State::Row = statement.next().unwrap() {
             return statement.read::<i64>(0).unwrap();
         }
         0
@@ -643,7 +644,7 @@ impl Chain {
 
     pub fn get_users_count(&self) -> i64 {
         let mut statement = self.db.prepare(SQL_GET_USERS_COUNT).unwrap();
-        while let State::Row = statement.next().unwrap() {
+        if let State::Row = statement.next().unwrap() {
             return statement.read::<i64>(0).unwrap();
         }
         0
@@ -665,7 +666,7 @@ impl Chain {
         }
 
         let mut result = HashMap::new();
-        let keystore = keystore.clone().unwrap();
+        let keystore = keystore.unwrap();
         let pub_key = keystore.get_public();
         let mut statement = self.db.prepare(SQL_GET_DOMAINS_BY_KEY).unwrap();
         statement.bind(1, &**pub_key).expect("Error in bind");
@@ -785,7 +786,7 @@ impl Chain {
                     SIGNER_DIFFICULTY
                 }
             }
-            Some(t) => self.get_difficulty_for_transaction(&t, block.index)
+            Some(t) => self.get_difficulty_for_transaction(t, block.index)
         };
         if block.difficulty < difficulty {
             warn!("Block difficulty is lower than needed");
@@ -799,7 +800,7 @@ impl Chain {
             warn!("Ignoring block with wrong hash:\n{:?}", &block);
             return Bad;
         }
-        if !check_block_signature(&block) {
+        if !check_block_signature(block) {
             warn!("Ignoring block with wrong signature:\n{:?}", &block);
             return Bad;
         }
@@ -843,18 +844,16 @@ impl Chain {
                 }
                 let zones = self.get_zones();
                 for z in zones {
-                    if z.name == block_data.zone {
-                        if z.yggdrasil {
-                            for record in &block_data.records {
-                                if !is_yggdrasil_record(record) {
-                                    warn!("Someone mined domain with clearnet records for Yggdrasil only zone!");
+                    if z.name == block_data.zone && z.yggdrasil {
+                        for record in &block_data.records {
+                            if !is_yggdrasil_record(record) {
+                                warn!("Someone mined domain with clearnet records for Yggdrasil only zone!");
+                                return Bad;
+                            }
+                            if let Some(data) = record.get_data() {
+                                if data.len() > MAX_DATA_LEN {
+                                    warn!("Someone mined too long record!");
                                     return Bad;
-                                }
-                                if let Some(data) = record.get_data() {
-                                    if data.len() > MAX_DATA_LEN {
-                                        warn!("Someone mined too long record!");
-                                        return Bad;
-                                    }
                                 }
                             }
                         }
@@ -884,7 +883,7 @@ impl Chain {
                 }
                 if block.index > BLOCK_SIGNERS_START {
                     // If this block is main, signed part of blockchain
-                    if !self.is_good_sign_block(&block, last_full_block) {
+                    if !self.is_good_sign_block(block, last_full_block) {
                         return Bad;
                     }
                 }
@@ -926,15 +925,12 @@ impl Chain {
                 if block.index > full_block.index && block.transaction.is_some() {
                     warn!("Not enough signing blocks over full {} block!", full_block.index);
                     return false;
-                } else {
-                    if !self.is_good_signer_for_block(&block, full_block) {
-                        return false;
-                    }
-                }
-            } else if sign_count < BLOCK_SIGNERS_ALL && block.transaction.is_none() {
-                if !self.is_good_signer_for_block(&block, full_block) {
+                } else if !self.is_good_signer_for_block(block, full_block) {
                     return false;
                 }
+            } else if sign_count < BLOCK_SIGNERS_ALL && block.transaction.is_none()
+                && !self.is_good_signer_for_block(block, full_block) {
+                return false;
             }
         }
         true

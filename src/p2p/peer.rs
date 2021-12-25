@@ -57,7 +57,7 @@ impl Peer {
     }
 
     pub fn get_addr(&self) -> SocketAddr {
-        self.addr.clone()
+        self.addr
     }
 
     pub fn get_stream(&mut self) -> &mut TcpStream {

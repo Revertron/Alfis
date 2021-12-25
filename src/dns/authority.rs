@@ -39,9 +39,9 @@ pub struct Zone {
 impl Zone {
     pub fn new(domain: String, m_name: String, r_name: String) -> Zone {
         Zone {
-            domain: domain,
-            m_name: m_name,
-            r_name: r_name,
+            domain,
+            m_name,
+            r_name,
             serial: 0,
             refresh: 0,
             retry: 0,
@@ -222,7 +222,7 @@ impl Authority {
                 None => continue
             };
 
-            if &domain != qname {
+            if domain != qname {
                 continue;
             }
 

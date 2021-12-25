@@ -22,7 +22,7 @@ pub fn to_hex(buf: &[u8]) -> String {
 }
 
 pub fn from_hex(string: &str) -> Result<Vec<u8>, num::ParseIntError> {
-    split_n(&string.trim()[..], 2)
+    split_n(string.trim(), 2)
         .iter()
         .map(|b| u8::from_str_radix(b, 16))
         .collect()
@@ -32,11 +32,9 @@ pub fn check_domain(name: &str, allow_dots: bool) -> bool {
     if name.starts_with('.') || name.starts_with('-') || name.ends_with('.') || name.ends_with('-') {
         return false;
     }
-    let parts: Vec<&str> = name.rsplitn(2, ".").collect();
-    if parts.len() == 2 {
-        if parts[1].len() < 3 && is_numeric(parts[1]) {
-            return false;
-        }
+    let parts: Vec<&str> = name.rsplitn(2, '.').collect();
+    if parts.len() == 2 && parts[1].len() < 3 && is_numeric(parts[1]) {
+        return false;
     }
 
     let mut last_dot = false;
@@ -77,7 +75,7 @@ pub fn is_numeric(str: &str) -> bool {
 }
 
 pub fn get_domain_zone(domain: &str) -> String {
-    let parts: Vec<&str> = domain.rsplitn(2, ".").collect();
+    let parts: Vec<&str> = domain.rsplitn(2, '.').collect();
     if !parts.is_empty() {
         parts[0].to_owned()
     } else {

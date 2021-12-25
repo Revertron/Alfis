@@ -12,7 +12,7 @@ use crate::{Context, Settings};
 
 /// Starts UDP and TCP DNS-servers
 pub fn start_dns_server(context: &Arc<Mutex<Context>>, settings: &Settings) -> bool {
-    let server_context = create_server_context(Arc::clone(&context), &settings);
+    let server_context = create_server_context(Arc::clone(context), settings);
 
     let mut result = true;
     if server_context.enable_udp {

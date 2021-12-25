@@ -46,7 +46,7 @@ impl CryptoBox {
 
     pub fn decrypt(secret: &[u8], message: &[u8]) -> Result<Vec<u8>, Error> {
         let secret = SecretKey::from_bytes(secret).unwrap();
-        decrypt(&secret, &message)
+        decrypt(&secret, message)
     }
 }
 

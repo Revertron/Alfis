@@ -126,7 +126,7 @@ fn action_check_domain(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>
     let c = context.lock().unwrap();
     if let Some(keystore) = c.get_keystore() {
         let name = name.to_lowercase();
-        let available = c.get_chain().is_domain_available(c.get_chain().get_height(), &name, &keystore);
+        let available = c.get_chain().is_domain_available(c.get_chain().get_height(), &name, keystore);
         web_view.eval(&format!("domainAvailable({})", available)).expect("Error evaluating!");
     }
 }
@@ -207,7 +207,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
         _ => threads
     };
     let status = Arc::new(Mutex::new(UiStatus::new(threads)));
-    let context_copy = Arc::clone(&context);
+    let context_copy = Arc::clone(context);
     let c = context.lock().unwrap();
 
     register(move |_uuid, e| {
@@ -221,7 +221,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
             let eval = match e {
                 Event::KeyCreated { path, public, hash } => {
                     load_domains(&mut context, &handle);
-                    send_keys_to_ui(&mut context, &handle);
+                    send_keys_to_ui(&context, &handle);
                     event_handle_luck(&handle, "Key successfully created! Don\\'t forget to save it!");
                     let mut s = format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash);
                     s.push_str(" showSuccess('New key mined successfully! Save it to a safe place!')");
@@ -230,7 +230,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                 Event::KeyLoaded { path, public, hash } |
                 Event::KeySaved { path, public, hash } => {
                     load_domains(&mut context, &handle);
-                    send_keys_to_ui(&mut context, &handle);
+                    send_keys_to_ui(&context, &handle);
                     format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash)
                 }
                 Event::MinerStarted | Event::KeyGeneratorStarted => {
@@ -301,7 +301,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                     if status.mining {
                         String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
                     } else {
-                        format!("setLeftStatusBarText('Idle'); showMiningIndicator(false, false);")
+                        String::from("setLeftStatusBarText('Idle'); showMiningIndicator(false, false);")
                     }
                 }
                 Event::NetworkStatus { blocks, domains, keys, nodes } => {
@@ -376,7 +376,7 @@ fn send_keys_to_ui(context: &MutexGuard<Context>, handle: &Handle<()>) {
         let mut keys = Vec::new();
         for key in context.get_keystores() {
             let path = key.get_path().replace("\\", "/");
-            let parts: Vec<&str> = path.rsplitn(2, "/").collect();
+            let parts: Vec<&str> = path.rsplitn(2, '/').collect();
             keys.push(KeysForJS { file_name: parts[0].to_owned(), public: key.get_public().to_string() });
         }
         keys
@@ -425,14 +425,12 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
     // Check if yggdrasil only quality of zone is not violated
     let zones = context.chain.get_zones();
     for z in zones {
-        if z.name == data.zone {
-            if z.yggdrasil {
-                for record in &data.records {
-                    if !is_yggdrasil_record(record) {
-                        show_warning(web_view, &format!("Zone {} is Yggdrasil only, you cannot use IPs from clearnet!", &data.zone));
-                        let _ = web_view.eval("domainMiningUnavailable();");
-                        return;
-                    }
+        if z.name == data.zone && z.yggdrasil {
+            for record in &data.records {
+                if !is_yggdrasil_record(record) {
+                    show_warning(web_view, &format!("Zone {} is Yggdrasil only, you cannot use IPs from clearnet!", &data.zone));
+                    let _ = web_view.eval("domainMiningUnavailable();");
+                    return;
                 }
             }
         }
@@ -562,6 +560,7 @@ fn format_event_now(kind: &str, message: &str) -> String {
     format!("addEvent('{}', '{}', '{}');", kind, time.format("%d.%m.%y %X"), message)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, class: &str, name: &str, mut data: DomainData, difficulty: u32, keystore: &Keystore, signing: Bytes, encryption: Bytes) {
     let name = name.to_owned();
     let encrypted = CryptoBox::encrypt(encryption.as_slice(), name.as_bytes()).expect("Error encrypting domain name!");
@@ -613,8 +612,7 @@ struct UiStatus {
 
 impl UiStatus {
     fn new(threads: usize) -> Self {
-        let mut speed = Vec::with_capacity(threads);
-        speed.resize(threads, 0u64);
+        let speed =vec![0; threads];
         UiStatus { mining: false, syncing: false, synced_blocks: 0, sync_height: 0, max_diff: 0, speed }
     }
 

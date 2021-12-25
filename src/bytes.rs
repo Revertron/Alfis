@@ -13,7 +13,7 @@ use num_bigint::BigUint;
 use serde::de::{Error as DeError, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Bytes {
     data: Vec<u8>
 }
@@ -44,7 +44,7 @@ impl Bytes {
                 return false;
             }
         }
-        return true;
+        true
     }
 
     /// Returns a byte slice of the hash contents.
@@ -57,6 +57,7 @@ impl Bytes {
         self.data.as_mut_slice()
     }
 
+    #[allow(clippy::inherent_to_string)]
     pub fn to_string(&self) -> String {
         crate::commons::to_hex(&self.data)
     }
@@ -76,19 +77,9 @@ impl Bytes {
     }
 }
 
-impl Default for Bytes {
-    fn default() -> Bytes {
-        Bytes { data: Vec::new() }
-    }
-}
-
 impl PartialEq for Bytes {
     fn eq(&self, other: &Self) -> bool {
-        crate::blockchain::hash_utils::same_hash(&self, &other)
-    }
-
-    fn ne(&self, other: &Self) -> bool {
-        !crate::blockchain::hash_utils::same_hash(&self, &other)
+        crate::blockchain::hash_utils::same_hash(self, other)
     }
 }
 
@@ -96,16 +87,16 @@ impl Eq for Bytes {}
 
 impl PartialOrd for Bytes {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        let self_hash_int = BigUint::from_bytes_le(&self);
-        let other_hash_int = BigUint::from_bytes_le(&other);
+        let self_hash_int = BigUint::from_bytes_le(self);
+        let other_hash_int = BigUint::from_bytes_le(other);
         Some(self_hash_int.cmp(&other_hash_int))
     }
 }
 
 impl Ord for Bytes {
     fn cmp(&self, other: &Self) -> Ordering {
-        let self_hash_int = BigUint::from_bytes_le(&self);
-        let other_hash_int = BigUint::from_bytes_le(&other);
+        let self_hash_int = BigUint::from_bytes_le(self);
+        let other_hash_int = BigUint::from_bytes_le(other);
         self_hash_int.cmp(&other_hash_int)
     }
 }

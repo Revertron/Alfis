@@ -69,7 +69,7 @@ impl Network {
         poll.registry().register(&mut server, SERVER, Interest::READABLE).expect("Error registering poll");
 
         // Starting peer connections to bootstrap nodes
-        self.peers.connect_peers(&peers_addrs, &poll.registry(), &mut self.token, yggdrasil_only);
+        self.peers.connect_peers(&peers_addrs, poll.registry(), &mut self.token, yggdrasil_only);
 
         let mut ui_timer = Instant::now();
         let mut log_timer = Instant::now();
@@ -83,7 +83,7 @@ impl Network {
             if self.peers.get_peers_count() == 0 && bootstrap_timer.elapsed().as_secs() > 60 {
                 warn!("Restarting swarm connections...");
                 // Starting peer connections to bootstrap nodes
-                self.peers.connect_peers(&peers_addrs, &poll.registry(), &mut self.token, yggdrasil_only);
+                self.peers.connect_peers(&peers_addrs, poll.registry(), &mut self.token, yggdrasil_only);
                 bootstrap_timer = Instant::now();
                 last_events_time = Instant::now();
             }
@@ -102,45 +102,42 @@ impl Network {
                         //debug!("Event for server socket {} is {:?}", event.token().0, &event);
                         // If this is an event for the server, it means a connection is ready to be accepted.
                         let connection = server.accept();
-                        match connection {
-                            Ok((mut stream, mut address)) => {
-                                // Checking if it is an ipv4-mapped ipv6 if yes convert to ipv4
-                                if address.is_ipv6() {
-                                    if let IpAddr::V6(ipv6) = address.ip() {
-                                        if let Some(ipv4) = ipv6.to_ipv4() {
-                                            address = SocketAddr::V4(SocketAddrV4::new(ipv4, address.port()))
-                                        }
+                        if let Ok((mut stream, mut address)) = connection {
+                            // Checking if it is an ipv4-mapped ipv6 if yes convert to ipv4
+                            if address.is_ipv6() {
+                                if let IpAddr::V6(ipv6) = address.ip() {
+                                    if let Some(ipv4) = ipv6.to_ipv4() {
+                                        address = SocketAddr::V4(SocketAddrV4::new(ipv4, address.port()))
                                     }
                                 }
-
-                                if self.peers.is_ignored(&address.ip()) {
-                                    debug!("Ignoring connection from banned {:?}", &address.ip());
-                                    continue;
-                                }
-
-                                if yggdrasil_only && !is_yggdrasil(&address.ip()) {
-                                    debug!("Dropping connection from Internet");
-                                    stream.shutdown(Shutdown::Both).unwrap_or_else(|e| {
-                                        warn!("Error in shutdown, {}", e);
-                                    });
-                                    let _ = poll.registry().reregister(&mut server, SERVER, Interest::READABLE);
-                                    continue;
-                                }
-
-                                //debug!("Accepted connection from: {} to local IP: {}", address, local_ip);
-                                let token = self.next_token();
-                                poll.registry().register(&mut stream, token, Interest::READABLE).expect("Error registering poll");
-                                let peer = Peer::new(address, stream, State::Connected, true);
-                                self.peers.add_peer(token, peer);
                             }
-                            Err(_) => {}
+
+                            if self.peers.is_ignored(&address.ip()) {
+                                debug!("Ignoring connection from banned {:?}", &address.ip());
+                                continue;
+                            }
+
+                            if yggdrasil_only && !is_yggdrasil(&address.ip()) {
+                                debug!("Dropping connection from Internet");
+                                stream.shutdown(Shutdown::Both).unwrap_or_else(|e| {
+                                    warn!("Error in shutdown, {}", e);
+                                });
+                                let _ = poll.registry().reregister(&mut server, SERVER, Interest::READABLE);
+                                continue;
+                            }
+
+                            //debug!("Accepted connection from: {} to local IP: {}", address, local_ip);
+                            let token = self.next_token();
+                            poll.registry().register(&mut stream, token, Interest::READABLE).expect("Error registering poll");
+                            let peer = Peer::new(address, stream, State::Connected, true);
+                            self.peers.add_peer(token, peer);
                         }
                         if let Err(e) = poll.registry().reregister(&mut server, SERVER, Interest::READABLE) {
                             panic!("Error reregistering server token!\n{}", e);
                         }
                     }
                     token => {
-                        if !self.handle_connection_event(&poll.registry(), &event) {
+                        if !self.handle_connection_event(poll.registry(), event) {
                             let _ = self.peers.close_peer(poll.registry(), &token);
                             let blocks = self.context.lock().unwrap().chain.get_height();
                             let keys = self.context.lock().unwrap().chain.get_users_count();
@@ -227,8 +224,8 @@ impl Network {
                         }
                         match peer.get_state().clone() {
                             State::Connected => {
-                                let mut stream = peer.get_stream();
-                                return match read_client_handshake(&mut stream) {
+                                let stream = peer.get_stream();
+                                return match read_client_handshake(stream) {
                                     Ok(key) => {
                                         let mut buf = [0u8; 32];
                                         buf.copy_from_slice(key.as_slice());
@@ -251,8 +248,8 @@ impl Network {
                                 };
                             }
                             State::ServerHandshake => {
-                                let mut stream = peer.get_stream();
-                                return match read_server_handshake(&mut stream) {
+                                let stream = peer.get_stream();
+                                return match read_server_handshake(stream) {
                                     Ok(data) => {
                                         if data.len() != 32 + 12 {
                                             warn!("Server handshake of {} bytes instead of {}", data.len(), 32 + 12);
@@ -278,19 +275,18 @@ impl Network {
                                 };
                             }
                             _ => {
-                                let mut stream = peer.get_stream();
-                                read_message(&mut stream)
+                                let stream = peer.get_stream();
+                                read_message(stream)
                             }
                         }
                     }
                 }
             };
 
-            if data.is_ok() {
+            if let Ok(data) = data {
                 let data = {
                     match self.peers.get_peer(&event.token()) {
                         Some(peer) => {
-                            let data = data.unwrap();
                             match decode_message(&data, peer.get_cipher()) {
                                 Ok(data) => data,
                                 Err(_) => {
@@ -344,9 +340,9 @@ impl Network {
                             }
                         }
                     }
-                    Err(_) => {
+                    Err(e) => {
                         let peer = self.peers.get_peer(&event.token()).unwrap();
-                        warn!("Error deserializing message from {}", &peer.get_addr());
+                        warn!("Error deserializing message from {}: {}", &peer.get_addr(), e.to_string());
                         return false;
                     }
                 }
@@ -368,7 +364,7 @@ impl Network {
                 Some(peer) => {
                     match peer.get_state().clone() {
                         State::Connecting => {
-                            if send_client_handshake(&mut peer.get_stream(), self.public_key.as_bytes()).is_err() {
+                            if send_client_handshake(peer.get_stream(), self.public_key.as_bytes()).is_err() {
                                 return false;
                             }
                             peer.set_state(State::ServerHandshake);
@@ -442,18 +438,16 @@ impl Network {
                 if self.peers.is_our_own_connect(&rand_id) {
                     warn!("Detected loop connect");
                     State::SendLoop
+                } else if origin.eq(my_origin) && version == my_version {
+                    let peer = self.peers.get_mut_peer(token).unwrap();
+                    peer.set_public(public);
+                    peer.set_active(true);
+                    debug!("Incoming v{} on {}", &app_version, peer.get_addr().ip());
+                    let app_version = self.context.lock().unwrap().app_version.clone();
+                    State::message(Message::shake(&app_version, &origin, version, me_public, &my_id, my_height))
                 } else {
-                    if origin.eq(my_origin) && version == my_version {
-                        let peer = self.peers.get_mut_peer(token).unwrap();
-                        peer.set_public(public);
-                        peer.set_active(true);
-                        debug!("Incoming v{} on {}", &app_version, peer.get_addr().ip());
-                        let app_version = self.context.lock().unwrap().app_version.clone();
-                        State::message(Message::shake(&app_version, &origin, version, me_public, &my_id, my_height))
-                    } else {
-                        warn!("Handshake from unsupported chain or version");
-                        State::Banned
-                    }
+                    warn!("Handshake from unsupported chain or version");
+                    State::Banned
                 }
             }
             Message::Shake { app_version, origin, version, public, rand_id, height } => {
@@ -516,20 +510,18 @@ impl Network {
                     info!("Hashes are different, requesting block {} from {}", my_height, peer.get_addr().ip());
                     info!("My hash: {:?}, their hash: {:?}", &my_hash, &hash);
                     State::message(Message::GetBlock { index: my_height })
+                } else if active_count < MAX_NODES && random::<u8>() < 50 {
+                    debug!("Requesting more peers from {}", peer.get_addr().ip());
+                    State::message(Message::GetPeers)
                 } else {
-                    if active_count < MAX_NODES && random::<u8>() < 50 {
-                        debug!("Requesting more peers from {}", peer.get_addr().ip());
-                        State::message(Message::GetPeers)
-                    } else {
-                        State::idle()
-                    }
+                    State::idle()
                 }
             }
             Message::GetPeers => {
                 let addr = {
                     let peer = self.peers.get_mut_peer(token).unwrap();
                     peer.set_active(true);
-                    peer.get_addr().clone()
+                    peer.get_addr()
                 };
                 State::message(Message::Peers { peers: self.peers.get_peers_for_exchange(&addr) })
             }
@@ -584,7 +576,7 @@ impl Network {
                 // If we have some consequent blocks in a bucket of 'future blocks', we add them
                 while let Some(block) = self.future_blocks.remove(&next_index) {
                     if context.chain.check_new_block(&block) == BlockQuality::Good {
-                        info!("Added block {} from future blocks", next_index);
+                        debug!("Added block {} from future blocks", next_index);
                         context.chain.add_block(block);
                     } else {
                         warn!("Block {} in future blocks is bad!", block.index);
@@ -656,21 +648,18 @@ impl Network {
 fn subscribe_to_bus(running: Arc<AtomicBool>) {
     use crate::event::Event;
     register(move |_uuid, e| {
-        match e {
-            Event::ActionQuit => {
-                running.store(false, Ordering::SeqCst);
-                return false;
-            }
-            _ => {}
+        if let Event::ActionQuit = e {
+            running.store(false, Ordering::SeqCst);
+            return false;
         }
         true
     });
 }
 
-fn encode_bytes(data: &Vec<u8>, cipher: &Option<Chacha>) -> Result<Vec<u8>, chacha20poly1305::aead::Error> {
+fn encode_bytes(data: &[u8], cipher: &Option<Chacha>) -> Result<Vec<u8>, chacha20poly1305::aead::Error> {
     match cipher {
-        None => Ok(data.clone()),
-        Some(chacha) => chacha.encrypt(data.as_slice())
+        None => Ok(data.to_owned()),
+        Some(chacha) => chacha.encrypt(data)
     }
 }
 
@@ -695,10 +684,10 @@ fn encode_message(message: &Message, cipher: &Option<Chacha>) -> Result<Vec<u8>,
     }
 }
 
-fn decode_message(data: &Vec<u8>, cipher: &Option<Chacha>) -> Result<Vec<u8>, chacha20poly1305::aead::Error> {
+fn decode_message(data: &[u8], cipher: &Option<Chacha>) -> Result<Vec<u8>, chacha20poly1305::aead::Error> {
     match cipher {
-        None => Ok(data.clone()),
-        Some(chacha) => chacha.decrypt(data.as_slice())
+        None => Ok(data.to_owned()),
+        Some(chacha) => chacha.decrypt(data)
     }
 }
 
@@ -804,13 +793,13 @@ fn read_server_handshake(stream: &mut TcpStream) -> Result<Vec<u8>, Error> {
     }
 }
 
-fn send_message(connection: &mut TcpStream, data: &Vec<u8>) -> io::Result<()> {
+fn send_message(connection: &mut TcpStream, data: &[u8]) -> io::Result<()> {
     let data_len = data.len() as u16;
     //debug!("Sending {} bytes", data_len);
     //debug!("Message: {:?}", to_hex(&data));
     let mut buf: Vec<u8> = Vec::with_capacity(data.len() + 2);
     buf.write_u16::<BigEndian>(data_len ^ 0xAAAA)?;
-    buf.write_all(&data)?;
+    buf.write_all(data)?;
     connection.write_all(&buf)?;
     connection.flush()
 }

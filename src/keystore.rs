@@ -60,7 +60,7 @@ impl Keystore {
     }
 
     pub fn from_random_bytes(key: &[u8]) -> Self {
-        let secret = SecretKey::from_bytes(&key).unwrap();
+        let secret = SecretKey::from_bytes(key).unwrap();
         let public = PublicKey::from(&secret);
         let keypair = Keypair { secret, public };
         let mut csprng = rand_old::thread_rng();
@@ -147,10 +147,7 @@ impl Keystore {
     pub fn check(message: &[u8], public_key: &[u8], signature: &[u8]) -> bool {
         let key = PublicKey::from_bytes(public_key).expect("Wrong public key!");
         let signature = Signature::from_bytes(signature).unwrap();
-        match key.verify(message, &signature) {
-            Ok(_) => true,
-            Err(_) => false
-        }
+        key.verify(message, &signature).is_ok()
     }
 
     pub fn encrypt(&self, message: &[u8]) -> Bytes {
@@ -166,6 +163,12 @@ impl Keystore {
                 Bytes::default()
             }
         }
+    }
+}
+
+impl Default for Keystore {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -185,7 +188,7 @@ impl PartialEq for Keystore {
 /// Checks if some public key is "strong" enough to mine domains
 /// TODO Optimize by caching Blakeout somewhere
 pub fn check_public_key_strength(key: &Bytes, strength: u32) -> bool {
-    let bytes = blakeout_data(&key);
+    let bytes = blakeout_data(key);
     key_hash_difficulty(&bytes) >= strength
 }
 

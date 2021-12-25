@@ -49,7 +49,7 @@ pub trait PacketBuffer {
         self.write(((val >> 24) & 0xFF) as u8)?;
         self.write(((val >> 16) & 0xFF) as u8)?;
         self.write(((val >> 8) & 0xFF) as u8)?;
-        self.write(((val >> 0) & 0xFF) as u8)?;
+        self.write((val & 0xFF) as u8)?;
 
         Ok(())
     }
@@ -95,7 +95,7 @@ pub trait PacketBuffer {
         let res = ((self.read()? as u32) << 24)
             | ((self.read()? as u32) << 16)
             | ((self.read()? as u32) << 8)
-            | ((self.read()? as u32) << 0);
+            | (self.read()? as u32);
 
         Ok(res)
     }
@@ -239,7 +239,7 @@ impl<'a, T> PacketBuffer for StreamPacketBuffer<'a, T> where T: Read + 'a {
     fn read(&mut self) -> Result<u8> {
         while self.pos >= self.buffer.len() {
             let mut local_buffer = [0; 1];
-            self.stream.read(&mut local_buffer)?;
+            self.stream.read_exact(&mut local_buffer)?;
             self.buffer.push(local_buffer[0]);
         }
 
@@ -252,7 +252,7 @@ impl<'a, T> PacketBuffer for StreamPacketBuffer<'a, T> where T: Read + 'a {
     fn get(&mut self, pos: usize) -> Result<u8> {
         while pos >= self.buffer.len() {
             let mut local_buffer = [0; 1];
-            self.stream.read(&mut local_buffer)?;
+            self.stream.read_exact(&mut local_buffer)?;
             self.buffer.push(local_buffer[0]);
         }
 
@@ -262,7 +262,7 @@ impl<'a, T> PacketBuffer for StreamPacketBuffer<'a, T> where T: Read + 'a {
     fn get_range(&mut self, start: usize, len: usize) -> Result<&[u8]> {
         while start + len > self.buffer.len() {
             let mut local_buffer = [0; 1];
-            self.stream.read(&mut local_buffer)?;
+            self.stream.read_exact(&mut local_buffer)?;
             self.buffer.push(local_buffer[0]);
         }
 

@@ -22,7 +22,7 @@ pub const BLOCK_SIGNERS_MIN: u64 = 4;
 pub const LIMITED_CONFIDENCE_DEPTH: u64 = 4;
 
 /// We start mining signing blocks after random delay, this is the max delay
-pub const BLOCK_SIGNERS_START_RANDOM: i64 = 180;
+pub const BLOCK_SIGNERS_START_RANDOM: i64 = 90;
 
 pub const NEW_DOMAINS_INTERVAL: i64 = 86400; // One day in seconds
 pub const DOMAIN_LIFETIME: i64 = 86400 * 365; // One year

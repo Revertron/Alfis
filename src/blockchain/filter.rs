@@ -25,7 +25,7 @@ impl DnsFilter for BlockchainFilter {
     fn lookup(&self, qname: &str, qtype: QueryType) -> Option<DnsPacket> {
         let search;
         let subdomain;
-        let parts: Vec<&str> = qname.rsplitn(3, ".").collect();
+        let parts: Vec<&str> = qname.rsplitn(3, '.').collect();
         match parts.len() {
             1 => {
                 let mut packet = DnsPacket::new();
@@ -193,10 +193,10 @@ impl BlockchainFilter {
         });
     }
 
-    fn get_zone_response(&self, zone: &str, serial: u32, mut packet: &mut DnsPacket) -> bool {
+    fn get_zone_response(&self, zone: &str, serial: u32, packet: &mut DnsPacket) -> bool {
         let have_zone = self.context.lock().unwrap().chain.is_available_zone(zone);
         if have_zone {
-            BlockchainFilter::add_soa_record(zone.to_owned(), serial, &mut packet);
+            BlockchainFilter::add_soa_record(zone.to_owned(), serial, packet);
         }
         have_zone
     }

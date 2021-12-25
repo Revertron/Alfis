@@ -1,7 +1,5 @@
 //! implements the DNS protocol in a transport agnostic fashion
 
-//use std::io::{Error, ErrorKind};
-use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::net::{Ipv4Addr, Ipv6Addr};
@@ -78,18 +76,12 @@ impl QueryType {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, Ord, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct TransientTtl(pub u32);
 
 impl PartialEq<TransientTtl> for TransientTtl {
-    fn eq(&self, _: &TransientTtl) -> bool {
-        true
-    }
-}
-
-impl PartialOrd<TransientTtl> for TransientTtl {
-    fn partial_cmp(&self, _: &TransientTtl) -> Option<Ordering> {
-        Some(Ordering::Equal)
+    fn eq(&self, other: &TransientTtl) -> bool {
+        self.0 == other.0
     }
 }
 
@@ -200,7 +192,7 @@ impl DnsRecord {
                     ((raw_addr >> 24) & 0xFF) as u8,
                     ((raw_addr >> 16) & 0xFF) as u8,
                     ((raw_addr >> 8) & 0xFF) as u8,
-                    ((raw_addr >> 0) & 0xFF) as u8
+                    (raw_addr & 0xFF) as u8
                 );
 
                 Ok(DnsRecord::A { domain, addr, ttl: TransientTtl(ttl) })
@@ -212,13 +204,13 @@ impl DnsRecord {
                 let raw_addr4 = buffer.read_u32()?;
                 let addr = Ipv6Addr::new(
                     ((raw_addr1 >> 16) & 0xFFFF) as u16,
-                    ((raw_addr1 >> 0) & 0xFFFF) as u16,
+                    (raw_addr1 & 0xFFFF) as u16,
                     ((raw_addr2 >> 16) & 0xFFFF) as u16,
-                    ((raw_addr2 >> 0) & 0xFFFF) as u16,
+                    (raw_addr2 & 0xFFFF) as u16,
                     ((raw_addr3 >> 16) & 0xFFFF) as u16,
-                    ((raw_addr3 >> 0) & 0xFFFF) as u16,
+                    (raw_addr3 & 0xFFFF) as u16,
                     ((raw_addr4 >> 16) & 0xFFFF) as u16,
-                    ((raw_addr4 >> 0) & 0xFFFF) as u16
+                    (raw_addr4 & 0xFFFF) as u16
                 );
 
                 Ok(DnsRecord::AAAA { domain, addr, ttl: TransientTtl(ttl) })
@@ -578,7 +570,7 @@ impl ResultCode {
             3 => ResultCode::NXDOMAIN,
             4 => ResultCode::NOTIMP,
             5 => ResultCode::REFUSED,
-            0 | _ => ResultCode::NOERROR
+            _ => ResultCode::NOERROR
         }
     }
 }
@@ -642,7 +634,7 @@ impl DnsHeader {
         )?;
 
         buffer.write_u8(
-            (self.rescode.clone() as u8)
+            (self.rescode as u8)
                 | ((self.checking_disabled as u8) << 4)
                 | ((self.authed_data as u8) << 5)
                 | ((self.z as u8) << 6)
@@ -691,25 +683,25 @@ impl DnsHeader {
 
 impl fmt::Display for DnsHeader {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "DnsHeader:\n")?;
-        write!(f, "\tid: {0}\n", self.id)?;
+        writeln!(f, "DnsHeader:")?;
+        writeln!(f, "\tid: {0}", self.id)?;
 
-        write!(f, "\trecursion_desired: {0}\n", self.recursion_desired)?;
-        write!(f, "\ttruncated_message: {0}\n", self.truncated_message)?;
-        write!(f, "\tauthoritative_answer: {0}\n", self.authoritative_answer)?;
-        write!(f, "\topcode: {0}\n", self.opcode)?;
-        write!(f, "\tresponse: {0}\n", self.response)?;
+        writeln!(f, "\trecursion_desired: {0}", self.recursion_desired)?;
+        writeln!(f, "\ttruncated_message: {0}", self.truncated_message)?;
+        writeln!(f, "\tauthoritative_answer: {0}", self.authoritative_answer)?;
+        writeln!(f, "\topcode: {0}", self.opcode)?;
+        writeln!(f, "\tresponse: {0}", self.response)?;
 
-        write!(f, "\trescode: {:?}\n", self.rescode)?;
-        write!(f, "\tchecking_disabled: {0}\n", self.checking_disabled)?;
-        write!(f, "\tauthed_data: {0}\n", self.authed_data)?;
-        write!(f, "\tz: {0}\n", self.z)?;
-        write!(f, "\trecursion_available: {0}\n", self.recursion_available)?;
+        writeln!(f, "\trescode: {:?}", self.rescode)?;
+        writeln!(f, "\tchecking_disabled: {0}", self.checking_disabled)?;
+        writeln!(f, "\tauthed_data: {0}", self.authed_data)?;
+        writeln!(f, "\tz: {0}", self.z)?;
+        writeln!(f, "\trecursion_available: {0}", self.recursion_available)?;
 
-        write!(f, "\tquestions: {0}\n", self.questions)?;
-        write!(f, "\tanswers: {0}\n", self.answers)?;
-        write!(f, "\tauthoritative_entries: {0}\n", self.authoritative_entries)?;
-        write!(f, "\tresource_entries: {0}\n", self.resource_entries)?;
+        writeln!(f, "\tquestions: {0}", self.questions)?;
+        writeln!(f, "\tanswers: {0}", self.answers)?;
+        writeln!(f, "\tauthoritative_entries: {0}", self.authoritative_entries)?;
+        writeln!(f, "\tresource_entries: {0}", self.resource_entries)?;
 
         Ok(())
     }
@@ -752,9 +744,9 @@ impl DnsQuestion {
 
 impl fmt::Display for DnsQuestion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "DnsQuestion:\n")?;
-        write!(f, "\tname: {0}\n", self.name)?;
-        write!(f, "\trecord type: {:?}\n", self.qtype)?;
+        writeln!(f, "DnsQuestion:")?;
+        writeln!(f, "\tname: {0}", self.name)?;
+        writeln!(f, "\trecord type: {:?}", self.qtype)?;
 
         Ok(())
     }
@@ -946,7 +938,7 @@ impl DnsPacket {
         let mut test_buffer = VectorPacketBuffer::new();
 
         let mut size = self.header.binary_len();
-        for ref question in &self.questions {
+        for question in &self.questions {
             size += question.binary_len();
             question.write(&mut test_buffer)?;
         }

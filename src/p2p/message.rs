@@ -2,6 +2,7 @@ extern crate serde;
 extern crate serde_json;
 
 use serde::{Deserialize, Serialize};
+use serde_cbor::Error;
 
 use crate::Bytes;
 
@@ -21,11 +22,8 @@ pub enum Message {
 }
 
 impl Message {
-    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, ()> {
-        match serde_cbor::from_slice(bytes.as_slice()) {
-            Ok(cmd) => Ok(cmd),
-            Err(_) => Err(())
-        }
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<Message, Error> {
+        serde_cbor::from_slice(bytes.as_slice())
     }
 
     pub fn hand(app_version: &str, origin: &str, version: u32, public: bool, rand_id: &str) -> Self {

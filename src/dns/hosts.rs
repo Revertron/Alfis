@@ -20,13 +20,13 @@ impl HostsFilter {
                 file.read_to_string(&mut text).unwrap();
                 let mut map = HashMap::new();
 
-                let list: Vec<_> = text.split("\n").collect();
+                let list: Vec<_> = text.split('\n').collect();
                 for s in list {
-                    if s.is_empty() || s.starts_with("#") {
+                    if s.is_empty() || s.starts_with('#') {
                         continue;
                     }
                     let string = s.replace('\t', " ");
-                    let parts: Vec<_> = string.splitn(2, " ").collect();
+                    let parts: Vec<_> = string.splitn(2, ' ').collect();
                     if parts.len() != 2 {
                         continue;
                     }
@@ -34,6 +34,7 @@ impl HostsFilter {
                     let domain = parts[1].trim().to_owned();
                     if let Ok(addr) = ip.parse::<IpAddr>() {
                         if !domain.is_empty() {
+                            #[allow(clippy::or_fun_call)]
                             map.entry(domain).or_insert(vec![addr]);
                         }
                     }
@@ -58,10 +59,10 @@ impl DnsFilter for HostsFilter {
             for addr in list {
                 match addr {
                     IpAddr::V4(addr) if qtype == QueryType::A => {
-                        packet.answers.push(DnsRecord::A { domain: qname.to_owned(), addr: addr.clone(), ttl: TransientTtl(2) });
+                        packet.answers.push(DnsRecord::A { domain: qname.to_owned(), addr: *addr, ttl: TransientTtl(2) });
                     }
                     IpAddr::V6(addr) if qtype == QueryType::AAAA => {
-                        packet.answers.push(DnsRecord::AAAA { domain: qname.to_owned(), addr: addr.clone(), ttl: TransientTtl(2) });
+                        packet.answers.push(DnsRecord::AAAA { domain: qname.to_owned(), addr: *addr, ttl: TransientTtl(2) });
                     }
                     _ => {}
                 }

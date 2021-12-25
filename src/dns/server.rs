@@ -67,8 +67,8 @@ fn resolve_cnames(lookup_list: &[DnsRecord], results: &mut Vec<DnsPacket>, resol
         return;
     }
 
-    for ref rec in lookup_list {
-        match **rec {
+    for rec in lookup_list {
+        match *rec {
             DnsRecord::CNAME { ref host, .. } | DnsRecord::SRV { ref host, .. } => {
                 if let Ok(result2) = resolver.resolve(host, qtype, true) {
                     let new_unmatched = result2.get_unresolved_cnames(qtype);
@@ -268,7 +268,7 @@ impl DnsServer for DnsUdpServer {
                         }
                     };
                     // If we got a request resent in 100ms interval, then we just skip it
-                    let key = (src.clone(), request.header.id);
+                    let key = (src, request.header.id);
                     let cur_time = Utc::now().timestamp_millis();
                     if let Some(time) = working_ids.get(&key) {
                         if time + 100 > cur_time {

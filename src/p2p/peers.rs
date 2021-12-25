@@ -53,51 +53,48 @@ impl Peers {
 
     pub fn close_peer(&mut self, registry: &Registry, token: &Token) {
         let peer = self.peers.get_mut(token);
-        match peer {
-            Some(peer) => {
-                let stream = peer.get_stream();
-                let _ = stream.shutdown(Shutdown::Both);
-                let _ = registry.deregister(stream);
-                match peer.get_state() {
-                    State::Connecting => {
-                        debug!("Peer connection {} to {:?} has timed out", &token.0, &peer.get_addr());
-                    }
-                    State::Connected => {
-                        debug!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
-                    }
-                    State::Idle { .. } | State::Message { .. } => {
-                        debug!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
-                    }
-                    State::Error => {
-                        debug!("Peer connection {} to {:?} has shut down on error", &token.0, &peer.get_addr());
-                    }
-                    State::Banned => {
-                        debug!("Peer connection {} to {:?} has shut down, banned", &token.0, &peer.get_addr());
-                        self.ignored.insert(peer.get_addr().ip().clone());
-                    }
-                    State::Offline { .. } => {
-                        debug!("Peer connection {} to {:?} is offline", &token.0, &peer.get_addr());
-                    }
-                    State::SendLoop => {
-                        debug!("Peer connection {} from {:?} is a loop", &token.0, &peer.get_addr());
-                    }
-                    State::Loop => {
-                        debug!("Peer connection {} to {:?} is a loop", &token.0, &peer.get_addr());
-                    }
-                    State::Twin => {
-                        debug!("Peer connection {} to {:?} is a twin", &token.0, &peer.get_addr());
-                    }
-                    State::ServerHandshake => {
-                        debug!("Peer connection {} from {:?} didn't shake hands", &token.0, &peer.get_addr());
-                    }
-                    State::HandshakeFinished => {
-                        debug!("Peer connection {} from {:?} shook hands, but then failed", &token.0, &peer.get_addr());
-                    }
+        if let Some(peer) = peer {
+            let stream = peer.get_stream();
+            let _ = stream.shutdown(Shutdown::Both);
+            let _ = registry.deregister(stream);
+            match peer.get_state() {
+                State::Connecting => {
+                    debug!("Peer connection {} to {:?} has timed out", &token.0, &peer.get_addr());
                 }
-
-                self.peers.remove(token);
+                State::Connected => {
+                    debug!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
+                }
+                State::Idle { .. } | State::Message { .. } => {
+                    debug!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
+                }
+                State::Error => {
+                    debug!("Peer connection {} to {:?} has shut down on error", &token.0, &peer.get_addr());
+                }
+                State::Banned => {
+                    debug!("Peer connection {} to {:?} has shut down, banned", &token.0, &peer.get_addr());
+                    self.ignored.insert(peer.get_addr().ip());
+                }
+                State::Offline { .. } => {
+                    debug!("Peer connection {} to {:?} is offline", &token.0, &peer.get_addr());
+                }
+                State::SendLoop => {
+                    debug!("Peer connection {} from {:?} is a loop", &token.0, &peer.get_addr());
+                }
+                State::Loop => {
+                    debug!("Peer connection {} to {:?} is a loop", &token.0, &peer.get_addr());
+                }
+                State::Twin => {
+                    debug!("Peer connection {} to {:?} is a twin", &token.0, &peer.get_addr());
+                }
+                State::ServerHandshake => {
+                    debug!("Peer connection {} from {:?} didn't shake hands", &token.0, &peer.get_addr());
+                }
+                State::HandshakeFinished => {
+                    debug!("Peer connection {} from {:?} shook hands, but then failed", &token.0, &peer.get_addr());
+                }
             }
-            None => {}
+
+            self.peers.remove(token);
         }
     }
 
@@ -129,16 +126,14 @@ impl Peers {
 
             if self.peers
                 .iter()
-                .find(|(_token, peer)| peer.get_addr().ip() == addr.ip())
-                .is_some() {
+                .any(|(_token, peer)| peer.get_addr().ip() == addr.ip()) {
                 //debug!("Skipping address from exchange: {}", &addr);
                 continue;
             }
 
             if self.new_peers
                 .iter()
-                .find(|a| a.ip().eq(&addr.ip()))
-                .is_some() {
+                .any(|a| a.ip().eq(&addr.ip())) {
                 //debug!("Skipping address from exchange: {}", &addr);
                 continue;
             }
@@ -223,13 +218,13 @@ impl Peers {
         if !peer.get_state().is_loop() {
             peer.set_state(State::Banned);
         }
-        let ip = peer.get_addr().ip().clone();
+        let ip = peer.get_addr().ip();
         self.close_peer(registry, token);
         self.ignored.insert(ip);
         match self.peers
             .iter()
             .find(|(_, p)| p.get_addr().ip() == ip)
-            .map(|(t, _)| t.clone()) {
+            .map(|(t, _)| *t) {
             None => {}
             Some(t) => {
                 self.close_peer(registry, &t);
@@ -240,7 +235,7 @@ impl Peers {
 
     pub fn ignore_ip(&mut self, ip: &IpAddr) {
         info!("Adding {} to ignored peers", &ip);
-        self.ignored.insert(ip.clone());
+        self.ignored.insert(*ip);
     }
 
     pub fn skip_peer_connection(&self, addr: &SocketAddr) -> bool {
@@ -257,22 +252,19 @@ impl Peers {
 
         let random_time = random::<u64>() % PING_PERIOD;
         for (token, peer) in self.peers.iter_mut() {
-            match peer.get_state() {
-                State::Idle { from } => {
-                    if from.elapsed().as_secs() >= PING_PERIOD + random_time {
-                        // Sometimes we check for new peers instead of pinging
-                        let message = if nodes < MAX_NODES && random::<bool>() {
-                            Message::GetPeers
-                        } else {
-                            Message::ping(height, hash.clone())
-                        };
+            if let State::Idle { from } = peer.get_state() {
+                if from.elapsed().as_secs() >= PING_PERIOD + random_time {
+                    // Sometimes we check for new peers instead of pinging
+                    let message = if nodes < MAX_NODES && random::<bool>() {
+                        Message::GetPeers
+                    } else {
+                        Message::ping(height, hash.clone())
+                    };
 
-                        peer.set_state(State::message(message));
-                        let stream = peer.get_stream();
-                        registry.reregister(stream, token.clone(), Interest::WRITABLE).unwrap();
-                    }
+                    peer.set_state(State::message(message));
+                    let stream = peer.get_stream();
+                    registry.reregister(stream, *token, Interest::WRITABLE).unwrap();
                 }
-                _ => {}
             }
         }
 
@@ -283,11 +275,9 @@ impl Peers {
         }
 
         // If someone has more blocks we sync
-        if nodes >= MIN_CONNECTED_NODES_START_SYNC {
-            if height < max_height {
-                let count = min(max_height - height, nodes as u64);
-                self.ask_blocks_from_peers(registry, height, height + count, have_blocks);
-            }
+        if nodes >= MIN_CONNECTED_NODES_START_SYNC && height < max_height {
+            let count = min(max_height - height, nodes as u64);
+            self.ask_blocks_from_peers(registry, height, height + count, have_blocks);
         }
 
         // If someone has less blocks (we mined a new block) we send a ping with our height
@@ -300,7 +290,7 @@ impl Peers {
                 None => {}
                 Some((token, peer)) => {
                     debug!("Peer {} is behind, sending ping", &peer.get_addr().ip());
-                    registry.reregister(peer.get_stream(), token.clone(), Interest::WRITABLE).unwrap();
+                    registry.reregister(peer.get_stream(), *token, Interest::WRITABLE).unwrap();
                     peer.set_state(State::message(Message::Ping { height, hash }));
                     self.update_behind_ping_time();
                 }
@@ -323,9 +313,9 @@ impl Peers {
         for (token, peer) in self.peers.iter_mut() {
             if peer.get_state().need_reconnect() {
                 let addr = peer.get_addr();
-                if let Ok(mut stream) = TcpStream::connect(addr.clone()) {
+                if let Ok(mut stream) = TcpStream::connect(addr) {
                     debug!("Trying to reconnect to peer {}, count {}", &addr, peer.reconnects());
-                    registry.register(&mut stream, token.clone(), Interest::WRITABLE).unwrap();
+                    registry.register(&mut stream, *token, Interest::WRITABLE).unwrap();
                     peer.set_state(State::Connecting);
                     peer.inc_reconnects();
                     peer.set_stream(stream);
@@ -346,7 +336,7 @@ impl Peers {
             None => {}
             Some((token, peer)) => {
                 debug!("Peer {} is higher than we are, requesting block {}", &peer.get_addr().ip(), height + 1);
-                registry.reregister(peer.get_stream(), token.clone(), Interest::WRITABLE).unwrap();
+                registry.reregister(peer.get_stream(), *token, Interest::WRITABLE).unwrap();
                 peer.set_state(State::message(Message::GetBlock { index: height + 1 }));
             }
         }
@@ -366,7 +356,7 @@ impl Peers {
                 continue;
             }
             debug!("Peer {} is higher than we are, requesting block {}", &peer.get_addr().ip(), index);
-            registry.reregister(peer.get_stream(), token.clone(), Interest::WRITABLE).unwrap();
+            registry.reregister(peer.get_stream(), *token, Interest::WRITABLE).unwrap();
             peer.set_state(State::message(Message::GetBlock { index }));
             index += 1;
             if index > max_height {
@@ -390,7 +380,7 @@ impl Peers {
     }
 
     /// Connecting to configured (bootstrap) peers
-    pub fn connect_peers(&mut self, peers_addrs: &Vec<String>, registry: &Registry, unique_token: &mut Token, yggdrasil_only: bool) {
+    pub fn connect_peers(&mut self, peers_addrs: &[String], registry: &Registry, unique_token: &mut Token, yggdrasil_only: bool) {
         let mut set = HashSet::new();
         for peer in peers_addrs.iter() {
             info!("Resolving address {}", peer);
@@ -405,7 +395,7 @@ impl Peers {
                 break;
             }
 
-            while addresses.len() > 0 {
+            while !addresses.is_empty() {
                 let addr = addresses.remove(0);
                 if !set.contains(&addr) {
                     match self.connect_peer(&addr, registry, unique_token, yggdrasil_only) {
@@ -420,7 +410,7 @@ impl Peers {
             }
 
             // Copy others to new_peers, to connect later
-            if addresses.len() > 0 {
+            if !addresses.is_empty() {
                 self.new_peers.append(&mut addresses);
             }
         }
@@ -435,13 +425,13 @@ impl Peers {
             return Err(io::Error::from(io::ErrorKind::InvalidInput));
         }
         trace!("Connecting to peer {}", &addr);
-        match TcpStream::connect(addr.clone()) {
+        match TcpStream::connect(*addr) {
             Ok(mut stream) => {
                 //stream.set_nodelay(true)?;
                 let token = next(unique_token);
                 trace!("Created connection {}, to peer {}", &token.0, &addr);
                 registry.register(&mut stream, token, Interest::WRITABLE).unwrap();
-                let mut peer = Peer::new(addr.clone(), stream, State::Connecting, false);
+                let mut peer = Peer::new(*addr, stream, State::Connecting, false);
                 peer.set_public(true);
                 self.peers.insert(token, peer);
                 Ok(())
@@ -456,6 +446,12 @@ impl Peers {
 
     pub fn need_behind_ping(&self) -> bool {
         self.behind_ping_sent_time + 5 < Utc::now().timestamp()
+    }
+}
+
+impl Default for Peers {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

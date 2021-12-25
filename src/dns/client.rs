@@ -131,7 +131,7 @@ impl DnsNetworkClient {
         let mut socket = TcpStream::connect(server)?;
 
         write_packet_length(&mut socket, req_buffer.pos())?;
-        socket.write(&req_buffer.buf[0..req_buffer.pos])?;
+        socket.write_all(&req_buffer.buf[0..req_buffer.pos])?;
         socket.flush()?;
 
         let _ = read_packet_length(&mut socket)?;
@@ -409,7 +409,7 @@ impl HttpsDnsClient {
             .max_idle_connections_per_host(8)
             .max_idle_connections(16)
             .resolver(move |addr: &str| {
-                let addr = match addr.find(":") {
+                let addr = match addr.find(':') {
                     Some(index) => addr[0..index].to_string(),
                     None => addr.to_string()
                 };
@@ -427,17 +427,15 @@ impl HttpsDnsClient {
                 for server in &servers {
                     if let Ok(res) = dns_client.send_udp_query(&addr, QueryType::A, server, true) {
                         for answer in &res.answers {
-                            match answer {
-                                DnsRecord::A { addr, .. } => result.push(IpAddr::V4(addr.clone())),
-                                _ => {}
+                            if let DnsRecord::A { addr, .. } = answer {
+                                result.push(IpAddr::V4(*addr))
                             }
                         }
                     }
                     if let Ok(res) = dns_client.send_udp_query(&addr, QueryType::AAAA, server, true) {
                         for answer in &res.answers {
-                            match answer {
-                                DnsRecord::AAAA { addr, .. } => result.push(IpAddr::V6(addr.clone())),
-                                _ => {}
+                            if let DnsRecord::AAAA { addr, .. } = answer {
+                                result.push(IpAddr::V6(*addr))
                             }
                         }
                     }
@@ -496,7 +494,7 @@ impl DnsClient for HttpsDnsClient {
         let response = self.agent
             .post(doh_url)
             .set("Content-Type", "application/dns-message")
-            .send_bytes(&req_buffer.buffer.as_slice());
+            .send_bytes(req_buffer.buffer.as_slice());
 
         match response {
             Ok(response) => {
@@ -512,7 +510,7 @@ impl DnsClient for HttpsDnsClient {
                                             .take(4096)
                                             .read_to_end(&mut bytes)?;
                                         let mut buffer = VectorPacketBuffer::new();
-                                        buffer.buffer.extend_from_slice(&bytes.as_slice());
+                                        buffer.buffer.extend_from_slice(bytes.as_slice());
                                         if let Ok(packet) = DnsPacket::from_buffer(&mut buffer) {
                                             return Ok(packet);
                                         }

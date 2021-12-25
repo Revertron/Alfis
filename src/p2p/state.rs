@@ -33,18 +33,11 @@ impl State {
     }
 
     pub fn is_idle(&self) -> bool {
-        match self {
-            State::Idle { .. } => true,
-            _ => false
-        }
+        matches!(self, State::Idle { .. })
     }
 
     pub fn is_loop(&self) -> bool {
-        match self {
-            State::Loop { .. } => true,
-            State::SendLoop { .. } => true,
-            _ => false
-        }
+        matches!(self, State::Loop { .. } | State::SendLoop { .. })
     }
 
     pub fn disabled(&self) -> bool {

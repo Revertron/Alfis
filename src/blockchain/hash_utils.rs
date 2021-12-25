@@ -30,13 +30,13 @@ pub fn check_block_signature(block: &Block) -> bool {
 /// Hashes some identity (domain in case of DNS). If you give it a public key, it will hash with it as well.
 /// Giving public key is needed to create a confirmation field in [Transaction](crate::blockchain::Transaction)
 pub fn hash_identity(identity: &str, key: Option<&Bytes>) -> Bytes {
-    let base = hash_sha256(identity.as_bytes());
+    let mut base = hash_sha256(identity.as_bytes());
     let identity = hash_sha256(&base);
     match key {
         None => Bytes::from_bytes(&identity),
         Some(key) => {
             let mut buf = Vec::new();
-            buf.append(&mut base.clone());
+            buf.append(&mut base);
             buf.append(&mut key.to_vec());
             Bytes::from_bytes(&hash_sha256(&buf))
         }
