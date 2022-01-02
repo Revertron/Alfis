@@ -52,49 +52,48 @@ impl Peers {
     }
 
     pub fn close_peer(&mut self, registry: &Registry, token: &Token) {
-        let peer = self.peers.get_mut(token);
-        if let Some(peer) = peer {
+        let peer = self.peers.remove(token);
+        if let Some(mut peer) = peer {
             let stream = peer.get_stream();
             let _ = stream.shutdown(Shutdown::Both);
             let _ = registry.deregister(stream);
+            let addr = peer.get_addr();
             match peer.get_state() {
                 State::Connecting => {
-                    debug!("Peer connection {} to {:?} has timed out", &token.0, &peer.get_addr());
+                    debug!("Peer connection {} to {:?} has timed out", &token.0, &addr);
                 }
                 State::Connected => {
-                    debug!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
+                    debug!("Peer connection {} to {:?} disconnected", &token.0, &addr);
                 }
                 State::Idle { .. } | State::Message { .. } => {
-                    debug!("Peer connection {} to {:?} disconnected", &token.0, &peer.get_addr());
+                    debug!("Peer connection {} to {:?} disconnected", &token.0, &addr);
                 }
                 State::Error => {
-                    debug!("Peer connection {} to {:?} has shut down on error", &token.0, &peer.get_addr());
+                    debug!("Peer connection {} to {:?} has shut down on error", &token.0, &addr);
                 }
                 State::Banned => {
-                    debug!("Peer connection {} to {:?} has shut down, banned", &token.0, &peer.get_addr());
-                    self.ignored.insert(peer.get_addr().ip());
+                    debug!("Peer connection {} to {:?} has shut down, banned", &token.0, &addr);
+                    self.ignored.insert(addr.ip());
                 }
                 State::Offline { .. } => {
-                    debug!("Peer connection {} to {:?} is offline", &token.0, &peer.get_addr());
+                    debug!("Peer connection {} to {:?} is offline", &token.0, &addr);
                 }
                 State::SendLoop => {
-                    debug!("Peer connection {} from {:?} is a loop", &token.0, &peer.get_addr());
+                    debug!("Peer connection {} from {:?} is a loop", &token.0, &addr);
                 }
                 State::Loop => {
-                    debug!("Peer connection {} to {:?} is a loop", &token.0, &peer.get_addr());
+                    debug!("Peer connection {} to {:?} is a loop", &token.0, &addr);
                 }
                 State::Twin => {
-                    debug!("Peer connection {} to {:?} is a twin", &token.0, &peer.get_addr());
+                    debug!("Peer connection {} to {:?} is a twin", &token.0, &addr);
                 }
                 State::ServerHandshake => {
-                    debug!("Peer connection {} from {:?} didn't shake hands", &token.0, &peer.get_addr());
+                    debug!("Peer connection {} from {:?} didn't shake hands", &token.0, &addr);
                 }
                 State::HandshakeFinished => {
-                    debug!("Peer connection {} from {:?} shook hands, but then failed", &token.0, &peer.get_addr());
+                    debug!("Peer connection {} from {:?} shook hands, but then failed", &token.0, &addr);
                 }
             }
-
-            self.peers.remove(token);
         }
     }
 
