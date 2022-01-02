@@ -7,7 +7,7 @@ check_blocks = 8
 
 # Network settings
 [net]
-# All bootstap nodes
+# All bootstrap nodes
 peers = ["peer-v4.alfis.name:4244", "peer-v6.alfis.name:4244", "peer-ygg.alfis.name:4244"]
 # Your node will listen on that address for other nodes to connect
 listen = "[::]:4244"
