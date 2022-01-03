@@ -143,5 +143,5 @@ fn default_key_files() -> Vec<String> {
 }
 
 fn default_dns_bootstraps() -> Vec<String> {
-    vec![String::from("9.9.9.9:53"), String::from("94.140.14.140:53")]
+    vec![String::from("9.9.9.9:53"), String::from("94.140.14.14:53")]
 }

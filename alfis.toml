@@ -30,7 +30,7 @@ forwarders = ["https://dns.adguard.com/dns-query"]
 #forwarders = ["1.1.1.1:53", "1.0.0.1:53"]
 
 # Bootstrap DNS-servers to resolve domains of DoH providers
-bootstraps = ["9.9.9.9:53", "94.140.14.140:53"]
+bootstraps = ["9.9.9.9:53", "94.140.14.14:53"]
 
 # Hosts file support (resolve local names or block ads)
 #hosts = ["system", "adblock.txt"]
