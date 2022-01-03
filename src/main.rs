@@ -35,7 +35,7 @@ const SETTINGS_FILENAME: &str = "alfis.toml";
 const LOG_TARGET_MAIN: &str = "alfis::Main";
 
 fn main() {
-    #[allow(unused_assignments)]
+    #[allow(unused_assignments, unused_mut)]
     let mut console_attached = true;
     // When linked with the windows subsystem windows won't automatically attach
     // to the console of the parent process, so we do it explicitly. This fails silently if the parent has no console.
