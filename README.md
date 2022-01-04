@@ -107,6 +107,12 @@ systemctl enable --now alfis
 After that configuration is in file `/etc/alfis.conf` and data is saved to `/var/lib/alfis`.
 If you have some DNS server bound to port 53, it will not properly start. Deal with it on your own.
 
+### Docker
+If you want to run ALFIS in docker container, you can do this by running:
+```shell
+docker run --rm --name alfis -p 53:53/tcp -p 53:53/udp cofob/alfis
+```
+
 ### GUI version Windows/Linux/macOS (if you want to create and change domains)
 If you want to create and manage your own domains on blockchain, you will need a version with GUI.
 You can download it from [releases](https://github.com/Revertron/Alfis/releases) section, choose appropriate OS and architecture version.
