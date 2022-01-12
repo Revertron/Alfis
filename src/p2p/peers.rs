@@ -1,8 +1,8 @@
 use std::cmp::min;
 use std::collections::{HashMap, HashSet};
-use std::io;
+use std::{io, thread};
 use std::net::{IpAddr, Shutdown, SocketAddr, ToSocketAddrs};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use chrono::Utc;
 #[allow(unused_imports)]
@@ -382,18 +382,12 @@ impl Peers {
     pub fn connect_peers(&mut self, peers_addrs: &[String], registry: &Registry, unique_token: &mut Token, yggdrasil_only: bool) {
         let mut set = HashSet::new();
         for peer in peers_addrs.iter() {
-            info!("Resolving address {}", peer);
-            let mut addresses: Vec<SocketAddr> = match peer.to_socket_addrs() {
-                Ok(peers) => peers.collect(),
-                Err(_) => { error!("Can't resolve address {}", &peer); continue; }
-            };
-            info!("Got addresses: {:?}", &addresses);
-
-            // At first we connect to 5 peer addresses
+            // At first we connect to 10 peer addresses
             if set.len() >= 10 {
                 break;
             }
 
+            let mut addresses = Self::resolve(peer);
             while !addresses.is_empty() {
                 let addr = addresses.remove(0);
                 if !set.contains(&addr) {
@@ -413,6 +407,29 @@ impl Peers {
                 self.new_peers.append(&mut addresses);
             }
         }
+    }
+
+    /// Tries to resolve some address several times with timeout
+    fn resolve(peer: &str) -> Vec<SocketAddr> {
+        info!("Resolving address {}", peer);
+        let start = Instant::now();
+        let delay = Duration::from_millis(20);
+        let timeout = Duration::from_millis(200);
+        while start.elapsed() < timeout {
+            let addresses: Vec<SocketAddr> = match peer.to_socket_addrs() {
+                Ok(peers) => peers.collect(),
+                Err(e) => {
+                    trace!("Can't resolve address {}: {}", &peer, e);
+                    thread::sleep(delay);
+                    continue;
+                }
+            };
+            if !addresses.is_empty() {
+                info!("Got addresses: {:?}", &addresses);
+                return addresses;
+            }
+        }
+        vec![]
     }
 
     fn connect_peer(&mut self, addr: &SocketAddr, registry: &Registry, unique_token: &mut Token, yggdrasil_only: bool) -> io::Result<()> {

@@ -4,7 +4,7 @@ extern crate serde_json;
 use std::cmp::max;
 use std::collections::{HashMap, HashSet};
 use std::io::{Error, ErrorKind, Read, Write};
-use std::net::{IpAddr, Shutdown, SocketAddr, SocketAddrV4};
+use std::net::{IpAddr, Shutdown, SocketAddr, SocketAddrV4, ToSocketAddrs};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -69,6 +69,7 @@ impl Network {
         poll.registry().register(&mut server, SERVER, Interest::READABLE).expect("Error registering poll");
 
         // Starting peer connections to bootstrap nodes
+        wait_for_internet(WAIT_FOR_INTERNET);
         self.peers.connect_peers(&peers_addrs, poll.registry(), &mut self.token, yggdrasil_only);
 
         let mut ui_timer = Instant::now();
@@ -82,6 +83,7 @@ impl Network {
         loop {
             if self.peers.get_peers_count() == 0 && bootstrap_timer.elapsed().as_secs() > 60 {
                 warn!("Restarting swarm connections...");
+                wait_for_internet(WAIT_FOR_INTERNET);
                 // Starting peer connections to bootstrap nodes
                 self.peers.connect_peers(&peers_addrs, poll.registry(), &mut self.token, yggdrasil_only);
                 bootstrap_timer = Instant::now();
@@ -146,9 +148,7 @@ impl Network {
                     }
                 }
             }
-            if !events.is_empty() {
-                last_events_time = Instant::now();
-            } else if last_events_time.elapsed().as_secs() > MAX_IDLE_SECONDS {
+            if last_events_time.elapsed().as_secs() > MAX_IDLE_SECONDS {
                 if self.peers.get_peers_count() > 0 {
                     warn!("Something is wrong with swarm connections, closing all.");
                     self.peers.close_all_peers(poll.registry());
@@ -156,6 +156,8 @@ impl Network {
                 } else {
                     thread::sleep(POLL_TIMEOUT.unwrap());
                 }
+            } else if !events.is_empty() {
+                last_events_time = Instant::now();
             }
 
             if ui_timer.elapsed().as_millis() > UI_REFRESH_DELAY_MS {
@@ -841,6 +843,27 @@ fn send_message(connection: &mut TcpStream, data: &[u8]) -> io::Result<()> {
     buf.write_all(data)?;
     connection.write_all(&buf)?;
     connection.flush()
+}
+
+fn wait_for_internet(timeout: Duration) {
+    let addr = "alfis.name:443";
+    let start = Instant::now();
+    let delay = Duration::from_millis(200);
+
+    trace!("Waiting for internet connection...");
+    while start.elapsed() < timeout {
+        match addr.to_socket_addrs() {
+            Ok(_) => {
+                trace!("We got internet connection!");
+                return;
+            },
+            Err(_) => {
+                thread::sleep(delay);
+                continue;
+            }
+        };
+    }
+    trace!("Waiting for internet connection has timed out.")
 }
 
 fn would_block(err: &io::Error) -> bool {

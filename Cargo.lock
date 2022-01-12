@@ -84,7 +84,7 @@ dependencies = [
 
 [[package]]
 name = "alfis"
-version = "0.6.10"
+version = "0.6.11"
 dependencies = [
  "base64",
  "bincode",
@@ -112,7 +112,7 @@ dependencies = [
  "serde_cbor",
  "serde_derive",
  "serde_json",
- "sha2 0.10.0",
+ "sha2 0.10.1",
  "signature",
  "simplelog",
  "sqlite",
@@ -1130,9 +1130,9 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "900d964dd36bb15bcf2f2b35694c072feab74969a54f2bbeec7a2d725d2bdcb6"
+checksum = "99c3bd8169c58782adad9290a9af5939994036b76187f7b4f0e6de91dbbfc0ec"
 dependencies = [
  "cfg-if",
  "cpufeatures",
@@ -1141,9 +1141,9 @@ dependencies = [
 
 [[package]]
 name = "signature"
-version = "1.4.0"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02658e48d89f2bec991f9a78e69cfa4c316f8d6a6c4ec12fae1aeb263d486788"
+checksum = "f054c6c1a6e95179d6f23ed974060dcefb2d9388bb7256900badad682c499de4"
 
 [[package]]
 name = "simplelog"
@@ -1322,9 +1322,9 @@ dependencies = [
 
 [[package]]
 name = "tinyfiledialogs"
-version = "3.8.3"
+version = "3.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9545b2375cbcb7a7d70cca5e92fbaa096fd89bebd2fbc54a3da7f37d15a54e6b"
+checksum = "adc577626a3c26e4e1d470dbe5fe33d6fabc14e57114cb377acdb4da1a17dde9"
 dependencies = [
  "cc",
  "libc",
