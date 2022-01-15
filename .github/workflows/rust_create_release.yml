@@ -82,6 +82,7 @@ jobs:
           PKGARCH=mips contrib/deb/generate.sh
           PKGARCH=mipsel contrib/deb/generate.sh
           PKGARCH=armhf contrib/deb/generate.sh
+          PKGARCH=armlf contrib/deb/generate.sh
           PKGARCH=arm64 contrib/deb/generate.sh
 
       - name: Upload bins & debs
