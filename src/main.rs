@@ -216,19 +216,16 @@ fn main() {
     let miner: Arc<Mutex<Miner>> = Arc::new(Mutex::new(miner_obj));
 
     let mut network = Network::new(Arc::clone(&context));
-    thread::spawn(move || {
+    let network = thread::Builder::new().name(String::from("Network")).spawn(move || {
         // Give UI some time to appear :)
         thread::sleep(Duration::from_millis(1000));
         network.start();
-    });
+    }).expect("Could not start network thread!");
 
     create_genesis_if_needed(&context, &miner);
     if no_gui {
         print_my_domains(&context);
-        let sleep = Duration::from_millis(1000);
-        loop {
-            thread::sleep(sleep);
-        }
+        let _ = network.join();
     } else {
         if !dns_server_ok {
             thread::spawn(|| {

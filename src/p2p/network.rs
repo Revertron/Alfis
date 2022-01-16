@@ -78,6 +78,8 @@ impl Network {
         let mut connect_timer = Instant::now();
         let mut last_events_time = Instant::now();
         let mut old_blocks = 0u64;
+        let mut old_domains = 0i64;
+        let mut old_keys = 0i64;
         let mut old_nodes = 0usize;
         let mut old_banned = 0usize;
         loop {
@@ -171,15 +173,17 @@ impl Network {
 
                     let keys = context.chain.get_users_count();
                     let domains = context.chain.get_domains_count();
-                    post(crate::event::Event::NetworkStatus { blocks, domains, keys, nodes });
+                    if old_nodes != nodes || old_blocks != blocks || old_banned != banned || old_domains != domains || old_keys != keys {
+                        info!("Active nodes: {}, banned: {}, blocks: {}, domains: {}, keys: {}", nodes, banned, blocks, domains, keys);
+                        post(crate::event::Event::NetworkStatus { blocks, domains, keys, nodes });
+                        old_nodes = nodes;
+                        old_blocks = blocks;
+                        old_domains = domains;
+                        old_keys = keys;
+                        old_banned = banned;
+                    }
 
                     if log_timer.elapsed().as_secs() > LOG_REFRESH_DELAY_SEC {
-                        if old_nodes != nodes || old_blocks != blocks || old_banned != banned {
-                            info!("Active nodes count: {}, banned count: {}, blocks count: {}", nodes, banned, blocks);
-                            old_nodes = nodes;
-                            old_blocks = blocks;
-                            old_banned = banned;
-                        }
                         let elapsed = last_events_time.elapsed().as_secs();
                         if elapsed >= 30 {
                             warn!("Last network events time {} seconds ago", elapsed);
@@ -454,7 +458,7 @@ impl Network {
                     let app_version = self.context.lock().unwrap().app_version.clone();
                     State::message(Message::shake(&app_version, &origin, version, me_public, &my_id, my_height))
                 } else {
-                    warn!("Handshake from unsupported chain or version");
+                    warn!("Handshake from unsupported chain or version: {}, {}", &origin, version);
                     State::Banned
                 }
             }

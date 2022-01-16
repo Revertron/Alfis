@@ -39,7 +39,7 @@ pub const LISTEN_PORT: u16 = 4244;
 pub const UI_REFRESH_DELAY_MS: u128 = 500;
 pub const LOG_REFRESH_DELAY_SEC: u64 = 60;
 
-pub const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(500));
+pub const POLL_TIMEOUT: Option<Duration> = Some(Duration::from_millis(200));
 pub const WAIT_FOR_INTERNET: Duration = Duration::from_secs(10);
 /// We start syncing blocks only when we got 4 and more connected nodes
 pub const MIN_CONNECTED_NODES_START_SYNC: usize = 4;
