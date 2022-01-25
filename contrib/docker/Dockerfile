@@ -1,7 +1,7 @@
-FROM ubuntu
+FROM debian:stretch-slim
 
 LABEL Description="Alfis Alternative Free Identity System"
-LABEL URL="https://github.com/Revertron/Alfis/releases "
+LABEL URL="https://github.com/Revertron/Alfis/releases"
 
 ARG arch=amd64
 ARG srv_port=4244
