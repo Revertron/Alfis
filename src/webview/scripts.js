@@ -4,6 +4,7 @@ var ownerEncryption = "";
 var availableZones = [];
 var myDomains = [];
 var currentZone;
+var currentDomain = "";
 var currentSelectedKey = -1;
 var keysLoaded = [];
 var stateMining = false;
@@ -348,8 +349,9 @@ function sendAction(param) {
 }
 
 function onDomainChange(element) {
+    currentDomain = element.value;
     if (typeof currentZone !== 'undefined') {
-        var domain = element.value + "." + currentZone.name;
+        var domain = currentDomain + "." + currentZone.name;
         external.invoke(JSON.stringify({cmd: 'checkDomain', name: domain}));
     }
 }
@@ -620,6 +622,8 @@ function changeZone(zone, event) {
     availableZones.forEach(function(value, index, array) {
         if (value.name == zone) {
             currentZone = value;
+            var domain = currentDomain + "." + currentZone.name;
+            external.invoke(JSON.stringify({cmd: 'checkDomain', name: domain}));
         }
     });
     refreshZonesList();
