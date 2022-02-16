@@ -49,7 +49,7 @@ impl Peer {
         &self.cipher
     }
 
-    pub fn get_nonce(&self) -> &[u8; 12] {
+    pub fn get_nonce(&self) -> &[u8] {
         match &self.cipher {
             None => &crate::crypto::ZERO_NONCE,
             Some(chacha) => chacha.get_nonce()

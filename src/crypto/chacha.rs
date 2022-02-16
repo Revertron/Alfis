@@ -10,30 +10,27 @@ pub const ZERO_NONCE: [u8; 12] = [0u8; 12];
 #[derive(Clone)]
 pub struct Chacha {
     cipher: ChaCha20Poly1305,
-    nonce: [u8; 12]
+    nonce: Nonce
 }
 
 impl Chacha {
     pub fn new(key: &[u8], nonce: &[u8]) -> Self {
         let key = Key::from_slice(key);
         let cipher = ChaCha20Poly1305::new(key);
-        let mut buf = [0u8; 12];
-        buf.copy_from_slice(nonce);
-        Chacha { cipher, nonce: buf }
+        let nonce = Nonce::clone_from_slice(nonce);
+        Chacha { cipher, nonce }
     }
 
     pub fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, Error> {
-        let nonce = Nonce::from(self.nonce);
-        self.cipher.encrypt(&nonce, data.as_ref())
+        self.cipher.encrypt(&self.nonce, data.as_ref())
     }
 
     pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, Error> {
-        let nonce = Nonce::from(self.nonce);
-        self.cipher.decrypt(&nonce, data.as_ref())
+        self.cipher.decrypt(&self.nonce, data.as_ref())
     }
 
-    pub fn get_nonce(&self) -> &[u8; 12] {
-        &self.nonce
+    pub fn get_nonce(&self) -> &[u8] {
+        &self.nonce.as_slice()
     }
 }
 
