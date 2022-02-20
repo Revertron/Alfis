@@ -92,7 +92,8 @@ impl Network {
                 last_events_time = Instant::now();
             }
             // Poll Mio for events, blocking until we get an event.
-            poll.poll(&mut events, POLL_TIMEOUT).expect("Error polling sockets");
+            poll.poll(&mut events, POLL_TIMEOUT)
+                .unwrap_or_else(|e| warn!("Error polling sockets: {}", e));
             if !running.load(Ordering::SeqCst) {
                 break;
             }
