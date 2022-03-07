@@ -1290,9 +1290,9 @@ dependencies = [
 
 [[package]]
 name = "thread-priority"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb4aa39eba9de82bc3c8091a87d147dc60b8648264580a9fc6ed473747825316"
+checksum = "9b3fe6ec8f0ac600de217a06f30b95f9aee46f93158fe7df97797eeee70f1f65"
 dependencies = [
  "cfg-if",
  "libc",
