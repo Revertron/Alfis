@@ -429,7 +429,8 @@ impl DnsRecord {
                 buffer.write_u16(QueryType::TXT.to_num())?;
                 buffer.write_u16(1)?;
                 buffer.write_u32(ttl)?;
-                buffer.write_u16(data.len() as u16)?;
+                buffer.write_u16((data.len() + 1) as u16)?;
+                buffer.write_u8(data.len() as u8)?;
 
                 for b in data.as_bytes() {
                     buffer.write_u8(*b)?;
