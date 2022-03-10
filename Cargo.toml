@@ -16,7 +16,7 @@ log = "0.4.14"
 simplelog = "0.11.2"
 toml = "0.5.8"
 digest = "0.10.2"
-sha2 = "0.10.1"
+sha2 = "0.10.2"
 ed25519-dalek = "1.0"
 x25519-dalek = "1.2"
 ecies-ed25519 = "0.5"
@@ -39,21 +39,21 @@ sqlite = "0.26.0"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 mio = { version = "0.8.0", features = ["os-poll", "net"] }
 ureq = { version = "2.4", optional = true }
-lru = "0.7.2"
+lru = "0.7.3"
 derive_more = "0.99.17"
 lazy_static = "1.4.0"
 
 # Optional dependencies regulated by features
 web-view = { version = "0.7.3", features = [], optional = true }
 tinyfiledialogs = { version = "3.9", optional = true }
-open = { version = "2.0.3", optional = true }
+open = { version = "2.1.1", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = ["impl-default", "wincon", "shellscalingapi"] }
-thread-priority = "0.7.0"
+thread-priority = "0.8.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-thread-priority = "0.7.0"
+thread-priority = "0.8.0"
 
 [build-dependencies]
 winres = "0.1.12"
