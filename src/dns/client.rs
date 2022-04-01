@@ -442,6 +442,8 @@ impl HttpsDnsClient {
                 }
                 dns_client.stop();
 
+                result.sort();
+                result.dedup();
                 let addrs = result
                     .into_iter()
                     .map(|ip| SocketAddr::new(ip, 443))

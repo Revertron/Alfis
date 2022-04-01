@@ -1,6 +1,6 @@
 [package]
 name = "alfis"
-version = "0.6.11"
+version = "0.6.12"
 authors = ["Revertron <alfis@revertron.com>"]
 edition = "2021"
 build = "build.rs"
@@ -12,7 +12,7 @@ exclude = ["blockchain.db", "alfis.toml"]
 
 [dependencies]
 getopts = "0.2.21"
-log = "0.4.14"
+log = "0.4.16"
 simplelog = "0.11.2"
 toml = "0.5.8"
 digest = "0.10.2"
@@ -37,7 +37,7 @@ rand = { version = "0.8.5", package = "rand" }
 rand-old = { package = "rand", version = "0.7.0" } # For ed25519-dalek
 sqlite = "0.26.0"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
-mio = { version = "0.8.0", features = ["os-poll", "net"] }
+mio = { version = "0.8.2", features = ["os-poll", "net"] }
 ureq = { version = "2.4", optional = true }
 lru = "0.7.3"
 derive_more = "0.99.17"
@@ -45,7 +45,7 @@ lazy_static = "1.4.0"
 
 # Optional dependencies regulated by features
 web-view = { version = "0.7.3", features = [], optional = true }
-tinyfiledialogs = { version = "3.9", optional = true }
+tinyfiledialogs = { version = "3.9.1", optional = true }
 open = { version = "2.1.1", optional = true }
 
 [target.'cfg(windows)'.dependencies]

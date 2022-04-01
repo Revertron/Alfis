@@ -49,7 +49,7 @@ function refreshRecordsList() {
         var data = value.addr;
         if (value.type == "MX") {
             data = value.priority + " " + value.host;
-        } else if (value.type == "CNAME") {
+        } else if (value.type == "CNAME" || value.type == "NS") {
             data = value.host;
         } else if (value.type == "TXT") {
             data = value.data;
