@@ -145,6 +145,12 @@ pub fn setup_miner_thread(cpu: u32) {
     let _ = set_current_thread_priority(ThreadPriority::Min);
 }
 
+#[cfg(target_os = "openbsd")]
+#[allow(unused_variables)]
+pub fn setup_miner_thread(cpu: u32) {
+    let _ = set_current_thread_priority(ThreadPriority::Min);
+}
+
 #[cfg(target_os = "macos")]
 #[allow(unused_variables)]
 pub fn setup_miner_thread(cpu: u32) {
