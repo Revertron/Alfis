@@ -451,20 +451,29 @@ impl Network {
                 if self.peers.is_our_own_connect(&rand_id) {
                     warn!("Detected loop connect");
                     State::SendLoop
-                } else if origin.eq(my_origin) && version == my_version {
+                } else if origin.eq(my_origin) {
                     let peer = self.peers.get_mut_peer(token).unwrap();
-                    peer.set_public(public);
-                    peer.set_active(true);
                     debug!("Incoming v{} on {}", &app_version, peer.get_addr().ip());
                     let app_version = self.context.lock().unwrap().app_version.clone();
-                    State::message(Message::shake(&app_version, &origin, version, me_public, &my_id, my_height))
+                    if version == my_version {
+                        peer.set_public(public);
+                        peer.set_active(true);
+                    } else {
+                        warn!("Handshake from unsupported version: {} (local version: {})", version, my_version);
+                    }
+                    State::message(Message::shake(&app_version, &origin, my_version, me_public, &my_id, my_height))
                 } else {
-                    warn!("Handshake from unsupported chain or version: {}, {}", &origin, version);
+                    warn!("Handshake from unsupported chain: {}", &origin);
                     State::Banned
                 }
             }
             Message::Shake { app_version, origin, version, public, rand_id, height } => {
-                if origin.ne(my_origin) || version != my_version {
+                if origin.ne(my_origin) {
+                    return State::Banned;
+                } else if version > my_version {
+                    warn!("Can't work with newer blockchain version {} and ALFIS version {}, please upgrade!", version, &app_version);
+                    return State::Banned;
+                } else if version != my_version {
                     return State::Banned;
                 }
                 if self.peers.is_tween_connect(&rand_id) {

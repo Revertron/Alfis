@@ -302,8 +302,9 @@ function createDomain() {
     data.info = document.getElementById("info_text").value;
     data.records = recordsBuffer;
     data.contacts = getContacts();
+    var renewal = document.getElementById("renewal").checked;
     data = JSON.stringify(data);
-    external.invoke(JSON.stringify({cmd: 'mineDomain', name: domain, data: data, signing: ownerSigning, encryption: ownerEncryption}));
+    external.invoke(JSON.stringify({cmd: 'mineDomain', name: domain, data: data, signing: ownerSigning, encryption: ownerEncryption, renewal: renewal}));
 }
 
 function getContacts() {

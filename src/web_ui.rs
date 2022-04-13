@@ -53,8 +53,8 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                 SelectKey { index } => { action_select_key(&context, web_view, index); }
                 CheckRecord { data } => { action_check_record(web_view, data); }
                 CheckDomain { name } => { action_check_domain(&context, web_view, name); }
-                MineDomain { name, data, signing, encryption } => {
-                    action_create_domain(Arc::clone(&context), Arc::clone(&miner), web_view, name, data, signing, encryption);
+                MineDomain { name, data, signing, encryption, renewal } => {
+                    action_create_domain(Arc::clone(&context), Arc::clone(&miner), web_view, name, data, signing, encryption, renewal);
                 }
                 TransferDomain { .. } => {}
                 StopMining => { post(Event::ActionStopMining); }
@@ -390,7 +390,7 @@ fn send_keys_to_ui(context: &MutexGuard<Context>, handle: &Handle<()>) {
     }
 }
 
-fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, web_view: &mut WebView<()>, name: String, data: String, signing: String, encryption: String) {
+fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, web_view: &mut WebView<()>, name: String, data: String, signing: String, encryption: String, renewal: bool) {
     debug!("Creating domain with data: {}", &data);
     let c = Arc::clone(&context);
     let context = context.lock().unwrap();
@@ -443,7 +443,7 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
     match context.chain.can_mine_domain(context.chain.get_height(), &name, &pub_key) {
         MineResult::Fine => {
             std::mem::drop(context);
-            create_domain(c, miner, CLASS_DOMAIN, &name, data, DOMAIN_DIFFICULTY, &keystore, signing, encryption);
+            create_domain(c, miner, CLASS_DOMAIN, &name, data, DOMAIN_DIFFICULTY, &keystore, signing, encryption, renewal);
             let _ = web_view.eval("domainMiningStarted();");
             event_info(web_view, &format!("Mining of domain \\'{}\\' has started", &name));
         }
@@ -561,7 +561,7 @@ fn format_event_now(kind: &str, message: &str) -> String {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, class: &str, name: &str, mut data: DomainData, difficulty: u32, keystore: &Keystore, signing: Bytes, encryption: Bytes) {
+fn create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, class: &str, name: &str, mut data: DomainData, difficulty: u32, keystore: &Keystore, signing: Bytes, encryption: Bytes, renewal: bool) {
     let name = name.to_owned();
     let encrypted = CryptoBox::encrypt(encryption.as_slice(), name.as_bytes()).expect("Error encrypting domain name!");
     data.encrypted = Bytes::from_bytes(&encrypted);
@@ -574,13 +574,7 @@ fn create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, class: 
     };
     let transaction = Transaction::from_str(name, class.to_owned(), data, signing, encryption);
     // If this domain is already in blockchain we approve slightly smaller difficulty
-    let discount = {
-        let context = context.lock().unwrap();
-        match context.chain.is_domain_in_blockchain(context.chain.get_height(), &transaction.identity) {
-            true => { 1 }
-            false => { 0 }
-        }
-    };
+    let discount = context.lock().unwrap().chain.get_identity_discount(&transaction.identity, renewal);
     let block = Block::new(Some(transaction), keystore.get_public(), Bytes::default(), difficulty - discount);
     miner.lock().unwrap().add_block(block, keystore.clone());
 }
@@ -595,7 +589,7 @@ pub enum Cmd {
     SelectKey { index: usize },
     CheckRecord { data: String },
     CheckDomain { name: String },
-    MineDomain { name: String, data: String, signing: String, encryption: String },
+    MineDomain { name: String, data: String, signing: String, encryption: String, renewal: bool },
     TransferDomain { name: String, owner: String },
     StopMining,
     Open { link: String }

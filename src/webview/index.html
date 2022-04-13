@@ -204,7 +204,7 @@
     <div class="modal-content">
         <div class="box" id="new_domain_dialog_box">
             <button class="delete" aria-label="close" onclick="closeDialog('new_domain_dialog')"></button>
-            <label class="label">New domain:</label>
+            <label class="label">Domain name:</label>
             <div class="field is-grouped is-fullwidth">
                 <div class="control field has-addons is-expanded">
                     <div class="control is-expanded has-icons-left">
@@ -264,6 +264,13 @@
 
             <div class="list mt-2" id="domain_records">
                 <!-- Here will be our domain records, added by dialog -->
+            </div>
+
+            <div class="field mt-3">
+                <label class="control">
+                    <input type="checkbox" id="renewal"> Renew domain by using higher difficulty while mining (works after block number 4999, until then it does nothing).
+                </label>
+                <p class="help">Starting from block 5000 the change of DNS records is decoupled from domain renewal.</p>
             </div>
         </div>
     </div>

@@ -7,6 +7,7 @@ pub const ORIGIN_DIFFICULTY: u32 = 28;
 pub const DOMAIN_DIFFICULTY: u32 = 24;
 pub const SIGNER_DIFFICULTY: u32 = 16;
 pub const KEYSTORE_DIFFICULTY: u32 = 23;
+pub const BLOCKS_WITHOUT_DISCOUNT: u64 = 4999;
 
 /// Blocks start to be signed starting from this index
 pub const BLOCK_SIGNERS_START: u64 = 35;
@@ -25,6 +26,7 @@ pub const LIMITED_CONFIDENCE_DEPTH: u64 = 4;
 pub const BLOCK_SIGNERS_START_RANDOM: i64 = 90;
 
 pub const NEW_DOMAINS_INTERVAL: i64 = 86400; // One day in seconds
+pub const ONE_WEEK: i64 = 86400 * 7; // One week in seconds
 pub const DOMAIN_LIFETIME: i64 = 86400 * 365; // One year
 pub const MAX_RECORDS: usize = 30;
 pub const MAX_DATA_LEN: usize = 255;

@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::cmp::max;
+use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::ops::Deref;
@@ -37,10 +37,11 @@ const SQL_GET_LAST_FULL_BLOCK: &str = "SELECT * FROM blocks WHERE id < ? AND `tr
 const SQL_GET_LAST_FULL_BLOCK_FOR_KEY: &str = "SELECT * FROM blocks WHERE id < ? AND `transaction`<>'' AND pub_key = ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_DOMAIN_OWNER_BY_ID: &str = "SELECT signing FROM domains WHERE id < ? AND identity = ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_DOMAIN_BY_ID: &str = "SELECT * FROM domains WHERE identity = ? ORDER BY id DESC LIMIT 1;";
-const SQL_GET_DOMAINS_BY_KEY: &str = "SELECT * FROM domains WHERE signing = ? ORDER BY id;";
+const SQL_GET_DOMAINS_BY_KEY: &str = "SELECT timestamp, identity, data, signing FROM domains WHERE signing = ? ORDER BY id;";
 const SQL_GET_DOMAINS_COUNT: &str = "SELECT count(DISTINCT identity) FROM domains;";
 const SQL_GET_USERS_COUNT: &str = "SELECT count(DISTINCT pub_key) FROM blocks;";
 const SQL_GET_USER_BLOCK_COUNT: &str = "SELECT count(pub_key) FROM blocks WHERE pub_key = ? AND id < ?";
+const SQL_GET_DOMAIN_UPDATE_TIME: &str = "SELECT domains.timestamp FROM blocks JOIN domains ON blocks.id = domains.id WHERE difficulty >= 23 AND identity = ? ORDER BY domains.id DESC LIMIT 1;";
 
 const SQL_GET_OPTIONS: &str = "SELECT * FROM options;";
 
@@ -558,7 +559,7 @@ impl Chain {
         statement.bind(1, height as i64).expect("Error in bind");
         statement.bind(2, &***id).expect("Error in bind");
         if let State::Row = statement.next().unwrap() {
-            // If there is such a zone
+            // If there is such an ID
             return true;
         }
         false
@@ -591,7 +592,40 @@ impl Chain {
         Fine
     }
 
-    pub fn get_id_transaction(&self, identity_hash: &Bytes) -> Option<Transaction> {
+    pub fn get_domain_renewal_time(&self, identity_hash: &Bytes) -> Option<i64> {
+        let mut statement = self.db.prepare(SQL_GET_DOMAIN_UPDATE_TIME).unwrap();
+        statement.bind(1, identity_hash.as_slice()).expect("Error in bind");
+        if let State::Row = statement.next().unwrap() {
+            let timestamp = statement.read::<i64>(0).unwrap();
+            if timestamp < Utc::now().timestamp() - DOMAIN_LIFETIME {
+                // This domain is too old
+                return None;
+            }
+            return Some(timestamp);
+        }
+        None
+    }
+
+    pub fn get_domain_update_time(&self, identity_hash: &Bytes) -> Option<i64> {
+        let mut statement = self.db.prepare(SQL_GET_DOMAIN_BY_ID).unwrap();
+        statement.bind(1, identity_hash.as_slice()).expect("Error in bind");
+        if let State::Row = statement.next().unwrap() {
+            let timestamp = statement.read::<i64>(1).unwrap();
+            if timestamp < Utc::now().timestamp() - DOMAIN_LIFETIME {
+                // This domain is too old
+                return None;
+            }
+            return Some(timestamp);
+        }
+        None
+    }
+
+    pub fn get_domain_transaction_by_id(&self, identity_hash: &Bytes) -> Option<Transaction> {
+        if self.get_domain_renewal_time(identity_hash).is_none() {
+            // Domain has expired
+            return None;
+        }
+
         let mut statement = self.db.prepare(SQL_GET_DOMAIN_BY_ID).unwrap();
         statement.bind(1, identity_hash.as_slice()).expect("Error in bind");
         if let State::Row = statement.next().unwrap() {
@@ -618,7 +652,7 @@ impl Chain {
             return None;
         }
         let identity_hash = hash_identity(domain, None);
-        if let Some(transaction) = self.get_id_transaction(&identity_hash) {
+        if let Some(transaction) = self.get_domain_transaction_by_id(&identity_hash) {
             debug!("Found transaction for domain {}: {:?}", domain, &transaction);
             if transaction.check_identity(domain) {
                 return Some(transaction);
@@ -671,33 +705,31 @@ impl Chain {
         let mut statement = self.db.prepare(SQL_GET_DOMAINS_BY_KEY).unwrap();
         statement.bind(1, &**pub_key).expect("Error in bind");
         while let State::Row = statement.next().unwrap() {
-            let _index = statement.read::<i64>(0).unwrap() as u64;
-            let timestamp = statement.read::<i64>(1).unwrap();
-            let identity = Bytes::from_bytes(&statement.read::<Vec<u8>>(2).unwrap());
-            let confirmation = Bytes::from_bytes(&statement.read::<Vec<u8>>(3).unwrap());
-            let class = String::from(CLASS_DOMAIN);
-            let data = statement.read::<String>(4).unwrap();
-            let signing = Bytes::from_bytes(&statement.read::<Vec<u8>>(5).unwrap());
-            let encryption = Bytes::from_bytes(&statement.read::<Vec<u8>>(6).unwrap());
+            let timestamp = statement.read::<i64>(0).unwrap();
+            let identity = Bytes::from_bytes(&statement.read::<Vec<u8>>(1).unwrap());
+            let data = statement.read::<String>(2).unwrap();
+            let signing = Bytes::from_bytes(&statement.read::<Vec<u8>>(3).unwrap());
 
             // Get the last transaction for this id and check if it is still ours
-            if let Some(transaction) = self.get_id_transaction(&identity) {
+            if let Some(transaction) = self.get_domain_transaction_by_id(&identity) {
                 if transaction.signing != signing {
                     trace!("Identity {:?} is not ours anymore, skipping", &identity);
                     continue;
                 }
             }
 
-            let transaction = Transaction { identity: identity.clone(), confirmation: confirmation.clone(), class, data, signing, encryption };
             //trace!("Found transaction for domain {:?}", &transaction);
-            if let Some(data) = transaction.get_domain_data() {
+            if let Ok(data) = serde_json::from_str::<DomainData>(&data) {
                 let decrypted = keystore.decrypt(data.encrypted.as_slice());
                 let mut domain = String::from_utf8(decrypted.to_vec()).unwrap();
                 if domain.is_empty() {
                     domain = String::from("unknown");
                 }
-                trace!("Found my domain {}", domain);
-                result.insert(identity, (domain, timestamp, data));
+                // TODO optimize
+                match self.get_domain_renewal_time(&identity) {
+                    None => result.insert(identity, (domain, timestamp, data)),
+                    Some(t) => result.insert(identity, (domain, t, data))
+                };
             }
         }
         result
@@ -786,7 +818,7 @@ impl Chain {
                     SIGNER_DIFFICULTY
                 }
             }
-            Some(t) => self.get_difficulty_for_transaction(t, block.index)
+            Some(t) => self.get_difficulty_for_transaction(t)
         };
         if block.difficulty < difficulty {
             warn!("Block difficulty is lower than needed");
@@ -955,14 +987,12 @@ impl Chain {
         true
     }
 
-    fn get_difficulty_for_transaction(&self, transaction: &Transaction, index: u64) -> u32 {
+    fn get_difficulty_for_transaction(&self, transaction: &Transaction) -> u32 {
         match transaction.class.as_ref() {
             CLASS_DOMAIN => {
                 // If this domain is already in blockchain we approve slightly smaller difficulty
-                let discount = match self.is_domain_in_blockchain(index, &transaction.identity) {
-                    true => { 1 }
-                    false => { 0 }
-                };
+                let discount = self.get_identity_discount(&transaction.identity, false);
+                // TODO move this check somewhere appropriate
                 return match serde_json::from_str::<DomainData>(&transaction.data) {
                     Ok(_) => DOMAIN_DIFFICULTY - discount,
                     Err(_) => {
@@ -973,6 +1003,20 @@ impl Chain {
             }
             CLASS_ORIGIN => ORIGIN_DIFFICULTY,
             _ => u32::MAX
+        }
+    }
+
+    pub fn get_identity_discount(&self, identity: &Bytes, renewal: bool) -> u32 {
+        match self.get_domain_update_time(identity) {
+            None => 0u32,
+            Some(timestamp) => {
+                if renewal || self.get_height() < BLOCKS_WITHOUT_DISCOUNT {
+                    return 1;
+                }
+                // Weeks since this domain was changed + 1, but not more than 7 weeks.
+                // So max discount will be 8 bits of difficulty.
+                (min((Utc::now().timestamp() - timestamp) / ONE_WEEK, 7i64) + 1) as u32
+            }
         }
     }
 

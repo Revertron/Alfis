@@ -84,7 +84,7 @@ dependencies = [
 
 [[package]]
 name = "alfis"
-version = "0.6.12"
+version = "0.7.0"
 dependencies = [
  "base64",
  "bincode",
@@ -719,9 +719,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.104"
+version = "0.2.123"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b2f96d100e1cf1929e7719b7edb3b90ab5298072638fccd77be9ce942ecdfce"
+checksum = "cb691a747a7ab48abc15c5b42066eaafde10dc427e3b6ee2a1cf43db04c763bd"
 
 [[package]]
 name = "log"
@@ -734,9 +734,9 @@ dependencies = [
 
 [[package]]
 name = "lru"
-version = "0.7.3"
+version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcb87f3080f6d1d69e8c564c0fcfde1d7aa8cc451ce40cae89479111f03bc0eb"
+checksum = "32613e41de4c47ab04970c348ca7ae7382cf116625755af070b008a15516a889"
 dependencies = [
  "hashbrown",
 ]
@@ -1291,9 +1291,9 @@ dependencies = [
 
 [[package]]
 name = "thread-priority"
-version = "0.8.0"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b3fe6ec8f0ac600de217a06f30b95f9aee46f93158fe7df97797eeee70f1f65"
+checksum = "696668a68983ad737e08e11e9afb701e962cab9f07f2a4ff339316b2d5b0870d"
 dependencies = [
  "cfg-if",
  "libc",
