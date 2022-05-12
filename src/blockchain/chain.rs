@@ -1116,7 +1116,7 @@ pub mod tests {
     use log::LevelFilter;
     #[allow(unused_imports)]
     use log::{debug, error, info, trace, warn};
-    use simplelog::{ColorChoice, ConfigBuilder, TermLogger, TerminalMode};
+    use simplelog::{ColorChoice, ConfigBuilder, TermLogger, TerminalMode, LevelPadding, format_description};
 
     use crate::{Block, Chain, Settings};
 
@@ -1126,8 +1126,11 @@ pub mod tests {
             .set_thread_level(LevelFilter::Off)
             .set_location_level(LevelFilter::Off)
             .set_target_level(LevelFilter::Error)
+            .set_level_padding(LevelPadding::Right)
             .set_time_level(LevelFilter::Error)
-            .set_time_to_local(true)
+            .set_time_format_custom(format_description!("[hour]:[minute]:[second].[subsecond]"))
+            .set_time_offset_to_local()
+            .unwrap()
             .build();
         if let Err(e) = TermLogger::init(LevelFilter::Trace, config, TerminalMode::Stdout, ColorChoice::Auto) {
             println!("Unable to initialize logger!\n{}", e);
