@@ -261,7 +261,7 @@ fn setup_logger(opt_matches: &Matches, console_attached: bool) {
         .set_target_level(LevelFilter::Error)
         .set_level_padding(LevelPadding::Right)
         .set_time_level(LevelFilter::Error)
-        .set_time_format_custom(format_description!("[hour]:[minute]:[second].[subsecond]"))
+        .set_time_format_custom(format_description!("[hour]:[minute]:[second].[subsecond digits:3]"))
         .set_time_offset_to_local()
         .unwrap()
         .build();

@@ -1128,9 +1128,7 @@ pub mod tests {
             .set_target_level(LevelFilter::Error)
             .set_level_padding(LevelPadding::Right)
             .set_time_level(LevelFilter::Error)
-            .set_time_format_custom(format_description!("[hour]:[minute]:[second].[subsecond]"))
-            .set_time_offset_to_local()
-            .unwrap()
+            .set_time_format_custom(format_description!("[hour]:[minute]:[second].[subsecond digits:3]"))
             .build();
         if let Err(e) = TermLogger::init(LevelFilter::Trace, config, TerminalMode::Stdout, ColorChoice::Auto) {
             println!("Unable to initialize logger!\n{}", e);
