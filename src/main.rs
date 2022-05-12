@@ -11,7 +11,7 @@ use std::{env, thread};
 use getopts::{Matches, Options};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn, LevelFilter};
-use simplelog::*;
+use simplelog::{ColorChoice, CombinedLogger, ConfigBuilder, format_description, LevelPadding, TerminalMode, TermLogger, WriteLogger};
 #[cfg(windows)]
 use winapi::um::wincon::{AttachConsole, FreeConsole, ATTACH_PARENT_PROCESS};
 extern crate lazy_static;
@@ -259,10 +259,11 @@ fn setup_logger(opt_matches: &Matches, console_attached: bool) {
         .set_thread_level(LevelFilter::Error)
         .set_location_level(LevelFilter::Off)
         .set_target_level(LevelFilter::Error)
-        .set_time_level(LevelFilter::Error)
-        .set_time_format_str("%F %T%.3f")
-        .set_time_to_local(true)
         .set_level_padding(LevelPadding::Right)
+        .set_time_level(LevelFilter::Error)
+        .set_time_format_custom(format_description!("[hour]:[minute]:[second].[subsecond]"))
+        .set_time_offset_to_local()
+        .unwrap()
         .build();
     match opt_matches.opt_str("l") {
         None => {
