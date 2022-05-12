@@ -1,6 +1,6 @@
 [package]
 name = "alfis"
-version = "0.7.0"
+version = "0.7.1"
 authors = ["Revertron <alfis@revertron.com>"]
 edition = "2021"
 build = "build.rs"
@@ -14,7 +14,7 @@ exclude = ["blockchain.db", "alfis.toml"]
 getopts = "0.2.21"
 log = "0.4.16"
 simplelog = "0.11.2"
-toml = "0.5.8"
+toml = "0.5.9"
 digest = "0.10.2"
 sha2 = "0.10.2"
 ed25519-dalek = "1.0"
@@ -25,8 +25,8 @@ signature = "1.5"
 blakeout = "0.3.0"
 num_cpus = "1.13.1"
 byteorder = "1.4.3"
-serde = { version = "1.0.136", features = ["derive"] }
-serde_json = "1.0.79"
+serde = { version = "1.0.137", features = ["derive"] }
+serde_json = "1.0.81"
 bincode = "1.3.3"
 serde_cbor = "0.11.2"
 base64 = "0.13.0"
@@ -36,8 +36,8 @@ chrono = { version = "0.4.19", features = ["serde"] }
 rand = { version = "0.8.5", package = "rand" }
 rand-old = { package = "rand", version = "0.7.0" } # For ed25519-dalek
 sqlite = "0.26.0"
-uuid = { version = "0.8.2", features = ["serde", "v4"] }
-mio = { version = "0.8.2", features = ["os-poll", "net"] }
+uuid = { version = "1.0.0", features = ["serde", "v4"] }
+mio = { version = "0.8.3", features = ["os-poll", "net"] }
 ureq = { version = "2.4", optional = true }
 lru = "0.7.5"
 derive_more = "0.99.17"
@@ -59,7 +59,7 @@ thread-priority = "0.8.2"
 winres = "0.1.12"
 
 [dev-dependencies]
-serde_bytes = "0.11.5"
+serde_bytes = "0.11.6"
 serde_derive = "1.0.126"
 
 [profile.release]
