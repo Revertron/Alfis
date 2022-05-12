@@ -174,8 +174,13 @@ impl Network {
 
                     let keys = context.chain.get_users_count();
                     let domains = context.chain.get_domains_count();
-                    if old_nodes != nodes || old_blocks != blocks || old_banned != banned || old_domains != domains || old_keys != keys {
-                        info!("Active nodes: {}, banned: {}, blocks: {}, domains: {}, keys: {}", nodes, banned, blocks, domains, keys);
+                    let nodes_changed = old_nodes != nodes;
+                    let other_changed = old_blocks != blocks || old_banned != banned || old_domains != domains || old_keys != keys;
+                    if nodes_changed || other_changed {
+                        // Don't log every current connection count change
+                        if log_timer.elapsed().as_secs() > LOG_REFRESH_DELAY_SEC || other_changed {
+                            info!("Active nodes: {}, banned: {}, blocks: {}, domains: {}, keys: {}", nodes, banned, blocks, domains, keys);
+                        }
                         post(crate::event::Event::NetworkStatus { blocks, domains, keys, nodes });
                         old_nodes = nodes;
                         old_blocks = blocks;
