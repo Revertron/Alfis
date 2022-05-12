@@ -1062,7 +1062,7 @@ impl Chain {
                 }
             }
             count += 1;
-            if !mitigated && count > 25 {
+            if !mitigated && count > 5000 {
                 tail = tail / 13;
                 mitigated = true;
             }

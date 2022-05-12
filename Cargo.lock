@@ -84,7 +84,7 @@ dependencies = [
 
 [[package]]
 name = "alfis"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "base64",
  "bincode",
