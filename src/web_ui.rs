@@ -17,7 +17,7 @@ use alfis::event::Event;
 use alfis::eventbus::{post, register};
 use alfis::miner::Miner;
 use alfis::{keystore, Block, Bytes, Context, Keystore, Transaction};
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Local, Utc};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn, LevelFilter};
 use serde::{Deserialize, Serialize};
@@ -574,7 +574,8 @@ fn create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, class: 
     };
     let transaction = Transaction::from_str(name, class.to_owned(), data, signing, encryption);
     // If this domain is already in blockchain we approve slightly smaller difficulty
-    let discount = context.lock().unwrap().chain.get_identity_discount(&transaction.identity, renewal);
+    let height = context.lock().unwrap().chain.get_height();
+    let discount = context.lock().unwrap().chain.get_identity_discount(&transaction.identity, renewal, height, Utc::now().timestamp());
     let block = Block::new(Some(transaction), keystore.get_public(), Bytes::default(), difficulty - discount);
     miner.lock().unwrap().add_block(block, keystore.clone());
 }

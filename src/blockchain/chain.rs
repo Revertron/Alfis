@@ -36,7 +36,7 @@ const SQL_GET_BLOCK_BY_ID: &str = "SELECT * FROM blocks WHERE id=? LIMIT 1;";
 const SQL_GET_LAST_FULL_BLOCK: &str = "SELECT * FROM blocks WHERE id < ? AND `transaction`<>'' ORDER BY id DESC LIMIT 1;";
 const SQL_GET_LAST_FULL_BLOCK_FOR_KEY: &str = "SELECT * FROM blocks WHERE id < ? AND `transaction`<>'' AND pub_key = ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_DOMAIN_OWNER_BY_ID: &str = "SELECT signing FROM domains WHERE id < ? AND identity = ? ORDER BY id DESC LIMIT 1;";
-const SQL_GET_DOMAIN_BY_ID: &str = "SELECT * FROM domains WHERE identity = ? ORDER BY id DESC LIMIT 1;";
+const SQL_GET_DOMAIN_BY_ID: &str = "SELECT * FROM domains WHERE identity = ? AND id < ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_DOMAINS_BY_KEY: &str = "SELECT timestamp, identity, data, signing FROM domains WHERE signing = ? ORDER BY id;";
 const SQL_GET_DOMAINS_COUNT: &str = "SELECT count(DISTINCT identity) FROM domains;";
 const SQL_GET_USERS_COUNT: &str = "SELECT count(DISTINCT pub_key) FROM blocks;";
@@ -606,12 +606,13 @@ impl Chain {
         None
     }
 
-    pub fn get_domain_update_time(&self, identity_hash: &Bytes) -> Option<i64> {
+    pub fn get_domain_update_time(&self, identity_hash: &Bytes, height: u64, time: i64) -> Option<i64> {
         let mut statement = self.db.prepare(SQL_GET_DOMAIN_BY_ID).unwrap();
         statement.bind(1, identity_hash.as_slice()).expect("Error in bind");
+        statement.bind(2, height as i64 ).expect("Error in bind");
         if let State::Row = statement.next().unwrap() {
             let timestamp = statement.read::<i64>(1).unwrap();
-            if timestamp < Utc::now().timestamp() - DOMAIN_LIFETIME {
+            if timestamp < time - DOMAIN_LIFETIME {
                 // This domain is too old
                 return None;
             }
@@ -620,7 +621,7 @@ impl Chain {
         None
     }
 
-    pub fn get_domain_transaction_by_id(&self, identity_hash: &Bytes) -> Option<Transaction> {
+    pub fn get_domain_transaction_by_id(&self, identity_hash: &Bytes, height: u64) -> Option<Transaction> {
         if self.get_domain_renewal_time(identity_hash).is_none() {
             // Domain has expired
             return None;
@@ -628,6 +629,7 @@ impl Chain {
 
         let mut statement = self.db.prepare(SQL_GET_DOMAIN_BY_ID).unwrap();
         statement.bind(1, identity_hash.as_slice()).expect("Error in bind");
+        statement.bind(2, height as i64).expect("Error in bind");
         if let State::Row = statement.next().unwrap() {
             let timestamp = statement.read::<i64>(1).unwrap();
             if timestamp < Utc::now().timestamp() - DOMAIN_LIFETIME {
@@ -652,7 +654,7 @@ impl Chain {
             return None;
         }
         let identity_hash = hash_identity(domain, None);
-        if let Some(transaction) = self.get_domain_transaction_by_id(&identity_hash) {
+        if let Some(transaction) = self.get_domain_transaction_by_id(&identity_hash, self.get_height()) {
             debug!("Found transaction for domain {}: {:?}", domain, &transaction);
             if transaction.check_identity(domain) {
                 return Some(transaction);
@@ -704,6 +706,7 @@ impl Chain {
         let pub_key = keystore.get_public();
         let mut statement = self.db.prepare(SQL_GET_DOMAINS_BY_KEY).unwrap();
         statement.bind(1, &**pub_key).expect("Error in bind");
+        let height = self.get_height();
         while let State::Row = statement.next().unwrap() {
             let timestamp = statement.read::<i64>(0).unwrap();
             let identity = Bytes::from_bytes(&statement.read::<Vec<u8>>(1).unwrap());
@@ -711,7 +714,7 @@ impl Chain {
             let signing = Bytes::from_bytes(&statement.read::<Vec<u8>>(3).unwrap());
 
             // Get the last transaction for this id and check if it is still ours
-            if let Some(transaction) = self.get_domain_transaction_by_id(&identity) {
+            if let Some(transaction) = self.get_domain_transaction_by_id(&identity, height) {
                 if transaction.signing != signing {
                     trace!("Identity {:?} is not ours anymore, skipping", &identity);
                     continue;
@@ -818,10 +821,10 @@ impl Chain {
                     SIGNER_DIFFICULTY
                 }
             }
-            Some(t) => self.get_difficulty_for_transaction(t)
+            Some(t) => self.get_difficulty_for_transaction(t, block.index, block.timestamp)
         };
         if block.difficulty < difficulty {
-            warn!("Block difficulty is lower than needed");
+            warn!("Block difficulty is lower than needed: {} < {}", block.difficulty, difficulty);
             return Bad;
         }
         if hash_difficulty(&block.hash) < block.difficulty {
@@ -987,11 +990,11 @@ impl Chain {
         true
     }
 
-    fn get_difficulty_for_transaction(&self, transaction: &Transaction) -> u32 {
+    fn get_difficulty_for_transaction(&self, transaction: &Transaction, height: u64, time: i64) -> u32 {
         match transaction.class.as_ref() {
             CLASS_DOMAIN => {
                 // If this domain is already in blockchain we approve slightly smaller difficulty
-                let discount = self.get_identity_discount(&transaction.identity, false);
+                let discount = self.get_identity_discount(&transaction.identity, false, height, time);
                 // TODO move this check somewhere appropriate
                 return match serde_json::from_str::<DomainData>(&transaction.data) {
                     Ok(_) => DOMAIN_DIFFICULTY - discount,
@@ -1006,8 +1009,8 @@ impl Chain {
         }
     }
 
-    pub fn get_identity_discount(&self, identity: &Bytes, renewal: bool) -> u32 {
-        match self.get_domain_update_time(identity) {
+    pub fn get_identity_discount(&self, identity: &Bytes, renewal: bool, height: u64, time: i64) -> u32 {
+        match self.get_domain_update_time(identity, height, time) {
             None => 0u32,
             Some(timestamp) => {
                 if renewal || self.get_height() < BLOCKS_WITHOUT_DISCOUNT {
@@ -1039,9 +1042,11 @@ impl Chain {
         }
 
         let mut set = HashSet::new();
-        let tail = block.signature.get_tail_u64();
+        let mut tail = block.signature.get_tail_u64();
         let mut count = 1;
+        let mut mitigated = false;
         let window = block.index - 1; // Without the last block
+        trace!("Calculating signers, tail: {}, window: {}", tail, window);
         while set.len() < BLOCK_SIGNERS_ALL as usize {
             let index = (tail.wrapping_mul(count) % window) + 1; // We want it to start from 1
             if let Some(b) = self.get_block(index) {
@@ -1057,8 +1062,12 @@ impl Chain {
                 }
             }
             count += 1;
+            if !mitigated && count > 25 {
+                tail = tail / 13;
+                mitigated = true;
+            }
         }
-        trace!("Got signers for block {}: {:?}", block.index, &result);
+        debug!("Got signers for block {}: {:?}, loop count {}", block.index, &result, count);
         let mut signers = self.signers.borrow_mut();
         signers.index = block.index;
         signers.signers = result.clone();

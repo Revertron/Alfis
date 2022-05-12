@@ -24,9 +24,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use alfis::event::Event;
 use alfis::eventbus::{post, register};
 use alfis::keystore::create_key;
-use alfis::{
-    dns_utils, Block, Bytes, Chain, Context, Keystore, Miner, Network, Settings, Transaction, ALFIS_DEBUG, DB_NAME, ORIGIN_DIFFICULTY
-};
+use alfis::{dns_utils, Block, Bytes, Chain, Context, Keystore, Miner, Network, Settings, Transaction, ALFIS_DEBUG, ALFIS_TRACE, DB_NAME, ORIGIN_DIFFICULTY};
 
 #[cfg(feature = "webgui")]
 mod web_ui;
@@ -53,7 +51,8 @@ fn main() {
     opts.optflag("h", "help", "Print this help menu");
     opts.optflag("n", "nogui", "Run without graphic user interface (default for no gui builds)");
     opts.optflag("v", "version", "Print version and exit");
-    opts.optflag("d", "debug", "Show trace messages, more than debug");
+    opts.optflag("d", "debug", "Show debug messages, more than usual");
+    opts.optflag("t", "trace", "Show trace messages, more than debug");
     opts.optflag("b", "blocks", "List blocks from DB and exit");
     opts.optflag("g", "generate", "Generate new config file. Generated config will be printed to console.");
     opts.optopt("k", "gen-key", "Generate new keys and save them to file.", "FILE");
@@ -248,6 +247,9 @@ fn main() {
 fn setup_logger(opt_matches: &Matches, console_attached: bool) {
     let mut level = LevelFilter::Info;
     if opt_matches.opt_present("d") || env::var(ALFIS_DEBUG).is_ok() {
+        level = LevelFilter::Debug;
+    }
+    if opt_matches.opt_present("t") || env::var(ALFIS_TRACE).is_ok() {
         level = LevelFilter::Trace;
     }
     let config = ConfigBuilder::new()

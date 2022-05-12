@@ -35,6 +35,7 @@ pub const DB_NAME: &str = "blockchain.db";
 pub const CLASS_ORIGIN: &str = "origin";
 pub const CLASS_DOMAIN: &str = "domain";
 pub const ALFIS_DEBUG: &str = "ALFIS_DEBUG";
+pub const ALFIS_TRACE: &str = "ALFIS_TRACE";
 
 /// Public nodes listen port
 pub const LISTEN_PORT: u16 = 4244;
@@ -48,4 +49,4 @@ pub const MIN_CONNECTED_NODES_START_SYNC: usize = 4;
 pub const MAX_READ_BLOCK_TIME: u128 = 100;
 pub const MAX_RECONNECTS: u32 = 5;
 pub const MAX_IDLE_SECONDS: u64 = 180;
-pub const MAX_NODES: usize = 15;
+pub const MAX_NODES: usize = 25;

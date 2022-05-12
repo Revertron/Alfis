@@ -132,7 +132,7 @@ impl Miner {
                             info!("Replacing current mining job with signing job!");
                             // We cancel current job, waiting for threads to finish
                             mining.store(false, Ordering::SeqCst);
-                            thread::sleep(Duration::from_millis(100));
+                            sleep(Duration::from_millis(100));
                             // Return current job to queue
                             jobs.insert(0, current_job.take().unwrap());
 
