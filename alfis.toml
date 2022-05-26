@@ -33,6 +33,6 @@ forwarders = ["94.140.14.14:53", "94.140.15.15:53"]
 #Mining options
 [mining]
 # How many CPU threads to spawn for mining, zero = number of CPU cores
-threads = 0
+threads = 1
 # Set lower priority for mining threads
 lower = true
