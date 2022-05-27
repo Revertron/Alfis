@@ -90,11 +90,11 @@ Beware of NetworkManager, it can change your resolvers at will.
 
 1. Download repository public key and add it to your APT
 ```
-wget -qO - https://deb.revertron.com/key.txt | sudo apt-key add -
+wget -qO - https://deb.revertron.com/key.txt | gpg --dearmor - | sudo tee /usr/share/keyrings/alfis.gpg
 ```
 2. Add repository path to sources list
 ```
-echo 'deb https://deb.revertron.com/ debian alfis' | sudo tee /etc/apt/sources.list.d/alfis.list
+echo 'deb [signed-by=/usr/share/keyrings/alfis.gpg] https://deb.revertron.com/ debian alfis' | sudo tee /etc/apt/sources.list.d/alfis.list
 ```
 3. Update packages and install ALFIS
 ```
