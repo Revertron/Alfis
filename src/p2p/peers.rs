@@ -268,9 +268,10 @@ impl Peers {
         }
 
         // Just purging ignored/banned IPs every 10 minutes
-        // TODO make it individual
+        // TODO make it individual for every IP
         if self.ignore_timer.elapsed().as_secs() >= 600 {
             self.ignored.clear();
+            self.ignore_timer = Instant::now();
         }
 
         // If someone has more blocks we sync
