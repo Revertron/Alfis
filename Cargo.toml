@@ -40,7 +40,7 @@ sqlite = "0.26.0"
 uuid = { version = "1.1.1", features = ["serde", "v4"] }
 mio = { version = "0.8.3", features = ["os-poll", "net"] }
 ureq = { version = "2.4", optional = true }
-lru = "0.7.6"
+lru = "0.7.7"
 derive_more = "0.99.17"
 lazy_static = "1.4.0"
 
