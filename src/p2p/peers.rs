@@ -227,7 +227,6 @@ impl Peers {
             None => {}
             Some(t) => {
                 self.close_peer(registry, &t);
-                self.peers.remove(&t);
             }
         }
     }
