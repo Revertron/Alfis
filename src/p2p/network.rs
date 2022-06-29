@@ -118,6 +118,10 @@ impl Network {
 
                             if self.peers.is_ignored(&address.ip()) {
                                 debug!("Ignoring connection from banned {:?}", &address.ip());
+                                stream.shutdown(Shutdown::Both).unwrap_or_else(|e| {
+                                    warn!("Error in shutdown, {}", e);
+                                });
+                                let _ = poll.registry().reregister(&mut server, SERVER, Interest::READABLE);
                                 continue;
                             }
 
