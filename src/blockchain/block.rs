@@ -98,6 +98,10 @@ impl Block {
             return true;
         }
 
+        if my_diff == it_diff && self.nonce != other.nonce {
+            return self.nonce < other.nonce;
+        }
+
         false
     }
 }

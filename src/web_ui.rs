@@ -442,7 +442,7 @@ fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, 
     };
     match context.chain.can_mine_domain(context.chain.get_height(), &name, &pub_key) {
         MineResult::Fine => {
-            std::mem::drop(context);
+            drop(context);
             create_domain(c, miner, CLASS_DOMAIN, &name, data, DOMAIN_DIFFICULTY, &keystore, signing, encryption, renewal);
             let _ = web_view.eval("domainMiningStarted();");
             event_info(web_view, &format!("Mining of domain \\'{}\\' has started", &name));

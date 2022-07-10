@@ -21,7 +21,7 @@ yggdrasil_only = false
 # Your DNS resolver will be listening on this address and port (Usual port is 53)
 listen = "127.0.0.1:53"
 # How many threads to spawn by DNS server
-threads = 50
+threads = 10
 # AdGuard DNS servers to filter ads and trackers
 forwarders = ["https://dns.adguard.com/dns-query"]
 #forwarders = ["94.140.14.14:53", "94.140.15.15:53"]

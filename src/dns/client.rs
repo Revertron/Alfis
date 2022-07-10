@@ -406,7 +406,7 @@ impl HttpsDnsClient {
         let agent = ureq::AgentBuilder::new()
             .user_agent(&client_name)
             .timeout(std::time::Duration::from_secs(5))
-            .max_idle_connections_per_host(8)
+            .max_idle_connections_per_host(2)
             .max_idle_connections(16)
             .resolver(move |addr: &str| {
                 let addr = match addr.find(':') {
