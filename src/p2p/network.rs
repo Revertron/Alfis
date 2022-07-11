@@ -459,6 +459,9 @@ impl Network {
         let my_id = self.peers.get_my_id().to_owned();
         let answer = match message {
             Message::Hand { app_version, origin, version, public, rand_id } => {
+                if app_version.starts_with("0.6") {
+                    return State::Banned;
+                }
                 if self.peers.is_our_own_connect(&rand_id) {
                     warn!("Detected loop connect");
                     State::SendLoop
@@ -489,6 +492,9 @@ impl Network {
                 }
                 if self.peers.is_tween_connect(&rand_id) {
                     return State::Twin;
+                }
+                if app_version.starts_with("0.6") {
+                    return State::Banned;
                 }
                 let nodes = self.peers.get_peers_active_count();
                 let peer = self.peers.get_mut_peer(token).unwrap();
@@ -610,6 +616,7 @@ impl Network {
         let peers_count = self.peers.get_peers_active_count();
         let peer = self.peers.get_mut_peer(token).unwrap();
         peer.set_received_block(block.index);
+        trace!("New block from {}", &peer.get_addr());
 
         let mut context = self.context.lock().unwrap();
         let max_height = context.chain.get_max_height();
@@ -654,8 +661,8 @@ impl Network {
                 if height + 1 == block.index {
                     context.chain.update_max_height(height);
                     post(crate::event::Event::SyncFinished);
-                    return State::Banned;
                 }
+                return State::Banned;
             }
             BlockQuality::Rewind => {
                 debug!("Got some orphan block, requesting its parent");

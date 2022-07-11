@@ -19,6 +19,7 @@ pub struct Peer {
     active: bool,
     reconnects: u32,
     received_block: u64,
+    sent_height: u64,
     cipher: Option<Chacha>,
     fork: HashMap<u64, Block>
 }
@@ -36,6 +37,7 @@ impl Peer {
             active: false,
             reconnects: 0,
             received_block: 0,
+            sent_height: 0,
             cipher: None,
             fork: HashMap::new()
         }
@@ -82,6 +84,18 @@ impl Peer {
 
     pub fn set_height(&mut self, height: u64) {
         self.height = height;
+    }
+
+    pub fn get_height(&self) -> u64 {
+        self.height
+    }
+
+    pub fn set_sent_height(&mut self, height: u64) {
+        self.sent_height = height;
+    }
+
+    pub fn get_sent_height(&self) -> u64 {
+        self.sent_height
     }
 
     pub fn is_higher(&self, height: u64) -> bool {

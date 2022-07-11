@@ -284,13 +284,14 @@ impl Peers {
             let mut rng = rand::thread_rng();
             match self.peers
                 .iter_mut()
-                .filter_map(|(token, peer)| if peer.is_lower(height) && peer.get_state().is_idle() { Some((token, peer)) } else { None })
+                .filter_map(|(token, peer)| if peer.is_lower(height) && peer.get_state().is_idle() && peer.get_sent_height() < height { Some((token, peer)) } else { None })
                 .choose(&mut rng) {
                 None => {}
                 Some((token, peer)) => {
-                    debug!("Peer {} is behind, sending ping", &peer.get_addr().ip());
+                    debug!("Peer {} is behind ({}), sending ping", &peer.get_addr().ip(), peer.get_height());
                     registry.reregister(peer.get_stream(), *token, Interest::WRITABLE).unwrap();
                     peer.set_state(State::message(Message::Ping { height, hash }));
+                    peer.set_sent_height(height);
                     self.update_behind_ping_time();
                 }
             }
@@ -368,7 +369,7 @@ impl Peers {
         if self.new_peers.is_empty() {
             return;
         }
-        self.new_peers.dedup();
+        self.new_peers.sort().dedup();
         let addr = self.new_peers.remove(0);
         match self.connect_peer(&addr, registry, unique_token, yggdrasil_only) {
             Ok(_) => {}
