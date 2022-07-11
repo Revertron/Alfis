@@ -25,7 +25,7 @@ use crate::commons::*;
 use crate::crypto::Chacha;
 use crate::eventbus::{post, register};
 use crate::p2p::{Message, Peer, Peers, State};
-use crate::{Block, Context};
+use crate::{Block, Bytes, Context};
 
 const SERVER: Token = Token(0);
 
@@ -82,6 +82,7 @@ impl Network {
         let mut old_keys = 0i64;
         let mut old_nodes = 0usize;
         let mut old_banned = 0usize;
+        let mut seen_blocks = HashSet::new();
         loop {
             if self.peers.get_peers_count() == 0 && bootstrap_timer.elapsed().as_secs() > 60 {
                 warn!("Restarting swarm connections...");
@@ -145,7 +146,7 @@ impl Network {
                         }
                     }
                     token => {
-                        if !self.handle_connection_event(poll.registry(), event) {
+                        if !self.handle_connection_event(poll.registry(), event, &mut seen_blocks) {
                             let _ = self.peers.close_peer(poll.registry(), &token);
                             let blocks = self.context.lock().unwrap().chain.get_height();
                             let keys = self.context.lock().unwrap().chain.get_users_count();
@@ -199,6 +200,7 @@ impl Network {
                             warn!("Last network events time {} seconds ago", elapsed);
                         }
                         log_timer = Instant::now();
+                        seen_blocks.clear();
                     }
                     if nodes < MAX_NODES && connect_timer.elapsed().as_secs() >= 5 {
                         self.peers.connect_new_peers(poll.registry(), &mut self.token, yggdrasil_only);
@@ -219,13 +221,13 @@ impl Network {
         }
     }
 
-    fn handle_connection_event(&mut self, registry: &Registry, event: &Event) -> bool {
+    fn handle_connection_event(&mut self, registry: &Registry, event: &Event, seen_blocks: &mut HashSet<Bytes>) -> bool {
         if event.is_error() || (event.is_read_closed() && event.is_write_closed()) {
             return false;
         }
 
         if event.is_readable() {
-            return self.process_readable(registry, event);
+            return self.process_readable(registry, event, seen_blocks);
         }
 
         if event.is_writable() {
@@ -235,7 +237,7 @@ impl Network {
         true
     }
 
-    fn process_readable(&mut self, registry: &Registry, event: &Event) -> bool {
+    fn process_readable(&mut self, registry: &Registry, event: &Event, seen_blocks: &mut HashSet<Bytes>) -> bool {
         let data = {
             let token = event.token();
             match self.peers.get_mut_peer(&token) {
@@ -328,7 +330,7 @@ impl Network {
             match Message::from_bytes(data) {
                 Ok(message) => {
                     //let m = format!("{:?}", &message);
-                    let new_state = self.handle_message(message, &event.token());
+                    let new_state = self.handle_message(message, &event.token(), seen_blocks);
                     let peer = self.peers.get_mut_peer(&event.token()).unwrap();
                     //debug!("Got message from {}: {:?}", &peer.get_addr(), &m);
                     let stream = peer.get_stream();
@@ -448,7 +450,7 @@ impl Network {
         true
     }
 
-    fn handle_message(&mut self, message: Message, token: &Token) -> State {
+    fn handle_message(&mut self, message: Message, token: &Token, seen_blocks: &mut HashSet<Bytes>) -> State {
         let (my_height, my_hash, my_origin, my_version, me_public) = {
             let context = self.context.lock().unwrap();
             // TODO cache it somewhere
@@ -514,6 +516,9 @@ impl Network {
                 let peer = self.peers.get_mut_peer(token).unwrap();
                 peer.set_height(height);
                 peer.set_active(true);
+                if seen_blocks.contains(&hash) {
+                    return State::message(Message::pong(my_height, my_hash));
+                }
                 if peer.is_higher(my_height) {
                     let mut context = self.context.lock().unwrap();
                     context.chain.update_max_height(height);
@@ -532,6 +537,9 @@ impl Network {
                 let peer = self.peers.get_mut_peer(token).unwrap();
                 peer.set_height(height);
                 peer.set_active(true);
+                if seen_blocks.contains(&hash) {
+                    return State::idle();
+                }
                 if peer.is_higher(my_height) {
                     let mut context = self.context.lock().unwrap();
                     context.chain.update_max_height(height);
@@ -585,7 +593,11 @@ impl Network {
                     return State::Banned;
                 }
                 info!("Received block {} with hash {:?}", block.index, &block.hash);
-                self.handle_block(token, block)
+                if !seen_blocks.contains(&block.hash) {
+                    self.handle_block(token, block, seen_blocks)
+                } else {
+                    State::idle()
+                }
             }
             Message::Twin => State::Twin,
             Message::Loop => State::Loop
@@ -593,7 +605,8 @@ impl Network {
         answer
     }
 
-    fn handle_block(&mut self, token: &Token, block: Block) -> State {
+    fn handle_block(&mut self, token: &Token, block: Block, seen_blocks: &mut HashSet<Bytes>) -> State {
+        seen_blocks.insert(block.hash.clone());
         let peers_count = self.peers.get_peers_active_count();
         let peer = self.peers.get_mut_peer(token).unwrap();
         peer.set_received_block(block.index);
@@ -652,16 +665,14 @@ impl Network {
                 debug!("Got forked block {} with hash {:?}", block.index, block.hash);
                 // If we are very much behind of blockchain
                 let lagged = block.index == context.chain.get_height() && block.index + LIMITED_CONFIDENCE_DEPTH <= max_height;
-                let last_block = context.chain.last_block().unwrap();
-                if block.is_better_than(&last_block) || lagged {
+                let our_block = context.chain.get_block(block.index).unwrap();
+                if block.is_better_than(&our_block) || lagged {
                     context.chain.replace_block(block).expect("Error replacing block with fork");
                     let index = context.chain.get_height();
                     post(crate::event::Event::BlockchainChanged { index });
                 } else {
                     debug!("Fork in not better than our block, dropping.");
-                    if let Some(block) = context.chain.get_block(block.index) {
-                        return State::message(Message::block(block.index, block.as_bytes()));
-                    }
+                    return State::message(Message::block(our_block.index, our_block.as_bytes()));
                 }
             }
         }
