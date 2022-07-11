@@ -369,7 +369,8 @@ impl Peers {
         if self.new_peers.is_empty() {
             return;
         }
-        self.new_peers.sort().dedup();
+        self.new_peers.sort();
+        self.new_peers.dedup();
         let addr = self.new_peers.remove(0);
         match self.connect_peer(&addr, registry, unique_token, yggdrasil_only) {
             Ok(_) => {}
