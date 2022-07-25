@@ -35,7 +35,7 @@ const SQL_ADD_DOMAIN: &str = "INSERT INTO domains (id, timestamp, identity, conf
 const SQL_GET_BLOCK_BY_ID: &str = "SELECT * FROM blocks WHERE id=? LIMIT 1;";
 const SQL_GET_LAST_FULL_BLOCK: &str = "SELECT * FROM blocks WHERE id < ? AND `transaction`<>'' ORDER BY id DESC LIMIT 1;";
 const SQL_GET_LAST_FULL_BLOCK_FOR_KEY: &str = "SELECT * FROM blocks WHERE id < ? AND `transaction`<>'' AND pub_key = ? ORDER BY id DESC LIMIT 1;";
-const SQL_GET_DOMAIN_OWNER_BY_ID: &str = "SELECT signing FROM domains WHERE id < ? AND identity = ? ORDER BY id DESC LIMIT 1;";
+const SQL_GET_DOMAIN_OWNER_BY_ID: &str = "SELECT signing, timestamp FROM domains WHERE id < ? AND identity = ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_DOMAIN_BY_ID: &str = "SELECT * FROM domains WHERE identity = ? AND id < ? ORDER BY id DESC LIMIT 1;";
 const SQL_GET_DOMAINS_BY_KEY: &str = "SELECT timestamp, identity, data, signing FROM domains WHERE signing = ? ORDER BY id;";
 const SQL_GET_DOMAINS_COUNT: &str = "SELECT count(DISTINCT identity) FROM domains;";
@@ -152,7 +152,7 @@ impl Chain {
                     }
 
                     //let last = self.last_block.clone().unwrap();
-                    if self.check_block(&block, &last_block, &last_full_block) != BlockQuality::Good {
+                    if self.check_block(&block, &last_block, &last_full_block) != Good {
                         error!("Block {} is bad:\n{:?}", block.index, &block);
                         info!("Truncating database from block {}...", block.index);
                         match self.truncate_db_from_block(block.index) {
@@ -391,10 +391,10 @@ impl Chain {
                 statement.bind(7, transaction.to_string().as_str())?;
             }
         }
-        statement.bind(8, &**block.prev_block_hash)?;
-        statement.bind(9, &**block.hash)?;
-        statement.bind(10, &**block.pub_key)?;
-        statement.bind(11, &**block.signature)?;
+        statement.bind(8, block.prev_block_hash.as_slice())?;
+        statement.bind(9, block.hash.as_slice())?;
+        statement.bind(10, block.pub_key.as_slice())?;
+        statement.bind(11, block.signature.as_slice())?;
         statement.next()
     }
 
@@ -409,11 +409,11 @@ impl Chain {
         let mut statement = self.db.prepare(sql)?;
         statement.bind(1, index as i64)?;
         statement.bind(2, timestamp)?;
-        statement.bind(3, &**t.identity)?;
-        statement.bind(4, &**t.confirmation)?;
+        statement.bind(3, t.identity.as_slice())?;
+        statement.bind(4, t.confirmation.as_slice())?;
         statement.bind(5, t.data.as_ref() as &str)?;
-        statement.bind(6, &**t.signing)?;
-        statement.bind(7, &**t.encryption)?;
+        statement.bind(6, t.signing.as_slice())?;
+        statement.bind(7, t.encryption.as_slice())?;
         statement.next()
     }
 
@@ -488,12 +488,13 @@ impl Chain {
     }
 
     /// Checks if any domain is available to mine for this client (pub_key)
-    pub fn is_domain_available(&self, height: u64, domain: &str, keystore: &Keystore) -> bool {
+    pub fn is_domain_available(&self, height: u64, domain: &str, public_key: &Bytes) -> bool {
         if domain.is_empty() {
             return false;
         }
         let identity_hash = hash_identity(domain, None);
-        if !self.is_id_available(height, &identity_hash, &keystore.get_public()) {
+        if !self.is_id_available(height, &identity_hash, public_key) {
+            warn!("Domain {} is not available!", domain);
             return false;
         }
 
@@ -512,7 +513,7 @@ impl Chain {
     pub fn is_id_available(&self, height: u64, identity: &Bytes, public_key: &Bytes) -> bool {
         let mut statement = self.db.prepare(SQL_GET_DOMAIN_OWNER_BY_ID).unwrap();
         statement.bind(1, height as i64).expect("Error in bind");
-        statement.bind(2, &***identity).expect("Error in bind");
+        statement.bind(2, identity.as_slice()).expect("Error in bind");
         while let State::Row = statement.next().unwrap() {
             let pub_key = Bytes::from_bytes(&statement.read::<Vec<u8>>(0).unwrap());
             if !pub_key.eq(public_key) {
@@ -557,7 +558,7 @@ impl Chain {
         // Checking for existing domain in DB
         let mut statement = self.db.prepare(SQL_GET_DOMAIN_OWNER_BY_ID).unwrap();
         statement.bind(1, height as i64).expect("Error in bind");
-        statement.bind(2, &***id).expect("Error in bind");
+        statement.bind(2, id.as_slice()).expect("Error in bind");
         if let State::Row = statement.next().unwrap() {
             // If there is such an ID
             return true;
@@ -705,7 +706,7 @@ impl Chain {
         let keystore = keystore.unwrap();
         let pub_key = keystore.get_public();
         let mut statement = self.db.prepare(SQL_GET_DOMAINS_BY_KEY).unwrap();
-        statement.bind(1, &**pub_key).expect("Error in bind");
+        statement.bind(1, pub_key.as_slice()).expect("Error in bind");
         let height = self.get_height();
         while let State::Row = statement.next().unwrap() {
             let timestamp = statement.read::<i64>(0).unwrap();
@@ -805,13 +806,9 @@ impl Chain {
         }
         if let Some(last) = last_block {
             if block.index > last.index + 1 {
-                info!("Got future block {}", block.index);
+                debug!("Got future block {}", block.index);
                 return Future;
             }
-        }
-        if !check_public_key_strength(&block.pub_key, KEYSTORE_DIFFICULTY) {
-            warn!("Ignoring block with weak public key:\n{:?}", &block);
-            return Bad;
         }
         let difficulty = match &block.transaction {
             None => {
@@ -853,12 +850,12 @@ impl Chain {
         }
 
         if let Some(transaction) = &block.transaction {
-            let current_height = match last_block {
-                None => 0,
-                Some(block) => block.index
-            };
+            if !check_public_key_strength(&block.pub_key, KEYSTORE_DIFFICULTY) {
+                warn!("Ignoring block with weak public key:\n{:?}", &block);
+                return Bad;
+            }
             // If this domain is not available to this public key
-            if !self.is_id_available(current_height, &transaction.identity, &block.pub_key) {
+            if !self.is_id_available(block.index - 1, &transaction.identity, &block.pub_key) {
                 warn!("Block {:?} is trying to spoof an identity!", &block);
                 return Bad;
             }

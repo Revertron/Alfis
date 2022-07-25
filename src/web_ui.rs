@@ -126,7 +126,7 @@ fn action_check_domain(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>
     let c = context.lock().unwrap();
     if let Some(keystore) = c.get_keystore() {
         let name = name.to_lowercase();
-        let available = c.get_chain().is_domain_available(c.get_chain().get_height(), &name, keystore);
+        let available = c.get_chain().is_domain_available(c.get_chain().get_height(), &name, &keystore.get_public());
         web_view.eval(&format!("domainAvailable({})", available)).expect("Error evaluating!");
     }
 }

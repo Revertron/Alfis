@@ -7,10 +7,16 @@ use crate::{Block, Bytes, Keystore};
 
 /// Checks block's hash and returns true on valid hash or false otherwise
 pub fn check_block_hash(block: &Block) -> bool {
+    // If this block's hash was already checked as good
+    if block.is_hash_good() {
+        return true;
+    }
     let mut copy: Block = block.clone();
     copy.hash = Bytes::default();
     copy.signature = Bytes::default();
-    blakeout_data(&copy.as_bytes_compact()) == block.hash
+    let good = blakeout_data(&copy.as_bytes_compact()) == block.hash;
+    block.set_hash_good(good);
+    good
 }
 
 /// Hashes data by given hasher

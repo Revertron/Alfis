@@ -598,7 +598,7 @@ impl Network {
                 if index != block.index {
                     return State::Banned;
                 }
-                info!("Received block {} with hash {:?}", block.index, &block.hash);
+                debug!("Received block {} with hash {:?}", block.index, &block.hash);
                 if !seen_blocks.contains(&block.hash) {
                     self.handle_block(token, block, seen_blocks)
                 } else {

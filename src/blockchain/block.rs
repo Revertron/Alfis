@@ -1,6 +1,7 @@
 extern crate serde;
 extern crate serde_json;
 
+use std::cell::RefCell;
 use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
@@ -27,7 +28,9 @@ pub struct Block {
     #[serde(default, skip_serializing_if = "Bytes::is_zero")]
     pub signature: Bytes,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub transaction: Option<Transaction>
+    pub transaction: Option<Transaction>,
+    #[serde(default, skip)]
+    hash_good: RefCell<bool>
 }
 
 impl Block {
@@ -43,7 +46,8 @@ impl Block {
             prev_block_hash,
             hash: Bytes::default(),
             pub_key,
-            signature: Bytes::default()
+            signature: Bytes::default(),
+            hash_good: RefCell::new(false)
         }
     }
 
@@ -60,7 +64,8 @@ impl Block {
             prev_block_hash,
             hash,
             pub_key,
-            signature
+            signature,
+            hash_good: RefCell::new(false)
         }
     }
 
@@ -72,6 +77,14 @@ impl Block {
         self.index == 1 &&
             matches!(Transaction::get_type(&self.transaction), TransactionType::Origin) &&
             self.prev_block_hash == Bytes::default()
+    }
+
+    pub fn is_hash_good(&self) -> bool {
+        *self.hash_good.borrow()
+    }
+
+    pub fn set_hash_good(&self, good: bool) {
+        *self.hash_good.borrow_mut() = good;
     }
 
     /// Serializes block to CBOR for network
