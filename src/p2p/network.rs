@@ -250,7 +250,7 @@ impl Network {
                         debug!("Node from {} disconnected", peer.get_addr().ip());
                         return false;
                     }
-                    match peer.get_state().clone() {
+                    match *peer.get_state() {
                         State::Connected => {
                             let stream = peer.get_stream();
                             return match read_client_handshake(stream) {
@@ -333,9 +333,9 @@ impl Network {
                     let new_state = self.handle_message(message, &event.token(), seen_blocks);
                     let peer = self.peers.get_mut_peer(&event.token()).unwrap();
                     //debug!("Got message from {}: {:?}", &peer.get_addr(), &m);
-                    let stream = peer.get_stream();
                     match new_state {
                         State::Message { data } => {
+                            let stream = peer.get_stream();
                             registry.reregister(stream, event.token(), Interest::WRITABLE).unwrap();
                             peer.set_state(State::Message { data });
                         }
@@ -358,6 +358,7 @@ impl Network {
                             self.peers.ignore_peer(registry, &event.token());
                         }
                         State::SendLoop => {
+                            let stream = peer.get_stream();
                             registry.reregister(stream, event.token(), Interest::WRITABLE).unwrap();
                             peer.set_state(State::SendLoop);
                         }
