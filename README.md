@@ -29,6 +29,8 @@ There are 10 domain zones available to get domain in:
 `.anon`, `.btn`, `.conf`, `.index`, `.merch`, `.mirror`, `.mob`, `.screen`, `.srv`, `.ygg`.
 But, `.anon` and `.ygg` are bound to have IP-addresses from Yggdrasil Network only.
 
+You can view the DB on the [online blockchain browser](https://viewer.alfis.name).
+
 ## Building and running
 
 ### On every OS
