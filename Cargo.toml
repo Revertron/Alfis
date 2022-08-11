@@ -1,6 +1,6 @@
 [package]
 name = "alfis"
-version = "0.7.8"
+version = "0.7.9"
 authors = ["Revertron <alfis@revertron.com>"]
 edition = "2021"
 build = "build.rs"
@@ -43,6 +43,7 @@ ureq = { version = "2.5", optional = true }
 lru = "0.7.8"
 derive_more = "0.99.17"
 lazy_static = "1.4.0"
+log-panics = { version = "2", features = ["with-backtrace"]}
 
 # Optional dependencies regulated by features
 web-view = { version = "0.7.3", features = [], optional = true }
@@ -68,7 +69,7 @@ opt-level = 3
 lto = true
 
 [profile.dev]
-opt-level = 2
+#opt-level = 2
 
 [profile.test]
 opt-level = 2

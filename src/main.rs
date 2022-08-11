@@ -12,6 +12,7 @@ use getopts::{Matches, Options};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn, LevelFilter};
 use simplelog::{ColorChoice, CombinedLogger, ConfigBuilder, format_description, LevelPadding, TerminalMode, TermLogger, WriteLogger};
+use log_panics;
 #[cfg(windows)]
 use winapi::um::wincon::{AttachConsole, FreeConsole, ATTACH_PARENT_PROCESS};
 extern crate lazy_static;
@@ -297,6 +298,19 @@ fn setup_logger(opt_matches: &Matches, console_attached: bool) {
             }
         }
     }
+    log_panics::Config::new()
+    .backtrace_mode( { 
+        
+        let is_bactrace_on = env::var("RUST_BACKTRACE"); 
+        match is_bactrace_on { 
+            Ok(val) => { if val == "1" {log_panics::BacktraceMode::Resolved} else {
+                log_panics::BacktraceMode::Off} 
+
+            }, 
+            Err(_) => {log_panics::BacktraceMode::Off},
+        }
+     }   )
+    .install_panic_hook()
 }
 
 /// Gets own domains by current loaded keystore and writes them to log
