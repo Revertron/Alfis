@@ -196,7 +196,7 @@ impl Peers {
                 count += 1;
             } else {
                 if !matches!(peer.get_state(), State::Connecting) {
-                    debug!("Inactive peer from {:?} in state: {:?}", peer.get_addr(), peer.get_state());
+                    trace!("Inactive peer from {:?} in state: {:?}", peer.get_addr(), peer.get_state());
                 }
             }
         }
