@@ -112,12 +112,12 @@ dependencies = [
  "serde_cbor",
  "serde_derive",
  "serde_json",
- "sha2 0.10.2",
+ "sha2 0.10.5",
  "signature",
  "simplelog",
  "sqlite",
  "thread-priority",
- "time 0.3.11",
+ "time 0.3.14",
  "tinyfiledialogs",
  "toml",
  "ureq",
@@ -1142,9 +1142,9 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.10.2"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55deaec60f81eefe3cce0dc50bda92d6d8e88f2a27df7c5033b42afeb1ed2676"
+checksum = "cf9db03534dff993187064c4e0c05a5708d2a9728ace9a8959b77bedf415dac5"
 dependencies = [
  "cfg-if",
  "cpufeatures",
@@ -1153,9 +1153,9 @@ dependencies = [
 
 [[package]]
 name = "signature"
-version = "1.5.0"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f054c6c1a6e95179d6f23ed974060dcefb2d9388bb7256900badad682c499de4"
+checksum = "f0ea32af43239f0d353a7dd75a22d94c329c8cdaafdcb4c1c1335aa10c298a4a"
 
 [[package]]
 name = "simplelog"
@@ -1165,7 +1165,7 @@ checksum = "48dfff04aade74dd495b007c831cd6f4e0cee19c344dd9dc0884c0289b70a786"
 dependencies = [
  "log",
  "termcolor",
- "time 0.3.11",
+ "time 0.3.14",
 ]
 
 [[package]]
@@ -1312,9 +1312,9 @@ dependencies = [
 
 [[package]]
 name = "thread-priority"
-version = "0.8.2"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "696668a68983ad737e08e11e9afb701e962cab9f07f2a4ff339316b2d5b0870d"
+checksum = "5a8a950b52fd40d98ac6ed41c7fa9e8dd62b131f48b74f418e810476b01a7460"
 dependencies = [
  "cfg-if",
  "libc",
@@ -1335,9 +1335,9 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.11"
+version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72c91f41dcb2f096c05f0873d667dceec1087ce5bcf984ec8ffb19acddbb3217"
+checksum = "3c3f9a28b618c3a6b9251b6908e9c99e04b9e5c02e6581ccbb67d59c34ef7f9b"
 dependencies = [
  "itoa",
  "libc",
