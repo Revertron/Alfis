@@ -1,11 +1,10 @@
-use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::time::Instant;
 
 use mio::net::TcpStream;
 
 use crate::crypto::Chacha;
 use crate::p2p::State;
-use crate::Block;
 
 #[derive(Debug)]
 pub struct Peer {
@@ -17,11 +16,11 @@ pub struct Peer {
     inbound: bool,
     public: bool,
     active: bool,
+    last_active: Instant,
     reconnects: u32,
     received_block: u64,
     sent_height: u64,
-    cipher: Option<Chacha>,
-    fork: HashMap<u64, Block>
+    cipher: Option<Chacha>
 }
 
 impl Peer {
@@ -35,11 +34,11 @@ impl Peer {
             inbound,
             public: false,
             active: false,
+            last_active: Instant::now(),
             reconnects: 0,
             received_block: 0,
             sent_height: 0,
-            cipher: None,
-            fork: HashMap::new()
+            cipher: None
         }
     }
 
@@ -133,10 +132,13 @@ impl Peer {
 
     pub fn set_active(&mut self, active: bool) {
         self.active = active;
+        if active {
+            self.last_active = Instant::now();
+        }
     }
 
     pub fn active(&self) -> bool {
-        self.active
+        self.active && self.last_active.elapsed().as_secs() < 120
     }
 
     pub fn reconnects(&self) -> u32 {
@@ -157,14 +159,6 @@ impl Peer {
 
     pub fn is_inbound(&self) -> bool {
         self.inbound
-    }
-
-    pub fn add_fork_block(&mut self, block: Block) {
-        self.fork.insert(block.index, block);
-    }
-
-    pub fn get_fork(&self) -> &HashMap<u64, Block> {
-        &self.fork
     }
 
     /// If loopback address then we care about ip and port.

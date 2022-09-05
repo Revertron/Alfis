@@ -359,7 +359,7 @@ impl Network {
                         }
                         State::SendLoop => {
                             let stream = peer.get_stream();
-                            registry.reregister(stream, event.token(), Interest::WRITABLE).unwrap();
+                            registry.reregister(stream, event.token(), Interest::WRITABLE | Interest::READABLE).unwrap();
                             peer.set_state(State::SendLoop);
                         }
                         State::Twin => {
@@ -461,6 +461,7 @@ impl Network {
         let answer = match message {
             Message::Hand { app_version, origin, version, public, rand_id } => {
                 if app_version.starts_with("0.6") {
+                    info!("Banning peer with version {}", &app_version);
                     return State::Banned;
                 }
                 if self.peers.is_our_own_connect(&rand_id) {
@@ -495,6 +496,7 @@ impl Network {
                     return State::Twin;
                 }
                 if app_version.starts_with("0.6") {
+                    info!("Banning peer with version {}", &app_version);
                     return State::Banned;
                 }
                 let nodes = self.peers.get_peers_active_count();
