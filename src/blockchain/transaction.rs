@@ -127,6 +127,18 @@ impl DomainData {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub enum DomainState {
+    // Not in blockchain, free to mine
+    NotFound,
+    // Active, not expired domain
+    Alive { renewed_time: i64, until: i64 },
+    // Expired, but can be renewed only by owner
+    Expired { renewed_time: i64, until: i64 },
+    // Expired and can be recaptured by anyone
+    Free { renewed_time: i64 }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Origin {
     zones: Bytes
 }

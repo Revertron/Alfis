@@ -13,7 +13,7 @@ pub enum BlockQuality {
     Fork
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum MineResult {
     Fine,
     WrongName,

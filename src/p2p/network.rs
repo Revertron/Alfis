@@ -460,7 +460,7 @@ impl Network {
         let my_id = self.peers.get_my_id().to_owned();
         let answer = match message {
             Message::Hand { app_version, origin, version, public, rand_id } => {
-                if app_version.starts_with("0.6") {
+                if !version_compatible(&app_version) {
                     info!("Banning peer with version {}", &app_version);
                     return State::Banned;
                 }
@@ -495,7 +495,7 @@ impl Network {
                 if self.peers.is_tween_connect(&rand_id) {
                     return State::Twin;
                 }
-                if app_version.starts_with("0.6") {
+                if !version_compatible(&app_version) {
                     info!("Banning peer with version {}", &app_version);
                     return State::Banned;
                 }
@@ -916,4 +916,11 @@ fn would_block(err: &io::Error) -> bool {
 
 fn interrupted(err: &io::Error) -> bool {
     err.kind() == io::ErrorKind::Interrupted
+}
+
+fn version_compatible(version: &str) -> bool {
+    let my_version = env!("CARGO_PKG_VERSION");
+    let parts = my_version.split('.').collect::<Vec<&str>>();
+    let major = format!("{}.{}", parts[0], parts[1]);
+    version.starts_with(&major)
 }
