@@ -417,6 +417,7 @@ impl Network {
                         encode_message(&message, peer.get_cipher()).unwrap()
                     };
                     send_message(peer.get_stream(), &data).unwrap_or_else(|e| warn!("Error sending hello {}", e));
+                    peer.set_state(State::idle());
                     //debug!("Sent hello to {}", &peer.get_addr());
                 }
                 State::Connected => {}
@@ -425,6 +426,7 @@ impl Network {
                     if let Ok(data) = encode_bytes(&data, peer.get_cipher()) {
                         send_message(peer.get_stream(), &data).unwrap_or_else(|e| warn!("Error sending message {}", e));
                     }
+                    peer.set_state(State::idle());
                 }
                 State::Idle { from } => {
                     debug!("Odd version of pings :)");
@@ -444,10 +446,12 @@ impl Network {
                 State::SendLoop => {
                     let data = encode_message(&Message::Loop, peer.get_cipher()).unwrap();
                     send_message(peer.get_stream(), &data).unwrap_or_else(|e| warn!("Error sending loop {}", e));
+                    peer.set_state(State::idle());
                 }
                 State::Twin => {
                     let data = encode_message(&Message::Twin, peer.get_cipher()).unwrap();
                     send_message(peer.get_stream(), &data).unwrap_or_else(|e| warn!("Error sending loop {}", e));
+                    peer.set_state(State::idle());
                 }
             }
             registry.reregister(peer.get_stream(), event.token(), Interest::READABLE).unwrap();

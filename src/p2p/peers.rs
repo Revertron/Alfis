@@ -308,7 +308,7 @@ impl Peers {
                 None => {}
                 Some((token, peer)) => {
                     debug!("Peer {} is behind ({}), sending ping", &peer.get_addr().ip(), peer.get_height());
-                    registry.reregister(peer.get_stream(), *token, Interest::WRITABLE | Interest::READABLE).unwrap();
+                    registry.reregister(peer.get_stream(), *token, Interest::WRITABLE).unwrap();
                     peer.set_state(State::message(Message::Ping { height, hash }));
                     peer.set_sent_height(height);
                     self.update_behind_ping_time();
