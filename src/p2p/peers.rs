@@ -9,6 +9,7 @@ use chrono::Utc;
 use log::{debug, error, info, trace, warn};
 use mio::net::TcpStream;
 use mio::{Interest, Registry, Token};
+use rand::prelude::SliceRandom;
 use rand::random;
 use rand::seq::IteratorRandom;
 
@@ -362,10 +363,11 @@ impl Peers {
 
     fn ask_blocks_from_peers(&mut self, registry: &Registry, height: u64, max_height: u64, have_blocks: HashSet<u64>) {
         let mut rng = rand::thread_rng();
-        let peers = self.peers
+        let mut peers = self.peers
             .iter_mut()
             .filter_map(|(token, peer)| if peer.has_more_blocks(height) { Some((token, peer)) } else { None })
             .choose_multiple(&mut rng, (max_height - height) as usize);
+        peers.shuffle(&mut rng);
         let mut index = height + 1;
         for (token, peer) in peers {
             if have_blocks.contains(&index) {
@@ -374,7 +376,7 @@ impl Peers {
                 continue;
             }
             debug!("Peer {} is higher than we are, requesting block {}", &peer.get_addr().ip(), index);
-            registry.reregister(peer.get_stream(), *token, Interest::WRITABLE | Interest::READABLE).unwrap();
+            registry.reregister(peer.get_stream(), *token, Interest::WRITABLE).unwrap();
             peer.set_state(State::message(Message::GetBlock { index }));
             index += 1;
             if index > max_height {

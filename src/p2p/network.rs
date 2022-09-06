@@ -227,11 +227,15 @@ impl Network {
         }
 
         if event.is_readable() {
-            return self.process_readable(registry, event, seen_blocks);
+            if !self.process_readable(registry, event, seen_blocks) {
+                return false;
+            }
         }
 
         if event.is_writable() {
-            return self.process_writable(registry, event);
+            if !self.process_writable(registry, event) {
+                return false;
+            }
         }
 
         true
