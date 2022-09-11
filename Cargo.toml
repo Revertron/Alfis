@@ -66,6 +66,7 @@ serde_derive = "1.0.126"
 [profile.release]
 opt-level = 3
 lto = true
+strip = true  # Automatically strip symbols from the binary.
 
 [profile.dev]
 opt-level = 2
