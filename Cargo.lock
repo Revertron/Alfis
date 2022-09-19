@@ -93,7 +93,7 @@ dependencies = [
  "chacha20poly1305",
  "chrono",
  "derive_more",
- "digest 0.10.3",
+ "digest 0.10.5",
  "ecies-ed25519",
  "ed25519-dalek",
  "getopts",
@@ -432,9 +432,9 @@ dependencies = [
 
 [[package]]
 name = "digest"
-version = "0.10.3"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2fb860ca6fafa5552fb6d0e816a69c8e49f0908bf524e30a90d97c85892d506"
+checksum = "adfbc57365a37acbd2ebf2b64d7e69bb766e2fea813521ed536f5d0520dcf86c"
 dependencies = [
  "block-buffer 0.10.0",
  "crypto-common",
@@ -1148,7 +1148,7 @@ checksum = "cf9db03534dff993187064c4e0c05a5708d2a9728ace9a8959b77bedf415dac5"
 dependencies = [
  "cfg-if",
  "cpufeatures",
- "digest 0.10.3",
+ "digest 0.10.5",
 ]
 
 [[package]]
