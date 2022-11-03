@@ -51,4 +51,4 @@ pub const MIN_CONNECTED_NODES_START_SYNC: usize = 4;
 pub const MAX_READ_BLOCK_TIME: u128 = 100;
 pub const MAX_RECONNECTS: u32 = 5;
 pub const MAX_IDLE_SECONDS: u64 = 180;
-pub const MAX_NODES: usize = 200;
+pub const MAX_NODES: usize = 15;
