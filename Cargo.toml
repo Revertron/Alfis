@@ -1,6 +1,6 @@
 [package]
 name = "alfis"
-version = "0.8.2"
+version = "0.8.3"
 authors = ["Revertron <alfis@revertron.com>"]
 edition = "2021"
 build = "build.rs"
@@ -15,8 +15,8 @@ getopts = "0.2.21"
 log = "0.4.17"
 simplelog = "0.12.0"
 toml = "0.5.9"
-digest = "0.10.2"
-sha2 = "0.10.5"
+digest = "0.10.5"
+sha2 = "0.10.6"
 ed25519-dalek = "1.0"
 x25519-dalek = "1.2"
 ecies-ed25519 = "0.5"
@@ -40,14 +40,14 @@ sqlite = "0.26.0"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 mio = { version = "0.8.4", features = ["os-poll", "net"] }
 ureq = { version = "2.5", optional = true }
-lru = "0.7.8"
+lru = "0.8.1"
 derive_more = "0.99.17"
 lazy_static = "1.4.0"
 
 # Optional dependencies regulated by features
 web-view = { version = "0.7.3", features = [], optional = true }
 tinyfiledialogs = { version = "3.9.1", optional = true }
-open = { version = "3.0.2", optional = true }
+open = { version = "3.0.3", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = ["impl-default", "wincon", "shellscalingapi"] }

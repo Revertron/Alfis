@@ -7,6 +7,7 @@ use std::marker::{Send, Sync};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs, UdpSocket};
 #[cfg(feature = "doh")]
 use std::net::IpAddr;
+use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicUsize, Ordering, AtomicBool};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
@@ -400,7 +401,7 @@ impl HttpsDnsClient {
             .collect::<Vec<SocketAddr>>();
         trace!("Using bootstraps: {:?}", &servers);
 
-        let cache: LruCache<String, Vec<SocketAddr>> = LruCache::new(10);
+        let cache: LruCache<String, Vec<SocketAddr>> = LruCache::new(NonZeroUsize::new(10).unwrap());
         let cache = RwLock::new(cache);
 
         let agent = ureq::AgentBuilder::new()

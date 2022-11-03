@@ -3,6 +3,7 @@
 use std::collections::VecDeque;
 use std::io::Write;
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream, UdpSocket};
+use std::num::NonZeroUsize;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Condvar, Mutex};
@@ -239,7 +240,7 @@ impl DnsServer for DnsUdpServer {
         let _ = Builder::new()
             .name("DnsUdpServer-incoming".into())
             .spawn(move || {
-                let mut working_ids: LruCache<(SocketAddr, u16), i64> = LruCache::new(256);
+                let mut working_ids: LruCache<(SocketAddr, u16), i64> = LruCache::new(NonZeroUsize::new(256).unwrap());
                 loop {
                     let _ = self.context.statistics.udp_query_count.fetch_add(1, Ordering::Release);
 
