@@ -43,6 +43,7 @@ ureq = { version = "2.5", optional = true }
 lru = "0.8.1"
 derive_more = "0.99.17"
 lazy_static = "1.4.0"
+spmc = "0.3.0"
 
 # Optional dependencies regulated by features
 web-view = { version = "0.7.3", features = [], optional = true }
