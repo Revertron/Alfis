@@ -84,7 +84,7 @@ dependencies = [
 
 [[package]]
 name = "alfis"
-version = "0.8.3"
+version = "0.8.4"
 dependencies = [
  "base64",
  "bincode",
@@ -1484,9 +1484,9 @@ checksum = "5a1f0175e03a0973cf4afd476bef05c26e228520400eb1fd473ad417b1c00ffb"
 
 [[package]]
 name = "uuid"
-version = "1.1.2"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd6469f4314d5f1ffec476e05f17cc9a78bc7a27a6a857842170bdf8d6f98d2f"
+checksum = "feb41e78f93363bb2df8b0e86a2ca30eed7806ea16ea0c790d757cf93f79be83"
 dependencies = [
  "getrandom 0.2.3",
  "serde",

@@ -37,7 +37,7 @@ time = "0.3.14"
 rand = { version = "0.8.5", package = "rand" }
 rand-old = { package = "rand", version = "0.7.0" } # For ed25519-dalek
 sqlite = "0.26.0"
-uuid = { version = "1.1.2", features = ["serde", "v4"] }
+uuid = { version = "1.2.1", features = ["serde", "v4"] }
 mio = { version = "0.8.4", features = ["os-poll", "net"] }
 ureq = { version = "2.5", optional = true }
 lru = "0.8.1"
