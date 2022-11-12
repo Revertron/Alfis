@@ -64,6 +64,7 @@ impl Network {
         let mut server = TcpListener::bind(addr).expect("Can't bind to address");
         debug!("Started node listener on {}", server.local_addr().unwrap());
 
+        let mut buffer = vec![0u8; 65535];
         let mut events = Events::with_capacity(64);
         let mut poll = Poll::new().expect("Unable to create poll");
         poll.registry().register(&mut server, SERVER, Interest::READABLE).expect("Error registering poll");
@@ -146,7 +147,7 @@ impl Network {
                         }
                     }
                     token => {
-                        if !self.handle_connection_event(poll.registry(), event, &mut seen_blocks) {
+                        if !self.handle_connection_event(poll.registry(), event, &mut seen_blocks, &mut buffer) {
                             let _ = self.peers.close_peer(poll.registry(), &token);
                             let blocks = self.context.lock().unwrap().chain.get_height();
                             let keys = self.context.lock().unwrap().chain.get_users_count();
@@ -202,7 +203,7 @@ impl Network {
                         log_timer = Instant::now();
                         seen_blocks.clear();
                     }
-                    if nodes < MAX_NODES && connect_timer.elapsed().as_secs() >= 5 {
+                    if nodes < MAX_NODES && connect_timer.elapsed().as_secs() >= 2 {
                         self.peers.connect_new_peers(poll.registry(), &mut self.token, yggdrasil_only);
                         connect_timer = Instant::now();
                     }
@@ -221,24 +222,28 @@ impl Network {
         }
     }
 
-    fn handle_connection_event(&mut self, registry: &Registry, event: &Event, seen_blocks: &mut HashSet<Bytes>) -> bool {
+    fn handle_connection_event(&mut self, registry: &Registry, event: &Event, seen_blocks: &mut HashSet<Bytes>, buf: &mut [u8]) -> bool {
         if event.is_error() || (event.is_read_closed() && event.is_write_closed()) {
             return false;
         }
 
         if event.is_readable() {
-            return self.process_readable(registry, event, seen_blocks);
+            if !self.process_readable(registry, event, seen_blocks, buf) {
+                return false;
+            }
         }
 
         if event.is_writable() {
-            return self.process_writable(registry, event);
+            if !self.process_writable(registry, event) {
+                return false;
+            }
         }
 
         true
     }
 
-    fn process_readable(&mut self, registry: &Registry, event: &Event, seen_blocks: &mut HashSet<Bytes>) -> bool {
-        let data = {
+    fn process_readable(&mut self, registry: &Registry, event: &Event, seen_blocks: &mut HashSet<Bytes>, buf: &mut [u8]) -> bool {
+        let data_size = {
             let token = event.token();
             match self.peers.get_mut_peer(&token) {
                 None => {
@@ -304,18 +309,18 @@ impl Network {
                         }
                         _ => {
                             let stream = peer.get_stream();
-                            read_message(stream)
+                            read_message(stream, buf)
                         }
                     }
                 }
             }
         };
 
-        if let Ok(data) = data {
+        if let Ok(data_size) = data_size {
             let data = {
                 match self.peers.get_peer(&event.token()) {
                     Some(peer) => {
-                        match decode_message(&data, peer.get_cipher()) {
+                        match decode_message(&buf[0..data_size], peer.get_cipher()) {
                             Ok(data) => data,
                             Err(_) => {
                                 vec![]
@@ -359,7 +364,7 @@ impl Network {
                         }
                         State::SendLoop => {
                             let stream = peer.get_stream();
-                            registry.reregister(stream, event.token(), Interest::WRITABLE).unwrap();
+                            registry.reregister(stream, event.token(), Interest::WRITABLE | Interest::READABLE).unwrap();
                             peer.set_state(State::SendLoop);
                         }
                         State::Twin => {
@@ -376,7 +381,7 @@ impl Network {
                 }
             }
         } else {
-            let error = data.err().unwrap();
+            let error = data_size.err().unwrap();
             let addr = match self.peers.get_peer(&event.token()) {
                 None => String::from("unknown"),
                 Some(peer) => peer.get_addr().to_string()
@@ -413,6 +418,7 @@ impl Network {
                         encode_message(&message, peer.get_cipher()).unwrap()
                     };
                     send_message(peer.get_stream(), &data).unwrap_or_else(|e| warn!("Error sending hello {}", e));
+                    peer.set_state(State::idle());
                     //debug!("Sent hello to {}", &peer.get_addr());
                 }
                 State::Connected => {}
@@ -421,6 +427,7 @@ impl Network {
                     if let Ok(data) = encode_bytes(&data, peer.get_cipher()) {
                         send_message(peer.get_stream(), &data).unwrap_or_else(|e| warn!("Error sending message {}", e));
                     }
+                    peer.set_state(State::idle());
                 }
                 State::Idle { from } => {
                     debug!("Odd version of pings :)");
@@ -440,10 +447,12 @@ impl Network {
                 State::SendLoop => {
                     let data = encode_message(&Message::Loop, peer.get_cipher()).unwrap();
                     send_message(peer.get_stream(), &data).unwrap_or_else(|e| warn!("Error sending loop {}", e));
+                    peer.set_state(State::idle());
                 }
                 State::Twin => {
                     let data = encode_message(&Message::Twin, peer.get_cipher()).unwrap();
                     send_message(peer.get_stream(), &data).unwrap_or_else(|e| warn!("Error sending loop {}", e));
+                    peer.set_state(State::idle());
                 }
             }
             registry.reregister(peer.get_stream(), event.token(), Interest::READABLE).unwrap();
@@ -460,7 +469,8 @@ impl Network {
         let my_id = self.peers.get_my_id().to_owned();
         let answer = match message {
             Message::Hand { app_version, origin, version, public, rand_id } => {
-                if app_version.starts_with("0.6") {
+                if !version_compatible(&app_version) {
+                    info!("Banning peer with version {}", &app_version);
                     return State::Banned;
                 }
                 if self.peers.is_our_own_connect(&rand_id) {
@@ -494,7 +504,8 @@ impl Network {
                 if self.peers.is_tween_connect(&rand_id) {
                     return State::Twin;
                 }
-                if app_version.starts_with("0.6") {
+                if !version_compatible(&app_version) {
+                    info!("Banning peer with version {}", &app_version);
                     return State::Banned;
                 }
                 let nodes = self.peers.get_peers_active_count();
@@ -741,18 +752,17 @@ fn decode_message(data: &[u8], cipher: &Option<Chacha>) -> Result<Vec<u8>, chach
     }
 }
 
-fn read_message(stream: &mut TcpStream) -> Result<Vec<u8>, Error> {
+fn read_message(stream: &mut TcpStream, buf: &mut [u8]) -> Result<usize, Error> {
     let instant = Instant::now();
     let data_size = (stream.read_u16::<BigEndian>()? ^ 0xAAAA) as usize;
     if data_size == 0 {
         return Err(io::Error::from(ErrorKind::InvalidInput));
     }
 
-    let mut buf = vec![0u8; data_size];
     let mut bytes_read = 0;
     let delay = Duration::from_millis(2);
     loop {
-        match stream.read(&mut buf[bytes_read..]) {
+        match stream.read(&mut buf[bytes_read..data_size]) {
             Ok(bytes) => {
                 bytes_read += bytes;
                 if bytes_read == data_size {
@@ -767,7 +777,7 @@ fn read_message(stream: &mut TcpStream) -> Result<Vec<u8>, Error> {
                     thread::sleep(delay);
                     continue;
                 } else {
-                    break;
+                    return Err(io::Error::from(ErrorKind::WouldBlock));
                 }
             },
             Err(ref err) if interrupted(err) => continue,
@@ -778,10 +788,10 @@ fn read_message(stream: &mut TcpStream) -> Result<Vec<u8>, Error> {
             },
         }
     }
-    if buf.len() == data_size {
-        Ok(buf)
+    if bytes_read == data_size {
+        Ok(data_size)
     } else {
-        Err(io::Error::from(ErrorKind::WouldBlock))
+        Err(io::Error::from(ErrorKind::BrokenPipe))
     }
 }
 
@@ -914,4 +924,11 @@ fn would_block(err: &io::Error) -> bool {
 
 fn interrupted(err: &io::Error) -> bool {
     err.kind() == io::ErrorKind::Interrupted
+}
+
+fn version_compatible(version: &str) -> bool {
+    let my_version = env!("CARGO_PKG_VERSION");
+    let parts = my_version.split('.').collect::<Vec<&str>>();
+    let major = format!("{}.{}", parts[0], parts[1]);
+    version.starts_with(&major)
 }

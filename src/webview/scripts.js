@@ -191,7 +191,8 @@ function editDomain(domain, event) {
                 recordsBuffer.push(v);
             });
         }
-        document.getElementById("new_domain").value = title.replace("." + domain_data.zone, "");
+        currentDomain = title.replace("." + domain_data.zone, "");
+        document.getElementById("new_domain").value = currentDomain;
         if (typeof domain_data.info !== 'undefined') {
             document.getElementById("info_text").value = domain_data.info;
         }

@@ -7,6 +7,8 @@ use std::marker::{Send, Sync};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs, UdpSocket};
 #[cfg(feature = "doh")]
 use std::net::IpAddr;
+#[cfg(feature = "doh")]
+use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicUsize, Ordering, AtomicBool};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
@@ -400,13 +402,13 @@ impl HttpsDnsClient {
             .collect::<Vec<SocketAddr>>();
         trace!("Using bootstraps: {:?}", &servers);
 
-        let cache: LruCache<String, Vec<SocketAddr>> = LruCache::new(10);
+        let cache: LruCache<String, Vec<SocketAddr>> = LruCache::new(NonZeroUsize::new(10).unwrap());
         let cache = RwLock::new(cache);
 
         let agent = ureq::AgentBuilder::new()
             .user_agent(&client_name)
-            .timeout(std::time::Duration::from_secs(5))
-            .max_idle_connections_per_host(2)
+            .timeout(std::time::Duration::from_secs(3))
+            .max_idle_connections_per_host(4)
             .max_idle_connections(16)
             .resolver(move |addr: &str| {
                 let addr = match addr.find(':') {
