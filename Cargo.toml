@@ -46,7 +46,7 @@ lazy_static = "1.4.0"
 spmc = "0.3.0"
 
 # Optional dependencies regulated by features
-web-view = { version = "0.7.3", features = [], optional = true }
+web-view = { git = "https://github.com/Boscop/web-view", ref = "e87e08cab3a2d500d54068ec9c7aaa055a711465", features = [], optional = true }
 tinyfiledialogs = { version = "3.9.1", optional = true }
 open = { version = "3.0.3", optional = true }
 
