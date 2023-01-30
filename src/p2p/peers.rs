@@ -15,15 +15,14 @@ use rand::seq::IteratorRandom;
 
 use crate::commons::*;
 use crate::p2p::{Message, Peer, State};
-use crate::{commons, Bytes};
+use crate::Bytes;
 
 const PING_PERIOD: u64 = 30;
 
 pub struct Peers {
     peers: HashMap<Token, Peer>,
     new_peers: Vec<SocketAddr>,
-    ignored: HashSet<IpAddr>,
-    ignore_timer: Instant,
+    ignored: HashMap<IpAddr, Instant>,
     my_id: String,
     behind_ping_sent_time: i64
 }
@@ -33,9 +32,8 @@ impl Peers {
         Peers {
             peers: HashMap::new(),
             new_peers: Vec::new(),
-            ignored: HashSet::new(),
-            ignore_timer: Instant::now(),
-            my_id: commons::random_string(6),
+            ignored: HashMap::new(),
+            my_id: random_string(6),
             behind_ping_sent_time: 0
         }
     }
@@ -74,7 +72,7 @@ impl Peers {
                 }
                 State::Banned => {
                     debug!("Peer connection {} to {:?} has shut down, banned", &token.0, &addr);
-                    self.ignored.insert(addr.ip());
+                    self.ignored.insert(addr.ip(), Instant::now());
                 }
                 State::Offline { .. } => {
                     debug!("Peer connection {} to {:?} is offline", &token.0, &addr);
@@ -138,7 +136,7 @@ impl Peers {
                 continue;
             }
 
-            if self.ignored.contains(&addr.ip()) {
+            if self.ignored.contains_key(&addr.ip()) {
                 debug!("Skipping ignored address from exchange: {}", &addr);
                 continue;
             }
@@ -164,7 +162,7 @@ impl Peers {
     }
 
     pub fn is_ignored(&self, addr: &IpAddr) -> bool {
-        self.ignored.contains(addr)
+        self.ignored.contains_key(addr)
     }
 
     pub fn get_peers_for_exchange(&self, peer_address: &SocketAddr) -> Vec<String> {
@@ -224,7 +222,7 @@ impl Peers {
         }
         let ip = peer.get_addr().ip();
         self.close_peer(registry, token);
-        self.ignored.insert(ip);
+        self.ignored.insert(ip, Instant::now());
         match self.peers
             .iter()
             .find(|(_, p)| p.get_addr().ip() == ip)
@@ -238,7 +236,7 @@ impl Peers {
 
     pub fn ignore_ip(&mut self, ip: &IpAddr) {
         info!("Adding {} to ignored peers", &ip);
-        self.ignored.insert(*ip);
+        self.ignored.insert(*ip, Instant::now());
     }
 
     pub fn skip_peer_connection(&self, addr: &SocketAddr) -> bool {
@@ -286,11 +284,7 @@ impl Peers {
         }
 
         // Just purging ignored/banned IPs every 10 minutes
-        // TODO make it individual for every IP
-        if self.ignore_timer.elapsed().as_secs() >= 600 {
-            self.ignored.clear();
-            self.ignore_timer = Instant::now();
-        }
+        self.ignored.retain(|_addr, time| { time.elapsed().as_secs() < 600 });
 
         // If someone has more blocks we sync
         if nodes >= MIN_CONNECTED_NODES_START_SYNC && height < max_height {
@@ -455,7 +449,7 @@ impl Peers {
     }
 
     fn connect_peer(&mut self, addr: &SocketAddr, registry: &Registry, unique_token: &mut Token, yggdrasil_only: bool) -> io::Result<()> {
-        if self.ignored.contains(&addr.ip()) {
+        if self.ignored.contains_key(&addr.ip()) {
             return Err(io::Error::from(io::ErrorKind::ConnectionAborted));
         }
         if yggdrasil_only && !is_yggdrasil(&addr.ip()) {
