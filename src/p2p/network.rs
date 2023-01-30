@@ -430,7 +430,7 @@ impl Network {
                     peer.set_state(State::idle());
                 }
                 State::Idle { from } => {
-                    debug!("Odd version of pings :)");
+                    debug!("Odd version of pings for {}", peer.get_addr().ip());
                     if from.elapsed().as_secs() >= 30 {
                         let data: Vec<u8> = {
                             let c = self.context.lock().unwrap();
@@ -470,7 +470,8 @@ impl Network {
         let answer = match message {
             Message::Hand { app_version, origin, version, public, rand_id } => {
                 if !version_compatible(&app_version) {
-                    info!("Banning peer with version {}", &app_version);
+                    let peer = self.peers.get_peer(token).unwrap();
+                    info!("Banning peer with version {}, at {}", &app_version, peer.get_addr().ip());
                     return State::Banned;
                 }
                 if self.peers.is_our_own_connect(&rand_id) {
@@ -505,7 +506,8 @@ impl Network {
                     return State::Twin;
                 }
                 if !version_compatible(&app_version) {
-                    info!("Banning peer with version {}", &app_version);
+                    let peer = self.peers.get_peer(token).unwrap();
+                    info!("Banning peer with version {} at {}", &app_version, peer.get_addr().ip());
                     return State::Banned;
                 }
                 let nodes = self.peers.get_peers_active_count();
@@ -893,7 +895,7 @@ fn send_message(connection: &mut TcpStream, data: &[u8]) -> io::Result<()> {
     let mut buf: Vec<u8> = Vec::with_capacity(data.len() + 2);
     buf.write_u16::<BigEndian>(data_len ^ 0xAAAA)?;
     buf.write_all(data)?;
-    connection.write_all(&buf)?;
+    write_all(connection, &buf)?;
     connection.flush()
 }
 
@@ -924,6 +926,29 @@ fn would_block(err: &io::Error) -> bool {
 
 fn interrupted(err: &io::Error) -> bool {
     err.kind() == io::ErrorKind::Interrupted
+}
+
+fn write_all(connection: &mut TcpStream, mut buf: &[u8]) -> io::Result<()> {
+    let start = Instant::now();
+    let timeout = Duration::from_secs(3);
+    let delay = Duration::from_millis(2);
+    while !buf.is_empty() {
+        match connection.write(buf) {
+            Ok(0) => {
+                return Err(io::Error::from(ErrorKind::WriteZero));
+            }
+            Ok(n) => buf = &buf[n..],
+            Err(ref e) if e.kind() == ErrorKind::Interrupted => thread::sleep(delay),
+            Err(e) => return Err(e),
+        }
+        if start.elapsed() > timeout {
+            warn!("Error writing data to {}", connection.peer_addr().unwrap());
+            return Err(io::Error::from(ErrorKind::BrokenPipe));
+        } else {
+            thread::sleep(delay);
+        }
+    }
+    Ok(())
 }
 
 fn version_compatible(version: &str) -> bool {

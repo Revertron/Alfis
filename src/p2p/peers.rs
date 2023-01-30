@@ -303,7 +303,7 @@ impl Peers {
             let mut rng = rand::thread_rng();
             match self.peers
                 .iter_mut()
-                .filter_map(|(token, peer)| if peer.is_lower(height) && peer.get_state().is_idle() && peer.get_sent_height() < height { Some((token, peer)) } else { None })
+                .filter_map(|(token, peer)| if peer.is_lower(height) && peer.get_state().is_idle() && !peer.active_recently() && peer.get_sent_height() < height { Some((token, peer)) } else { None })
                 .choose(&mut rng) {
                 None => {}
                 Some((token, peer)) => {

@@ -141,6 +141,10 @@ impl Peer {
         self.active && self.last_active.elapsed().as_secs() < 120
     }
 
+    pub fn active_recently(&self) -> bool {
+        self.active && self.last_active.elapsed().as_secs() < 10
+    }
+
     pub fn reconnects(&self) -> u32 {
         self.reconnects
     }
