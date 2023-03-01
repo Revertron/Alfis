@@ -34,9 +34,9 @@ num-bigint = "0.4.3"
 num-traits = "0.2.15"
 chrono = { version = "0.4.20", features = ["serde"] }
 time = "0.3.14"
-rand = { version = "0.8.5", package = "rand" }
+rand = { package = "rand", version = "0.8.5" }
 rand-old = { package = "rand", version = "0.7.0" } # For ed25519-dalek
-sqlite = "0.26.0"
+sqlite = "0.30.4"
 uuid = { version = "1.3.0", features = ["serde", "v4"] }
 mio = { version = "0.8.5", features = ["os-poll", "net"] }
 ureq = { version = "2.5", optional = true }
@@ -46,7 +46,7 @@ lazy_static = "1.4.0"
 spmc = "0.3.0"
 
 # Optional dependencies regulated by features
-web-view = { git = "https://github.com/Boscop/web-view", ref = "e87e08cab3a2d500d54068ec9c7aaa055a711465", features = [], optional = true }
+web-view = { git = "https://github.com/Boscop/web-view", features = [], optional = true }
 tinyfiledialogs = { version = "3.9.1", optional = true }
 open = { version = "3.0.3", optional = true }
 

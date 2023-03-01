@@ -179,11 +179,11 @@ impl Chain {
 
     fn truncate_db_from_block(&mut self, index: u64) -> sqlite::Result<State> {
         let mut statement = self.db.prepare(SQL_TRUNCATE_BLOCKS)?;
-        statement.bind(1, index as i64)?;
+        statement.bind((1, index as i64))?;
         statement.next()?;
 
         let mut statement = self.db.prepare(SQL_TRUNCATE_DOMAINS)?;
-        statement.bind(1, index as i64)?;
+        statement.bind((1, index as i64))?;
         statement.next()
     }
 
@@ -237,8 +237,8 @@ impl Chain {
         let mut options = Options::empty();
         if let Ok(mut statement) = self.db.prepare(SQL_GET_OPTIONS) {
             while let State::Row = statement.next().unwrap() {
-                let name = statement.read::<String>(0).unwrap();
-                let value = statement.read::<String>(1).unwrap();
+                let name: String = statement.read(0).unwrap();
+                let value: String = statement.read(1).unwrap();
                 match name.as_ref() {
                     "origin" => options.origin = value,
                     "version" => options.version = value.parse().unwrap(),
@@ -374,24 +374,24 @@ impl Chain {
     /// Adds block to blocks table
     fn add_block_to_table(&mut self, block: Block) -> sqlite::Result<State> {
         let mut statement = self.db.prepare(SQL_ADD_BLOCK)?;
-        statement.bind(1, block.index as i64)?;
-        statement.bind(2, block.timestamp as i64)?;
-        statement.bind(3, block.version as i64)?;
-        statement.bind(4, block.difficulty as i64)?;
-        statement.bind(5, block.random as i64)?;
-        statement.bind(6, block.nonce as i64)?;
+        statement.bind((1, block.index as i64))?;
+        statement.bind((2, block.timestamp as i64))?;
+        statement.bind((3, block.version as i64))?;
+        statement.bind((4, block.difficulty as i64))?;
+        statement.bind((5, block.random as i64))?;
+        statement.bind((6, block.nonce as i64))?;
         match &block.transaction {
             None => {
-                statement.bind(7, "")?;
+                statement.bind((7, ""))?;
             }
             Some(transaction) => {
-                statement.bind(7, transaction.to_string().as_str())?;
+                statement.bind((7, transaction.to_string().as_str()))?;
             }
         }
-        statement.bind(8, block.prev_block_hash.as_slice())?;
-        statement.bind(9, block.hash.as_slice())?;
-        statement.bind(10, block.pub_key.as_slice())?;
-        statement.bind(11, block.signature.as_slice())?;
+        statement.bind((8, block.prev_block_hash.as_slice()))?;
+        statement.bind((9, block.hash.as_slice()))?;
+        statement.bind((10, block.pub_key.as_slice()))?;
+        statement.bind((11, block.signature.as_slice()))?;
         statement.next()
     }
 
@@ -404,20 +404,20 @@ impl Chain {
         };
 
         let mut statement = self.db.prepare(sql)?;
-        statement.bind(1, index as i64)?;
-        statement.bind(2, timestamp)?;
-        statement.bind(3, t.identity.as_slice())?;
-        statement.bind(4, t.confirmation.as_slice())?;
-        statement.bind(5, t.data.as_ref() as &str)?;
-        statement.bind(6, t.signing.as_slice())?;
-        statement.bind(7, t.encryption.as_slice())?;
+        statement.bind((1, index as i64))?;
+        statement.bind((2, timestamp))?;
+        statement.bind((3, t.identity.as_slice()))?;
+        statement.bind((4, t.confirmation.as_slice()))?;
+        statement.bind((5, t.data.as_ref() as &str))?;
+        statement.bind((6, t.signing.as_slice()))?;
+        statement.bind((7, t.encryption.as_slice()))?;
         statement.next()
     }
 
     pub fn get_block(&self, index: u64) -> Option<Block> {
         match self.db.prepare(SQL_GET_BLOCK_BY_ID) {
             Ok(mut statement) => {
-                statement.bind(1, index as i64).expect("Error in bind");
+                statement.bind((1, index as i64)).expect("Error in bind");
                 if statement.next().unwrap() == State::Row {
                     return match Self::get_block_from_statement(&mut statement) {
                         None => {
@@ -459,13 +459,13 @@ impl Chain {
         let mut statement = match pub_key {
             None => {
                 let mut statement = self.db.prepare(SQL_GET_LAST_FULL_BLOCK).expect("Unable to prepare");
-                statement.bind(1, before as i64).expect("Unable to bind");
+                statement.bind((1, before as i64)).expect("Unable to bind");
                 statement
             }
             Some(pub_key) => {
                 let mut statement = self.db.prepare(SQL_GET_LAST_FULL_BLOCK_FOR_KEY).expect("Unable to prepare");
-                statement.bind(1, before as i64).expect("Unable to bind");
-                statement.bind(2, pub_key).expect("Unable to bind");
+                statement.bind((1, before as i64)).expect("Unable to bind");
+                statement.bind((2, pub_key)).expect("Unable to bind");
                 statement
             }
         };
@@ -576,8 +576,8 @@ impl Chain {
     pub fn is_domain_in_blockchain(&self, height: u64, id: &Bytes) -> bool {
         // Checking for existing domain in DB
         let mut statement = self.db.prepare(SQL_GET_DOMAIN_OWNER_BY_ID).unwrap();
-        statement.bind(1, height as i64).expect("Error in bind");
-        statement.bind(2, id.as_slice()).expect("Error in bind");
+        statement.bind((1, height as i64)).expect("Error in bind");
+        statement.bind((2, id.as_slice())).expect("Error in bind");
         if let State::Row = statement.next().unwrap() {
             // If there is such an ID
             return true;
@@ -587,9 +587,9 @@ impl Chain {
 
     pub fn get_domain_renewal_time(&self, time: i64, identity_hash: &Bytes) -> Option<i64> {
         let mut statement = self.db.prepare(SQL_GET_DOMAIN_UPDATE_TIME).unwrap();
-        statement.bind(1, identity_hash.as_slice()).expect("Error in bind");
+        statement.bind((1, identity_hash.as_slice())).expect("Error in bind");
         if let State::Row = statement.next().unwrap() {
-            let timestamp = statement.read::<i64>(0).unwrap();
+            let timestamp: i64 = statement.read(0).unwrap();
             if timestamp < time - DOMAIN_LIFETIME {
                 // This domain is too old
                 return None;
@@ -601,10 +601,10 @@ impl Chain {
 
     pub fn get_domain_update_time(&self, identity_hash: &Bytes, height: u64, time: i64) -> Option<i64> {
         let mut statement = self.db.prepare(SQL_GET_DOMAIN_BY_ID).unwrap();
-        statement.bind(1, identity_hash.as_slice()).expect("Error in bind");
-        statement.bind(2, height as i64 ).expect("Error in bind");
+        statement.bind((1, identity_hash.as_slice())).expect("Error in bind");
+        statement.bind((2, height as i64)).expect("Error in bind");
         if let State::Row = statement.next().unwrap() {
-            let timestamp = statement.read::<i64>(1).unwrap();
+            let timestamp: i64 = statement.read(1).unwrap();
             if timestamp < time - DOMAIN_LIFETIME {
                 // This domain is too old
                 return None;
@@ -616,10 +616,10 @@ impl Chain {
 
     pub fn get_identity_transaction_and_state(&self, identity_hash: &Bytes, height: u64, time: i64) -> (Option<Transaction>, DomainState) {
         let mut statement = self.db.prepare(SQL_GET_DOMAIN_BY_ID).unwrap();
-        statement.bind(1, identity_hash.as_slice()).expect("Error in bind");
-        statement.bind(2, height as i64).expect("Error in bind");
+        statement.bind((1, identity_hash.as_slice())).expect("Error in bind");
+        statement.bind((2, height as i64)).expect("Error in bind");
         if let State::Row = statement.next().unwrap() {
-            let timestamp = statement.read::<i64>(1).unwrap();
+            let timestamp: i64 = statement.read(1).unwrap();
             // Determine current state of the domain
             let state = if timestamp + DOMAIN_LIFETIME >= time {
                 DomainState::Alive { renewed_time: timestamp, until: timestamp + DOMAIN_LIFETIME }
@@ -628,12 +628,12 @@ impl Chain {
             } else {
                 DomainState::Free { renewed_time: timestamp }
             };
-            let identity = Bytes::from_bytes(&statement.read::<Vec<u8>>(2).unwrap());
-            let confirmation = Bytes::from_bytes(&statement.read::<Vec<u8>>(3).unwrap());
+            let identity = Bytes::from_bytes(&statement.read::<Vec<u8>, usize>(2).unwrap());
+            let confirmation = Bytes::from_bytes(&statement.read::<Vec<u8>, usize>(3).unwrap());
             let class = String::from(CLASS_DOMAIN);
-            let data = statement.read::<String>(4).unwrap();
-            let signing = Bytes::from_bytes(&statement.read::<Vec<u8>>(5).unwrap());
-            let encryption = Bytes::from_bytes(&statement.read::<Vec<u8>>(6).unwrap());
+            let data: String = statement.read(4).unwrap();
+            let signing = Bytes::from_bytes(&statement.read::<Vec<u8>, usize>(5).unwrap());
+            let encryption = Bytes::from_bytes(&statement.read::<Vec<u8>, usize>(6).unwrap());
             let transaction = Transaction { identity, confirmation, class, data, signing, encryption };
             return (Some(transaction), state);
         }
@@ -672,7 +672,7 @@ impl Chain {
     pub fn get_domains_count(&self) -> i64 {
         let mut statement = self.db.prepare(SQL_GET_DOMAINS_COUNT).unwrap();
         if let State::Row = statement.next().unwrap() {
-            return statement.read::<i64>(0).unwrap();
+            return statement.read::<i64, usize>(0).unwrap();
         }
         0
     }
@@ -680,17 +680,17 @@ impl Chain {
     pub fn get_users_count(&self) -> i64 {
         let mut statement = self.db.prepare(SQL_GET_USERS_COUNT).unwrap();
         if let State::Row = statement.next().unwrap() {
-            return statement.read::<i64>(0).unwrap();
+            return statement.read::<i64, usize>(0).unwrap();
         }
         0
     }
 
     pub fn get_user_block_count(&self, pub_key: &Bytes, max_height: u64) -> i64 {
         let mut statement = self.db.prepare(SQL_GET_USER_BLOCK_COUNT).unwrap();
-        statement.bind(1, pub_key.as_slice()).expect("Error in bind");
-        statement.bind(2, max_height as i64).expect("Error in bind");
+        statement.bind((1, pub_key.as_slice())).expect("Error in bind");
+        statement.bind((2, max_height as i64)).expect("Error in bind");
         if let State::Row = statement.next().unwrap() {
-            return statement.read::<i64>(0).unwrap();
+            return statement.read::<i64, usize>(0).unwrap();
         }
         0i64
     }
@@ -704,13 +704,13 @@ impl Chain {
         let keystore = keystore.unwrap();
         let pub_key = keystore.get_public();
         let mut statement = self.db.prepare(SQL_GET_DOMAINS_BY_KEY).unwrap();
-        statement.bind(1, pub_key.as_slice()).expect("Error in bind");
+        statement.bind((1, pub_key.as_slice())).expect("Error in bind");
         let height = self.get_height();
         while let State::Row = statement.next().unwrap() {
-            let timestamp = statement.read::<i64>(0).unwrap();
-            let identity = Bytes::from_bytes(&statement.read::<Vec<u8>>(1).unwrap());
-            let data = statement.read::<String>(2).unwrap();
-            let signing = Bytes::from_bytes(&statement.read::<Vec<u8>>(3).unwrap());
+            let timestamp = statement.read::<i64, usize>(0).unwrap();
+            let identity = Bytes::from_bytes(&statement.read::<Vec<u8>, usize>(1).unwrap());
+            let data = statement.read::<String, usize>(2).unwrap();
+            let signing = Bytes::from_bytes(&statement.read::<Vec<u8>, usize>(3).unwrap());
 
             // Get the last transaction for this id and check if it is still ours
             // TODO use state to show it in UI
@@ -1067,17 +1067,17 @@ impl Chain {
     }
 
     fn get_block_from_statement(statement: &mut Statement) -> Option<Block> {
-        let index = statement.read::<i64>(0).unwrap() as u64;
-        let timestamp = statement.read::<i64>(1).unwrap();
-        let version = statement.read::<i64>(2).unwrap() as u32;
-        let difficulty = statement.read::<i64>(3).unwrap() as u32;
-        let random = statement.read::<i64>(4).unwrap() as u32;
-        let nonce = statement.read::<i64>(5).unwrap() as u64;
-        let transaction = Transaction::from_json(&statement.read::<String>(6).unwrap());
-        let prev_block_hash = Bytes::from_bytes(statement.read::<Vec<u8>>(7).unwrap().as_slice());
-        let hash = Bytes::from_bytes(statement.read::<Vec<u8>>(8).unwrap().as_slice());
-        let pub_key = Bytes::from_bytes(statement.read::<Vec<u8>>(9).unwrap().as_slice());
-        let signature = Bytes::from_bytes(statement.read::<Vec<u8>>(10).unwrap().as_slice());
+        let index = statement.read::<i64, usize>(0).unwrap() as u64;
+        let timestamp = statement.read::<i64, usize>(1).unwrap();
+        let version = statement.read::<i64, usize>(2).unwrap() as u32;
+        let difficulty = statement.read::<i64, usize>(3).unwrap() as u32;
+        let random = statement.read::<i64, usize>(4).unwrap() as u32;
+        let nonce = statement.read::<i64, usize>(5).unwrap() as u64;
+        let transaction = Transaction::from_json(&statement.read::<String, usize>(6).unwrap());
+        let prev_block_hash = Bytes::from_bytes(statement.read::<Vec<u8>, usize>(7).unwrap().as_slice());
+        let hash = Bytes::from_bytes(statement.read::<Vec<u8>, usize>(8).unwrap().as_slice());
+        let pub_key = Bytes::from_bytes(statement.read::<Vec<u8>, usize>(9).unwrap().as_slice());
+        let signature = Bytes::from_bytes(statement.read::<Vec<u8>, usize>(10).unwrap().as_slice());
         Some(Block::from_all_params(index, timestamp, version, difficulty, random, nonce, prev_block_hash, hash, pub_key, signature, transaction))
     }
 }
