@@ -72,7 +72,7 @@ impl Keystore {
         let path = Path::new(filename);
         match fs::read(&path) {
             Ok(key) => {
-                match toml::from_slice::<Keys>(key.as_slice()) {
+                match toml::from_str::<Keys>(&String::from_utf8(key).unwrap_or_default()) {
                     Ok(keys) => {
                         let secret = SecretKey::from_bytes(&from_hex(&keys.signing.secret).unwrap()).unwrap();
                         let public = PublicKey::from_bytes(&from_hex(&keys.signing.public).unwrap()).unwrap();

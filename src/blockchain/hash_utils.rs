@@ -86,7 +86,7 @@ pub fn key_hash_difficulty(hash: &[u8]) -> u32 {
 #[inline]
 pub fn hash_sha256(data: &[u8]) -> Vec<u8> {
     let mut digest = Sha256::default();
-    digest.update(data.as_ref());
+    digest.update(data);
     Vec::from(&digest.finalize()[..])
 }
 

@@ -431,7 +431,7 @@ impl Network {
                 }
                 State::Idle { from } => {
                     debug!("Odd version of pings for {}", peer.get_addr().ip());
-                    if from.elapsed().as_secs() >= 30 {
+                    if from.elapsed().as_secs() >= 120 {
                         let data: Vec<u8> = {
                             let c = self.context.lock().unwrap();
                             let message = Message::ping(c.chain.get_height(), c.chain.get_last_hash());
@@ -542,7 +542,7 @@ impl Network {
                 if peer.is_higher(my_height) {
                     let mut context = self.context.lock().unwrap();
                     context.chain.update_max_height(height);
-                    info!("Peer is higher, requesting block {} from {}", height, peer.get_addr().ip());
+                    info!("Peer is higher, requesting block {} from {}", my_height + 1, peer.get_addr().ip());
                     State::message(Message::GetBlock { index: my_height + 1 })
                 } else if my_height == height && hash.ne(&my_hash) {
                     info!("Hashes are different, requesting block {} from {}", my_height, peer.get_addr().ip());
@@ -563,7 +563,7 @@ impl Network {
                 if peer.is_higher(my_height) {
                     let mut context = self.context.lock().unwrap();
                     context.chain.update_max_height(height);
-                    info!("Peer is higher, requesting block {} from {}", height, peer.get_addr().ip());
+                    info!("Peer is higher, requesting block {} from {}", my_height + 1, peer.get_addr().ip());
                     State::message(Message::GetBlock { index: my_height + 1 })
                 } else if my_height == height && hash.ne(&my_hash) {
                     info!("Hashes are different, requesting block {} from {}", my_height, peer.get_addr().ip());
