@@ -51,7 +51,7 @@ function refreshRecordsList() {
             data = value.priority + " " + value.host;
         } else if (value.type == "CNAME" || value.type == "NS") {
             data = value.host;
-        } else if (value.type == "TXT") {
+        } else if (value.type == "TXT" || value.type == "TLSA") {
             data = value.data;
         } else if (value.type == "SRV") {
             data = value.priority + " " + value.weight + " " + value.port + " " + value.host;
