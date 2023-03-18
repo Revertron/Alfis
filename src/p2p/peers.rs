@@ -288,8 +288,12 @@ impl Peers {
 
         // If someone has more blocks we sync
         if nodes >= MIN_CONNECTED_NODES_START_SYNC && height < max_height {
-            let count = min(max_height - height, nodes as u64);
-            self.ask_blocks_from_peers(registry, height, height + count, have_blocks);
+            // Give some opportunity to get more peers instead of requests for blocks only
+            let request_blocks = nodes >= 10 || random::<bool>();
+            if request_blocks {
+                let count = min(max_height - height, nodes as u64);
+                self.ask_blocks_from_peers(registry, height, height + count, have_blocks);
+            }
         }
 
         // If someone has less blocks (we mined a new block) we send a ping with our height

@@ -254,17 +254,20 @@ impl Chain {
         let index = block.index;
         let timestamp = block.timestamp;
         let owner = block.pub_key.clone();
-        self.last_block = Some(block.clone());
-        if block.transaction.is_some() {
-            self.last_full_block = Some(block.clone());
-        }
         let transaction = block.transaction.clone();
-        if self.add_block_to_table(block).is_ok() {
-            if let Some(mut transaction) = transaction {
-                if transaction.signing.is_empty() {
-                    transaction.signing = owner;
+        match self.add_block_to_table(block.clone()) {
+            Ok(_) => {
+                self.last_block = Some(block.clone());
+                if let Some(mut transaction) = transaction {
+                    self.last_full_block = Some(block);
+                    if transaction.signing.is_empty() {
+                        transaction.signing = owner;
+                    }
+                    self.add_transaction_to_table(index, timestamp, &transaction).expect("Error adding transaction");
                 }
-                self.add_transaction_to_table(index, timestamp, &transaction).expect("Error adding transaction");
+            }
+            Err(e) => {
+                warn!("Error adding block to table ({}): {:?}", e, &block);
             }
         }
     }
