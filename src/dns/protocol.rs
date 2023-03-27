@@ -499,9 +499,9 @@ impl DnsRecord {
             | DnsRecord::MX { ref domain, .. }
             | DnsRecord::UNKNOWN { ref domain, .. }
             | DnsRecord::SOA { ref domain, .. }
-            | DnsRecord::TXT { ref domain, .. } => Some(domain.clone()),
-            DnsRecord::OPT { .. }
-            | DnsRecord::TLSA { .. } => None,
+            | DnsRecord::TXT { ref domain, .. }
+            | DnsRecord::TLSA { ref domain, .. } => Some(domain.clone()),
+            DnsRecord::OPT { .. } => None
         }
     }
 

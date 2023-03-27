@@ -207,6 +207,7 @@ impl DnsFilter for BlockchainFilter {
                             | DnsRecord::NS { domain, .. }
                             | DnsRecord::CNAME { domain, .. }
                             | DnsRecord::SRV { domain, .. }
+                            | DnsRecord::TLSA { domain, .. }
                             | DnsRecord::MX { domain, .. }
                             | DnsRecord::UNKNOWN { domain, .. }
                             | DnsRecord::SOA { domain, .. }
@@ -228,6 +229,7 @@ impl DnsFilter for BlockchainFilter {
                                         | DnsRecord::NS { domain, .. }
                                         | DnsRecord::CNAME { domain, .. }
                                         | DnsRecord::SRV { domain, .. }
+                                        | DnsRecord::TLSA { domain, .. }
                                         | DnsRecord::MX { domain, .. }
                                         | DnsRecord::UNKNOWN { domain, .. }
                                         | DnsRecord::SOA { domain, .. }
@@ -258,6 +260,7 @@ impl DnsFilter for BlockchainFilter {
                                             | DnsRecord::NS { domain, .. }
                                             | DnsRecord::CNAME { domain, .. }
                                             | DnsRecord::SRV { domain, .. }
+                                            | DnsRecord::TLSA { domain, .. }
                                             | DnsRecord::MX { domain, .. }
                                             | DnsRecord::UNKNOWN { domain, .. }
                                             | DnsRecord::SOA { domain, .. }
