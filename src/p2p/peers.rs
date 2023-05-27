@@ -268,18 +268,18 @@ impl Peers {
                     registry.reregister(stream, *token, Interest::WRITABLE | Interest::READABLE).unwrap();
                 }
             } else {
+                if !matches!(peer.get_state(), State::Connecting {..}) && (peer.get_state().is_timed_out() || !peer.active()) {
+                    stale_tokens.push((token.clone(), peer.get_addr()));
+                    continue;
+                }
                 if matches!(peer.get_state(), State::Message {..}) {
-                    if !peer.active() {
-                        stale_tokens.push((token.clone(), peer.get_addr()));
-                        continue;
-                    }
                     let stream = peer.get_stream();
                     registry.reregister(stream, *token, Interest::WRITABLE).unwrap();
                 }
             }
         }
         for (token, addr) in &stale_tokens {
-            info!("Closing stale peer from {}", addr);
+            info!("Closing stale (timed out) peer from {}", addr);
             self.close_peer(registry, token);
         }
 

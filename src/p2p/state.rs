@@ -36,6 +36,17 @@ impl State {
         matches!(self, State::Idle { .. })
     }
 
+    pub fn is_timed_out(&self) -> bool {
+        match self {
+            State::Error => true,
+            State::Banned => true,
+            State::Idle { from } => {
+                from.elapsed().as_secs() > 60
+            }
+            _ => false
+        }
+    }
+
     pub fn is_loop(&self) -> bool {
         matches!(self, State::Loop { .. } | State::SendLoop { .. })
     }
