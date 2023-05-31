@@ -1085,6 +1085,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustversion"
+version = "1.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f3208ce4d8448b3f3e7d168a73f5e0c43a61e32930de3bceeccedb388b6bf06"
+
+[[package]]
 name = "ryu"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1362,13 +1368,15 @@ dependencies = [
 
 [[package]]
 name = "thread-priority"
-version = "0.10.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "978519ae4c6891352f964b88da4ab5a3a9b74a40247cda5baee145dae6cd3b71"
+checksum = "0c56ce92f1285eaaa11fc1a3201e25de97898c50e87caa4c2aee836fe05288de"
 dependencies = [
+ "bitflags",
  "cfg-if",
  "libc",
  "log",
+ "rustversion",
  "winapi",
 ]
 
