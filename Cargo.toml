@@ -1,6 +1,6 @@
 [package]
 name = "alfis"
-version = "0.8.4"
+version = "0.8.5"
 authors = ["Revertron <alfis@revertron.com>"]
 edition = "2021"
 build = "build.rs"
@@ -52,6 +52,7 @@ open = { version = "3.0.3", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = ["impl-default", "wincon", "shellscalingapi"] }
+windows-service = "0.6.0"
 thread-priority = "0.10.0"
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))'.dependencies]

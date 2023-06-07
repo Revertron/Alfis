@@ -6,7 +6,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use std::{env, thread};
+use std::{env, fs, thread};
 
 use getopts::{Matches, Options};
 #[allow(unused_imports)]
@@ -20,17 +20,23 @@ use std::fs::{File, OpenOptions};
 use std::io::{Seek, SeekFrom, Write};
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread::JoinHandle;
 
 use alfis::event::Event;
 use alfis::eventbus::{post, register};
 use alfis::keystore::create_key;
 use alfis::{dns_utils, Block, Bytes, Chain, Context, Keystore, Miner, Network, Settings, Transaction, ALFIS_DEBUG, ALFIS_TRACE, DB_NAME, ORIGIN_DIFFICULTY};
+#[cfg(windows)]
+use crate::win_service::start_service;
 
 #[cfg(feature = "webgui")]
 mod web_ui;
+#[cfg(windows)]
+mod win_service;
 
 const SETTINGS_FILENAME: &str = "alfis.toml";
 const LOG_TARGET_MAIN: &str = "alfis::Main";
+const CONFIG: &str = include_str!("../alfis.toml");
 
 fn main() {
     #[allow(unused_assignments, unused_mut)]
@@ -55,6 +61,12 @@ fn main() {
     opts.optflag("t", "trace", "Show trace messages, more than debug");
     opts.optflag("b", "blocks", "List blocks from DB and exit");
     opts.optflag("g", "generate", "Generate new config file. Generated config will be printed to console.");
+    #[cfg(windows)]
+    {
+        opts.optflag("", "install", "Install self as Windows service.");
+        opts.optflag("", "uninstall", "Uninstall self as Windows service.");
+        opts.optflag("", "service", "Run as Windows service.");
+    }
     opts.optopt("k", "gen-key", "Generate new keys and save them to file.", "FILE");
     opts.optopt("l", "log", "Write log to file", "FILE");
     opts.optopt("s", "status", "Write status to file", "FILE");
@@ -79,7 +91,40 @@ fn main() {
     }
 
     if opt_matches.opt_present("g") {
-        println!("{}", include_str!("../alfis.toml"));
+        println!("{}", CONFIG);
+        exit(0);
+    }
+
+    #[cfg(windows)]
+    if opt_matches.opt_present("install") {
+        let progdata = env::var("PROGRAMDATA").expect("Failed to get APPDATA directory");
+
+        // Create a new directory inside the AppData directory
+        let new_directory = format!("{}\\ALFIS", progdata);
+        fs::create_dir_all(&new_directory).expect("Failed to create directory");
+
+        // Change the current directory to the new directory
+        env::set_current_dir(&new_directory).expect("Failed to change directory");
+        let mut file = File::create("alfis.toml").expect("Failed to create alfis.toml in AppData\\ALFIS");
+        file.write_all(CONFIG.as_bytes()).expect("Failed to write alfis.toml");
+
+        use crate::win_service::*;
+        install_service(SERVICE_NAME, &program);
+        // Without explicitly detaching the console cmd won't redraw it's prompt.
+        unsafe {
+            FreeConsole();
+        }
+        exit(0);
+    }
+
+    #[cfg(windows)]
+    if opt_matches.opt_present("uninstall") {
+        use crate::win_service::*;
+        uninstall_service(SERVICE_NAME);
+        // Without explicitly detaching the console cmd won't redraw it's prompt.
+        unsafe {
+            FreeConsole();
+        }
         exit(0);
     }
 
@@ -97,9 +142,21 @@ fn main() {
     };
 
     #[cfg(feature = "webgui")]
-    let no_gui = opt_matches.opt_present("n");
+    let mut no_gui = opt_matches.opt_present("n");
     #[cfg(not(feature = "webgui"))]
     let no_gui = true;
+
+    if opt_matches.opt_present("service") {
+        let appdata = env::var("PROGRAMDATA").expect("Failed to get APPDATA directory");
+
+        // Create a new directory inside the AppData directory
+        let new_directory = format!("{}\\ALFIS", appdata);
+        fs::create_dir_all(&new_directory).expect("Failed to create directory");
+
+        // Change the current directory to the new directory
+        env::set_current_dir(&new_directory).expect("Failed to change directory");
+        no_gui = true;
+    }
 
     if let Some(path) = opt_matches.opt_str("w") {
         env::set_current_dir(Path::new(&path)).unwrap_or_else(|_| panic!("Unable to change working directory to '{}'", &path));
@@ -131,33 +188,22 @@ fn main() {
 
     let settings = Settings::load(&config_name).unwrap_or_else(|| panic!("Cannot load settings from {}!", &config_name));
     debug!(target: LOG_TARGET_MAIN, "Loaded settings: {:?}", &settings);
-    let chain: Chain = Chain::new(&settings, DB_NAME);
-    if opt_matches.opt_present("b") {
-        for i in 1..(chain.get_height() + 1) {
-            if let Some(block) = chain.get_block(i) {
-                info!(target: LOG_TARGET_MAIN, "{:?}", &block);
-            }
+    let settings_copy = settings.clone();
+
+    let context = match create_context(opt_matches.opt_present("b"), settings) {
+        Some(value) => value,
+        None => return,
+    };
+
+    #[cfg(windows)]
+    if opt_matches.opt_present("service") {
+        if let Err(e) = start_service(settings_copy, context) {
+            error!("Unable to start service: {}", e);
+            exit(1);
         }
+        info!("Service is stopped.");
         return;
     }
-    info!("Blocks count: {}, domains count: {}, users count: {}", chain.get_height(), chain.get_domains_count(), chain.get_users_count());
-    let settings_copy = settings.clone();
-    let mut keys = Vec::new();
-    if !settings.key_files.is_empty() {
-        for name in &settings.key_files {
-            match Keystore::from_file(name, "") {
-                None => {
-                    warn!("Error loading keyfile from {}", name);
-                }
-                Some(keystore) => {
-                    info!("Successfully loaded keyfile {}", name);
-                    keys.push(keystore);
-                }
-            }
-        }
-    }
-    let context = Context::new(env!("CARGO_PKG_VERSION").to_owned(), settings, keys, chain);
-    let context: Arc<Mutex<Context>> = Arc::new(Mutex::new(context));
 
     // If we just need to generate keys
     if let Some(filename) = opt_matches.opt_str("k") {
@@ -192,34 +238,7 @@ fn main() {
         exit(0);
     }
 
-    if let Ok(mut context) = context.lock() {
-        context.chain.check_chain(settings_copy.check_blocks);
-        match context.chain.get_block(1) {
-            None => {
-                info!(target: LOG_TARGET_MAIN, "No blocks found in DB");
-            }
-            Some(block) => {
-                trace!(target: LOG_TARGET_MAIN, "Loaded DB with origin {:?}", &block.hash);
-            }
-        }
-    }
-
-    let dns_server_ok = if settings_copy.dns.threads > 0 {
-        dns_utils::start_dns_server(&context, &settings_copy)
-    } else {
-        true
-    };
-
-    let mut miner_obj = Miner::new(Arc::clone(&context));
-    miner_obj.start_mining_thread();
-    let miner: Arc<Mutex<Miner>> = Arc::new(Mutex::new(miner_obj));
-
-    let mut network = Network::new(Arc::clone(&context));
-    let network = thread::Builder::new().name(String::from("Network")).spawn(move || {
-        // Give UI some time to appear :)
-        thread::sleep(Duration::from_millis(1000));
-        network.start();
-    }).expect("Could not start network thread!");
+    let (dns_server_ok, miner, network) = start_services(&settings_copy, &context);
 
     create_genesis_if_needed(&context, &miner);
     if no_gui {
@@ -241,6 +260,73 @@ fn main() {
     unsafe {
         FreeConsole();
     }
+}
+
+fn create_context(only_print_blocks: bool, settings: Settings) -> Option<Arc<Mutex<Context>>> {
+    let chain: Chain = Chain::new(&settings, DB_NAME);
+    if only_print_blocks {
+        for i in 1..(chain.get_height() + 1) {
+            if let Some(block) = chain.get_block(i) {
+                info!(target: LOG_TARGET_MAIN, "{:?}", &block);
+            }
+        }
+        return None;
+    }
+    info!("Blocks count: {}, domains count: {}, users count: {}", chain.get_height(), chain.get_domains_count(), chain.get_users_count());
+    let keys = load_keys(&settings);
+    let context = Context::new(env!("CARGO_PKG_VERSION").to_owned(), settings, keys, chain);
+    let context: Arc<Mutex<Context>> = Arc::new(Mutex::new(context));
+    Some(context)
+}
+
+fn load_keys(settings: &Settings) -> Vec<Keystore> {
+    let mut keys = Vec::new();
+    if !settings.key_files.is_empty() {
+        for name in &settings.key_files {
+            match Keystore::from_file(name, "") {
+                None => {
+                    warn!("Error loading keyfile from {}", name);
+                }
+                Some(keystore) => {
+                    info!("Successfully loaded keyfile {}", name);
+                    keys.push(keystore);
+                }
+            }
+        }
+    }
+    keys
+}
+
+pub fn start_services(settings: &Settings, context: &Arc<Mutex<Context>>) -> (bool, Arc<Mutex<Miner>>, JoinHandle<()>) {
+    if let Ok(mut context) = context.lock() {
+        context.chain.check_chain(settings.check_blocks);
+        match context.chain.get_block(1) {
+            None => {
+                info!(target: LOG_TARGET_MAIN, "No blocks found in DB");
+            }
+            Some(block) => {
+                trace!(target: LOG_TARGET_MAIN, "Loaded DB with origin {:?}", &block.hash);
+            }
+        }
+    }
+
+    let dns_server_ok = if settings.dns.threads > 0 {
+        dns_utils::start_dns_server(&context, &settings)
+    } else {
+        true
+    };
+
+    let mut miner_obj = Miner::new(Arc::clone(&context));
+    miner_obj.start_mining_thread();
+    let miner: Arc<Mutex<Miner>> = Arc::new(Mutex::new(miner_obj));
+
+    let mut network = Network::new(Arc::clone(&context));
+    let network = thread::Builder::new().name(String::from("Network")).spawn(move || {
+        // Give UI some time to appear :)
+        thread::sleep(Duration::from_millis(1000));
+        network.start();
+    }).expect("Could not start network thread!");
+    (dns_server_ok, miner, network)
 }
 
 /// Sets up logger in accordance with command line options
