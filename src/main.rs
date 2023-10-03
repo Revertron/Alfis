@@ -146,6 +146,7 @@ fn main() {
     #[cfg(not(feature = "webgui"))]
     let no_gui = true;
 
+    #[cfg(windows)]
     if opt_matches.opt_present("service") {
         let appdata = env::var("PROGRAMDATA").expect("Failed to get APPDATA directory");
 
