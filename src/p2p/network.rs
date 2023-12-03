@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::{Error, ErrorKind, Read, Write};
 use std::net::{IpAddr, Shutdown, SocketAddr, SocketAddrV4, ToSocketAddrs};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, mpsc, Mutex};
 use std::time::{Duration, Instant};
 use std::{io, thread};
 
@@ -84,7 +84,27 @@ impl Network {
         let mut old_nodes = 0usize;
         let mut old_banned = 0usize;
         let mut seen_blocks = HashSet::new();
+
+        let (debug_send, debug_receive) = mpsc::channel();
+        let _debug_thread = thread::spawn(move || {
+            let mut timer = Instant::now();
+            let mut log = String::new();
+            loop {
+                if let Ok(line) = debug_receive.try_recv() {
+                    timer = Instant::now();
+                    log = line;
+                } else {
+                    if timer.elapsed().as_secs() >= 60 {
+                        timer = Instant::now();
+                        warn!("Stuck in '{log}'");
+                    }
+                    thread::sleep(Duration::from_secs(1));
+                }
+            }
+        });
+
         loop {
+            let _ = debug_send.send(String::from("Restart swarm"));
             if self.peers.get_peers_count() == 0 && bootstrap_timer.elapsed().as_secs() > 60 {
                 warn!("Restarting swarm connections...");
                 wait_for_internet(WAIT_FOR_INTERNET);
@@ -93,6 +113,7 @@ impl Network {
                 bootstrap_timer = Instant::now();
                 last_events_time = Instant::now();
             }
+            let _ = debug_send.send(String::from("Poll events"));
             // Poll Mio for events, blocking until we get an event.
             poll.poll(&mut events, POLL_TIMEOUT)
                 .unwrap_or_else(|e| warn!("Error polling sockets: {}", e));
@@ -106,6 +127,7 @@ impl Network {
                 // We can use the token we previously provided to `register` to determine for which socket the event is.
                 match event.token() {
                     SERVER => {
+                        let _ = debug_send.send(String::from("Server accept"));
                         //debug!("Event for server socket {} is {:?}", event.token().0, &event);
                         // If this is an event for the server, it means a connection is ready to be accepted.
                         while let Ok((mut stream, mut address)) = server.accept() {
@@ -147,6 +169,7 @@ impl Network {
                         }
                     }
                     token => {
+                        let _ = debug_send.send(String::from("Handle connection event"));
                         if !self.handle_connection_event(poll.registry(), event, &mut seen_blocks, &mut buffer) {
                             let _ = self.peers.close_peer(poll.registry(), &token);
                             let blocks = self.context.lock().unwrap().chain.get_height();
@@ -157,6 +180,7 @@ impl Network {
                     }
                 }
             }
+            let _ = debug_send.send(String::from("After events iter"));
             if last_events_time.elapsed().as_secs() > MAX_IDLE_SECONDS {
                 if self.peers.get_peers_count() > 0 {
                     warn!("Something is wrong with swarm connections, closing all.");
@@ -169,6 +193,7 @@ impl Network {
                 last_events_time = Instant::now();
             }
 
+            let _ = debug_send.send(String::from("UI Timer"));
             if ui_timer.elapsed().as_millis() > UI_REFRESH_DELAY_MS {
                 // Send pings to idle peers
                 let (height, max_height, hash) = {
@@ -210,6 +235,7 @@ impl Network {
                     (blocks, max_height, context.chain.get_last_hash())
                 };
 
+                let _ = debug_send.send(String::from("Peers update"));
                 let have_blocks: HashSet<u64> = self.future_blocks.values().map(|block| block.index).collect();
                 self.peers.update(poll.registry(), hash, height, max_height, have_blocks);
                 ui_timer = Instant::now();
