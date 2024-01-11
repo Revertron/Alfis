@@ -101,7 +101,7 @@ fn main() {
 
         // Create a new directory inside the AppData directory
         let new_directory = format!("{}\\ALFIS", progdata);
-        fs::create_dir_all(&new_directory).expect("Failed to create directory");
+        std::fs::create_dir_all(&new_directory).expect("Failed to create directory");
 
         // Change the current directory to the new directory
         env::set_current_dir(&new_directory).expect("Failed to change directory");
@@ -163,10 +163,7 @@ fn main() {
     if let Some(path) = opt_matches.opt_str("w") {
         env::set_current_dir(Path::new(&path)).unwrap_or_else(|_| panic!("Unable to change working directory to '{}'", &path));
     }
-    let config_name = match opt_matches.opt_str("c") {
-        None => SETTINGS_FILENAME.to_owned(),
-        Some(path) => path
-    };
+    let config_name = opt_matches.opt_str("c").unwrap_or_else(|| SETTINGS_FILENAME.to_owned());
 
     setup_logger(&opt_matches, console_attached);
     if let Some(status) = opt_matches.opt_str("s") {
