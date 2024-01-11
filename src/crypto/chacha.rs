@@ -1,8 +1,8 @@
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 
-use chacha20poly1305::aead::{Aead, Error, NewAead};
-use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
+use chacha20poly1305::aead::{Aead, Error};
+use chacha20poly1305::{ChaCha20Poly1305, Key, KeyInit, Nonce};
 
 pub const ZERO_NONCE: [u8; 12] = [0u8; 12];
 

@@ -6,7 +6,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use std::{env, fs, thread};
+use std::{env, thread};
 
 use getopts::{Matches, Options};
 #[allow(unused_imports)]
@@ -141,10 +141,11 @@ fn main() {
         }
     };
 
-    #[cfg(feature = "webgui")]
     let mut no_gui = opt_matches.opt_present("n");
-    #[cfg(not(feature = "webgui"))]
-    let no_gui = true;
+    if !cfg!(feature = "webgui")
+    {
+        no_gui = true;
+    }
 
     #[cfg(windows)]
     if opt_matches.opt_present("service") {
@@ -152,7 +153,7 @@ fn main() {
 
         // Create a new directory inside the AppData directory
         let new_directory = format!("{}\\ALFIS", appdata);
-        fs::create_dir_all(&new_directory).expect("Failed to create directory");
+        std::fs::create_dir_all(&new_directory).expect("Failed to create directory");
 
         // Change the current directory to the new directory
         env::set_current_dir(&new_directory).expect("Failed to change directory");

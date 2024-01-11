@@ -10,7 +10,7 @@ check_blocks = 8
 # All bootstrap nodes
 peers = ["peer-v4.alfis.name:4244", "peer-v6.alfis.name:4244", "peer-ygg.alfis.name:4244"]
 # Your node will listen on that address for other nodes to connect
-listen = "[::]:4244"
+listen = "[::]:42440"
 # Set true if you want your IP to participate in peer-exchange, or false otherwise
 public = true
 # Allow connections to/from Yggdrasil only (https://yggdrasil-network.github.io)
@@ -19,7 +19,7 @@ yggdrasil_only = false
 # DNS resolver options
 [dns]
 # Your DNS resolver will be listening on this address and port (Usual port is 53)
-listen = "127.0.0.1:53"
+listen = "127.0.0.1:5311"
 # How many threads to spawn by DNS server
 threads = 10
 # AdGuard DNS servers to filter ads and trackers

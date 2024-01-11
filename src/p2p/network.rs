@@ -17,8 +17,8 @@ use mio::event::Event;
 use mio::net::{TcpListener, TcpStream};
 use mio::{Events, Interest, Poll, Registry, Token};
 use rand::{random, Rng, RngCore};
-use rand_old::prelude::thread_rng;
-use x25519_dalek::{PublicKey, StaticSecret};
+use rand::prelude::thread_rng;
+use x25519_dalek::{PublicKey, ReusableSecret};
 
 use crate::blockchain::types::BlockQuality;
 use crate::commons::*;
@@ -31,7 +31,7 @@ const SERVER: Token = Token(0);
 
 pub struct Network {
     context: Arc<Mutex<Context>>,
-    secret_key: StaticSecret,
+    secret_key: ReusableSecret,
     public_key: PublicKey,
     token: Token,
     // States of peer connections, and some data to send when sockets become writable
@@ -44,7 +44,7 @@ impl Network {
     pub fn new(context: Arc<Mutex<Context>>) -> Self {
         // P2P encryption primitives
         let mut thread_rng = thread_rng();
-        let secret_key = StaticSecret::new(&mut thread_rng);
+        let secret_key = ReusableSecret::random_from_rng(&mut thread_rng);
         let public_key = PublicKey::from(&secret_key);
         let peers = Peers::new();
         Network { context, secret_key, public_key, token: Token(1), peers, future_blocks: HashMap::new() }

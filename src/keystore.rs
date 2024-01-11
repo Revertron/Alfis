@@ -13,14 +13,14 @@ use std::time::Instant;
 use std::{fs, thread};
 
 use blakeout::Blakeout;
-use ed25519_dalek::Keypair;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use rand_old::{CryptoRng, RngCore};
+use crate::keystore::rand::RngCore;
 use serde::{Deserialize, Serialize};
 
-use self::ed25519_dalek::ed25519::signature::Signature;
-use self::ed25519_dalek::{PublicKey, SecretKey, Signer, Verifier};
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, SecretKey};
+use ed25519_dalek::ed25519::SignatureBytes;
+use rand::CryptoRng;
 use crate::blockchain::hash_utils::*;
 use crate::bytes::Bytes;
 use crate::commons::KEYSTORE_DIFFICULTY;
@@ -31,7 +31,7 @@ use crate::{from_hex, setup_miner_thread, to_hex, Context};
 
 #[derive(Debug)]
 pub struct Keystore {
-    keypair: Keypair,
+    keypair: SigningKey,
     hash: RefCell<Bytes>,
     path: String,
     crypto_box: CryptoBox,
@@ -40,30 +40,40 @@ pub struct Keystore {
 
 impl Keystore {
     pub fn new() -> Self {
-        let mut csprng = rand_old::thread_rng();
-        let keypair = ed25519_dalek::Keypair::generate(&mut csprng);
+        let mut csprng = rand::thread_rng();
+        let mut buf = [0u8; 32];
+        csprng.fill_bytes(&mut buf);
+        let secret = SecretKey::from(buf);
+        let keypair = ed25519_dalek::SigningKey::from_bytes(&secret);
         let crypto_box = CryptoBox::generate(&mut csprng);
         Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new(), crypto_box, old: false }
     }
 
     pub fn from_random<R>(csprng: &mut R) -> Self where R: CryptoRng + RngCore {
-        let keypair = ed25519_dalek::Keypair::generate(csprng);
+        let mut buf = [0u8; 32];
+        csprng.fill_bytes(&mut buf);
+        let secret = SecretKey::from(buf);
+        let keypair = ed25519_dalek::SigningKey::from_bytes(&secret);
         let crypto_box = CryptoBox::generate(csprng);
         Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new(), crypto_box, old: false }
     }
 
     pub fn from_bytes(seed: &[u8]) -> Self {
-        let keypair = Keypair::from_bytes(seed).expect("Error creating keypair from bytes!");
-        let mut csprng = rand_old::thread_rng();
+        //TODO test thoroughly
+        let secret_key = SecretKey::try_from(seed).expect("Can't create Keystore from bytes");
+        let keypair = SigningKey::from_bytes(&secret_key);
+        let mut csprng = rand::thread_rng();
         let crypto_box = CryptoBox::generate(&mut csprng);
         Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new(), crypto_box, old: false }
     }
 
     pub fn from_random_bytes(key: &[u8]) -> Self {
-        let secret = SecretKey::from_bytes(key).unwrap();
-        let public = PublicKey::from(&secret);
-        let keypair = Keypair { secret, public };
-        let mut csprng = rand_old::thread_rng();
+        //TODO test thoroughly
+        let keypair = SecretKey::try_from(key).expect("Can't create Keystore from bytes");
+        let keypair = SigningKey::from_bytes(&keypair);
+        //let public = PublicKey::from(&keypair);
+        //let keypair = SigningKey { secret, public };
+        let mut csprng = rand::thread_rng();
         let crypto_box = CryptoBox::generate(&mut csprng);
         Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new(), crypto_box, old: false }
     }
@@ -74,12 +84,11 @@ impl Keystore {
             Ok(key) => {
                 match toml::from_str::<Keys>(&String::from_utf8(key).unwrap_or_default()) {
                     Ok(keys) => {
-                        let secret = SecretKey::from_bytes(&from_hex(&keys.signing.secret).unwrap()).unwrap();
-                        let public = PublicKey::from_bytes(&from_hex(&keys.signing.public).unwrap()).unwrap();
-                        let keypair = Keypair { secret, public };
+                        let secret = SecretKey::try_from(from_hex(&keys.signing.secret).unwrap().as_slice()).unwrap();
+                        let keypair = SigningKey::from_bytes(&secret);
                         let crypto_box = CryptoBox::from_strings(&keys.encryption.secret, &keys.encryption.public);
                         let keystore = Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::from(filename), crypto_box, old: false };
-                        let bytes = Bytes::from_bytes(&keystore.keypair.public.to_bytes());
+                        let bytes = Bytes::from_bytes(&keystore.keypair.verifying_key().to_bytes());
                         if check_public_key_strength(&bytes, KEYSTORE_DIFFICULTY) {
                             Some(keystore)
                         } else {
@@ -112,11 +121,11 @@ impl Keystore {
     }
 
     pub fn get_public(&self) -> Bytes {
-        Bytes::from_bytes(&self.keypair.public.to_bytes())
+        Bytes::from_bytes(&self.keypair.verifying_key().to_bytes())
     }
 
     pub fn get_private(&self) -> Bytes {
-        Bytes::from_bytes(&self.keypair.secret.to_bytes())
+        Bytes::from_bytes(&self.keypair.to_bytes())
     }
 
     pub fn get_encryption_public(&self) -> Bytes {
@@ -124,7 +133,7 @@ impl Keystore {
     }
 
     pub fn get_keys(&self) -> Keys {
-        let signing = KeyPack::new(to_hex(&self.keypair.public.to_bytes()), to_hex(&self.keypair.secret.to_bytes()));
+        let signing = KeyPack::new(to_hex(&self.keypair.verifying_key().to_bytes()), to_hex(&self.keypair.to_bytes()));
         let encryption = KeyPack::new(to_hex(&self.crypto_box.public.to_bytes()), to_hex(&self.crypto_box.secret.to_bytes()));
         Keys::new(false, signing, encryption)
     }
@@ -145,9 +154,13 @@ impl Keystore {
     }
 
     pub fn check(message: &[u8], public_key: &[u8], signature: &[u8]) -> bool {
-        let key = PublicKey::from_bytes(public_key).expect("Wrong public key!");
-        let signature = Signature::from_bytes(signature).unwrap();
-        key.verify(message, &signature).is_ok()
+        let buf = public_key.try_into().expect("Wrong public key");
+        let key = ed25519_dalek::VerifyingKey::from_bytes(&buf).expect("Wrong public key!");
+        if let Ok(signature) = SignatureBytes::try_from(signature) {
+            let signature = Signature::from_bytes(&signature);
+            return key.verify(message, &signature).is_ok();
+        }
+        false
     }
 
     pub fn encrypt(&self, message: &[u8]) -> Bytes {
@@ -174,7 +187,7 @@ impl Default for Keystore {
 
 impl Clone for Keystore {
     fn clone(&self) -> Self {
-        let keypair = Keypair::from_bytes(&self.keypair.to_bytes()).unwrap();
+        let keypair = SigningKey::from_bytes(&self.keypair.to_bytes());
         Self { keypair, hash: RefCell::new(Bytes::default()), path: self.path.clone(), crypto_box: self.crypto_box.clone(), old: self.old }
     }
 }
@@ -243,7 +256,6 @@ pub fn create_key(context: Arc<Mutex<Context>>) {
 }
 
 fn generate_key(difficulty: u32, mining: Arc<AtomicBool>) -> Option<Keystore> {
-    use self::rand::RngCore;
     let mut rng = rand::thread_rng();
     let mut time = Instant::now();
     let mut count = 0u128;
@@ -251,10 +263,11 @@ fn generate_key(difficulty: u32, mining: Arc<AtomicBool>) -> Option<Keystore> {
     let mut buf = [0u8; 32];
     loop {
         rng.fill_bytes(&mut buf);
-        let secret = SecretKey::from_bytes(&buf).unwrap();
-        let public = PublicKey::from(&secret);
+        let secret = SecretKey::try_from(buf).expect("Wrong buf length");
+        let keypair = SigningKey::from_bytes(&secret);
+        //let public = PublicKey::from(&secret);
         digest.reset();
-        digest.update(public.as_bytes());
+        digest.update(keypair.verifying_key().as_bytes());
         if key_hash_difficulty(digest.result()) >= difficulty {
             mining.store(false, atomic::Ordering::SeqCst);
             let keystore = Keystore::from_random_bytes(&buf);

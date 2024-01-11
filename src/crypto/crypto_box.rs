@@ -1,8 +1,8 @@
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 
-use ecies_ed25519::{decrypt, encrypt, Error, PublicKey, SecretKey};
-use rand_old::{CryptoRng, RngCore};
+use ecies_ed25519_ng::{decrypt, encrypt, Error, PublicKey, SecretKey};
+use rand::{CryptoRng, RngCore};
 
 use crate::{from_hex, to_hex};
 
@@ -19,7 +19,7 @@ impl CryptoBox {
     }
 
     pub fn generate<R>(csprng: &mut R) -> Self where R: CryptoRng + RngCore {
-        let (secret, public) = ecies_ed25519::generate_keypair(csprng);
+        let (secret, public) = ecies_ed25519_ng::generate_keypair(csprng);
         Self { secret, public }
     }
 
@@ -30,7 +30,7 @@ impl CryptoBox {
     }
 
     pub fn hide(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
-        let mut random = rand_old::thread_rng();
+        let mut random = rand::thread_rng();
         encrypt(&self.public, msg, &mut random)
     }
 
@@ -40,7 +40,7 @@ impl CryptoBox {
 
     pub fn encrypt(public: &[u8], message: &[u8]) -> Result<Vec<u8>, Error> {
         let public = PublicKey::from_bytes(public).unwrap();
-        let mut random = rand_old::thread_rng();
+        let mut random = rand::thread_rng();
         encrypt(&public, message, &mut random)
     }
 
