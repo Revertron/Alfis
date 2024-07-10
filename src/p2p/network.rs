@@ -791,7 +791,7 @@ fn read_message(stream: &mut TcpStream, buf: &mut [u8]) -> Result<usize, Error> 
         match stream.read(&mut buf[bytes_read..data_size]) {
             Ok(bytes) => {
                 bytes_read += bytes;
-                if bytes_read == data_size {
+                if bytes_read == data_size || bytes == 0 {
                     break;
                 }
             }
