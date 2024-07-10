@@ -161,7 +161,7 @@ impl Network {
                             //debug!("Accepted connection from: {} to local IP: {}", address, local_ip);
                             let token = self.next_token();
                             poll.registry().register(&mut stream, token, Interest::READABLE).expect("Error registering poll");
-                            let peer = Peer::new(address, stream, State::Connected, true);
+                            let peer = Peer::new(address, stream, State::Connected{ from: Instant::now() }, true);
                             self.peers.add_peer(token, peer);
                         }
                         if let Err(e) = poll.registry().reregister(&mut server, SERVER, Interest::READABLE) {
@@ -169,7 +169,11 @@ impl Network {
                         }
                     }
                     token => {
-                        let _ = debug_send.send(String::from("Handle connection event"));
+                        let peer = match self.peers.get_peer(&token) {
+                            None => "None".to_string(),
+                            Some(p) => p.to_string()
+                        };
+                        let _ = debug_send.send(format!("Handle connection event: {:?} for peer {}", &event, &peer));
                         if !self.handle_connection_event(poll.registry(), event, &mut seen_blocks, &mut buffer) {
                             let _ = self.peers.close_peer(poll.registry(), &token);
                             let blocks = self.context.lock().unwrap().chain.get_height();
@@ -282,7 +286,7 @@ impl Network {
                         return false;
                     }
                     match *peer.get_state() {
-                        State::Connected => {
+                        State::Connected { .. } => {
                             let stream = peer.get_stream();
                             return match read_client_handshake(stream) {
                                 Ok(key) => {
@@ -291,12 +295,12 @@ impl Network {
                                     let public_key: PublicKey = PublicKey::from(buf);
                                     let shared = self.secret_key.diffie_hellman(&public_key);
                                     let mut nonce = [0u8; 12];
-                                    let mut rng = rand::thread_rng();
+                                    let mut rng = thread_rng();
                                     rng.fill(&mut nonce);
                                     let chacha = Chacha::new(shared.as_bytes(), &nonce);
                                     registry.reregister(stream, event.token(), Interest::WRITABLE).unwrap();
                                     peer.set_cipher(chacha);
-                                    peer.set_state(State::ServerHandshake);
+                                    peer.set_state(State::ServerHandshake{ from: Instant::now() });
                                     //trace!("Client hello read successfully");
                                     true
                                 }
@@ -306,7 +310,7 @@ impl Network {
                                 }
                             };
                         }
-                        State::ServerHandshake => {
+                        State::ServerHandshake { .. } => {
                             let stream = peer.get_stream();
                             return match read_server_handshake(stream) {
                                 Ok(data) => {
@@ -345,17 +349,8 @@ impl Network {
         if let Ok(data_size) = data_size {
             let data = {
                 match self.peers.get_peer(&event.token()) {
-                    Some(peer) => {
-                        match decode_message(&buf[0..data_size], peer.get_cipher()) {
-                            Ok(data) => data,
-                            Err(_) => {
-                                vec![]
-                            }
-                        }
-                    }
-                    None => {
-                        vec![]
-                    }
+                    Some(peer) => decode_message(&buf[0..data_size], peer.get_cipher()).unwrap_or_else(|_| vec![]),
+                    None => vec![],
                 }
             };
             match Message::from_bytes(data) {
@@ -371,8 +366,8 @@ impl Network {
                             peer.set_state(State::Message { data });
                         }
                         State::Connecting => {}
-                        State::Connected => {}
-                        State::ServerHandshake => {}
+                        State::Connected { .. } => {}
+                        State::ServerHandshake { .. } => {}
                         State::HandshakeFinished => {}
                         State::Idle { .. } => {
                             peer.set_state(State::idle());
@@ -426,13 +421,15 @@ impl Network {
                     if send_client_handshake(peer.get_stream(), self.public_key.as_bytes()).is_err() {
                         return false;
                     }
-                    peer.set_state(State::ServerHandshake);
+                    peer.set_state(State::ServerHandshake{ from: Instant::now() });
+                    peer.set_active(true);
                 }
-                State::ServerHandshake => {
+                State::ServerHandshake { .. } => {
                     if send_server_handshake(peer, self.public_key.as_bytes()).is_err() {
                         return false;
                     }
                     peer.set_state(State::HandshakeFinished);
+                    peer.set_active(true);
                     //trace!("Server handshake sent");
                 }
                 State::HandshakeFinished => {
@@ -445,9 +442,10 @@ impl Network {
                     };
                     send_message(peer.get_stream(), &data).unwrap_or_else(|e| warn!("Error sending hello {}", e));
                     peer.set_state(State::idle());
+                    peer.set_active(true);
                     //debug!("Sent hello to {}", &peer.get_addr());
                 }
-                State::Connected => {}
+                State::Connected { .. } => {}
                 State::Message { data } => {
                     //debug!("Sending data to {}: {}", &peer.get_addr(), &String::from_utf8(data.clone()).unwrap());
                     if let Ok(data) = encode_bytes(&data, peer.get_cipher()) {
@@ -825,7 +823,7 @@ fn read_message(stream: &mut TcpStream, buf: &mut [u8]) -> Result<usize, Error> 
 
 /// Sends one byte [garbage_size], [random bytes], and [public_key]
 fn send_client_handshake(stream: &mut TcpStream, public_key: &[u8]) -> io::Result<()> {
-    let mut rng = rand::thread_rng();
+    let mut rng = thread_rng();
     let packet_size: usize = rng.gen_range(64..255);
     let mut buf = vec![0u8; packet_size];
     rng.fill_bytes(&mut buf);
@@ -839,6 +837,19 @@ fn send_client_handshake(stream: &mut TcpStream, public_key: &[u8]) -> io::Resul
 }
 
 fn read_client_handshake(stream: &mut TcpStream) -> Result<Vec<u8>, Error> {
+    read_garbage_header(stream)?;
+    // Then we have public key for ECDH
+    let mut buf = vec![0u8; 32];
+    match stream.read_exact(&mut buf) {
+        Ok(_) => Ok(buf),
+        Err(e) => {
+            warn!("Error reading handshake!");
+            Err(e)
+        }
+    }
+}
+
+fn read_garbage_header(stream: &mut TcpStream) -> Result<(), Error> {
     // First, we read garbage size
     let data_size = match stream.read_u8() {
         Ok(size) => (size ^ 0xA) as usize,
@@ -855,19 +866,11 @@ fn read_client_handshake(stream: &mut TcpStream) -> Result<Vec<u8>, Error> {
             return Err(e);
         }
     }
-    // Then we have public key for ECDH
-    let mut buf = vec![0u8; 32];
-    match stream.read_exact(&mut buf) {
-        Ok(_) => Ok(buf),
-        Err(e) => {
-            warn!("Error reading handshake!");
-            Err(e)
-        }
-    }
+    Ok(())
 }
 
 fn send_server_handshake(peer: &mut Peer, public_key: &[u8]) -> io::Result<()> {
-    let mut rng = rand::thread_rng();
+    let mut rng = thread_rng();
     let packet_size: usize = rng.gen_range(64..255);
     let mut buf = vec![0u8; packet_size];
     rng.fill_bytes(&mut buf);
@@ -887,22 +890,7 @@ fn send_server_handshake(peer: &mut Peer, public_key: &[u8]) -> io::Result<()> {
 }
 
 fn read_server_handshake(stream: &mut TcpStream) -> Result<Vec<u8>, Error> {
-    // First, we read garbage size
-    let data_size = match stream.read_u8() {
-        Ok(size) => (size ^ 0xA) as usize,
-        Err(e) => {
-            error!("Error reading from socket! {}", e);
-            return Err(e);
-        }
-    };
-    // Read the garbage
-    let mut buf = vec![0u8; data_size];
-    match stream.read_exact(&mut buf) {
-        Ok(_) => {}
-        Err(e) => {
-            return Err(e);
-        }
-    }
+    read_garbage_header(stream)?;
     // Then we have public key for ECDH, plus nonce 12 bytes
     let mut buf = vec![0u8; 32 + 12];
     match stream.read_exact(&mut buf) {
@@ -946,12 +934,12 @@ fn wait_for_internet(timeout: Duration) {
     trace!("Waiting for internet connection has timed out.")
 }
 
-fn would_block(err: &io::Error) -> bool {
-    err.kind() == io::ErrorKind::WouldBlock
+fn would_block(err: &Error) -> bool {
+    err.kind() == ErrorKind::WouldBlock
 }
 
-fn interrupted(err: &io::Error) -> bool {
-    err.kind() == io::ErrorKind::Interrupted
+fn interrupted(err: &Error) -> bool {
+    err.kind() == ErrorKind::Interrupted
 }
 
 fn write_all(connection: &mut TcpStream, mut buf: &[u8]) -> io::Result<()> {

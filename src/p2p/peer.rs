@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::net::SocketAddr;
 use std::time::Instant;
 
@@ -138,6 +139,18 @@ impl Peer {
     }
 
     pub fn active(&self) -> bool {
+        match &self.state {
+            State::Connected { from } => {
+                return from.elapsed().as_secs() < 5;
+            }
+            State::Idle { from } => {
+                return from.elapsed().as_secs() < 120;
+            }
+            State::ServerHandshake { from } => {
+                return from.elapsed().as_secs() < 10;
+            }
+            _ => {}
+        }
         self.active && self.last_active.elapsed().as_secs() < 120
     }
 
@@ -173,5 +186,25 @@ impl Peer {
         } else {
             self.addr.ip() == addr.ip()
         }
+    }
+}
+
+impl Display for Peer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let state = match &self.state {
+            State::Connecting => "Connecting",
+            State::Connected { .. } => "Connected",
+            State::ServerHandshake { .. } => "ServerHandshake",
+            State::HandshakeFinished => "HandshakeFinished",
+            State::Idle { .. } => "Idle",
+            State::Message { .. } => "Message",
+            State::Error => "Error",
+            State::Banned => "Banned",
+            State::SendLoop => "SendLoop",
+            State::Loop => "Loop",
+            State::Twin => "Twin",
+            State::Offline { .. } => "Offline"
+        };
+        write!(f, "{:?} {}", &self.addr, state)
     }
 }

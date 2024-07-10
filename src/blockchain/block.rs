@@ -97,7 +97,7 @@ impl Block {
         bincode::serialize(&self).unwrap()
     }
 
-    /// Checks if this block is superior than the other
+    /// Checks if this block is superior to the other
     pub fn is_better_than(&self, other: &Block) -> bool {
         if self.transaction.is_some() && other.transaction.is_none() {
             return true;

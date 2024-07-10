@@ -56,7 +56,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                 MineDomain { name, data, signing, encryption, renewal } => {
                     action_create_domain(Arc::clone(&context), Arc::clone(&miner), web_view, name, data, signing, encryption, renewal);
                 }
-                TransferDomain { .. } => {}
+                TransferDomain { name, owner} => { info!("Transferring '{name}' to '{owner}'"); }
                 StopMining => { post(Event::ActionStopMining); }
                 Open { link } => {
                     if open::that(&link).is_err() {
@@ -360,10 +360,11 @@ fn load_domains(context: &mut MutexGuard<Context>, handle: &Handle<()>) {
         web_view.eval("clearMyDomains();")
     });
     let domains = context.chain.get_my_domains(context.get_keystore());
-    //debug!("Domains: {:?}", &domains.values());
-    for (_identity, (domain, timestamp, data)) in domains {
+    let mut domains = domains.iter().map(|(_, d)| d).collect::<Vec<_>>();
+    domains.sort_by(|a, b| a.0.cmp(&b.0));
+    for (domain, timestamp, data) in domains {
         let d = serde_json::to_string(&data).unwrap();
-        let d = d.replace("'", "\\'").replace("\\n", "\\\\n");
+        let d = d.replace("'", "\\'").replace("\\n", "\\\\n").replace("\"", "\\\"");
         let command = format!("addMyDomain('{}', {}, {}, '{}');", &domain, timestamp, timestamp + DOMAIN_LIFETIME, &d);
         let _ = handle.dispatch(move |web_view|{
             web_view.eval(&command)

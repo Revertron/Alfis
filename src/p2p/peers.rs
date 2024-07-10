@@ -61,7 +61,7 @@ impl Peers {
                 State::Connecting => {
                     debug!("Peer connection {} to {:?} has timed out", &token.0, &addr);
                 }
-                State::Connected => {
+                State::Connected { .. } => {
                     debug!("Peer connection {} to {:?} disconnected", &token.0, &addr);
                 }
                 State::Idle { .. } | State::Message { .. } => {
@@ -86,8 +86,8 @@ impl Peers {
                 State::Twin => {
                     debug!("Peer connection {} to {:?} is a twin", &token.0, &addr);
                 }
-                State::ServerHandshake => {
-                    debug!("Peer connection {} from {:?} didn't shake hands", &token.0, &addr);
+                State::ServerHandshake { from } => {
+                    debug!("Peer connection {} from {:?} didn't shake hands for {}ms", &token.0, &addr, from.elapsed().as_millis());
                 }
                 State::HandshakeFinished => {
                     debug!("Peer connection {} from {:?} shook hands, but then failed", &token.0, &addr);
@@ -269,6 +269,7 @@ impl Peers {
                 }
             } else {
                 if !matches!(peer.get_state(), State::Connecting {..}) && (peer.get_state().is_timed_out() || !peer.active()) {
+                    debug!("Stale peer: {}, state: {:?}", peer.get_addr(), peer.get_state());
                     stale_tokens.push((token.clone(), peer.get_addr()));
                     continue;
                 }

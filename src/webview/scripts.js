@@ -34,7 +34,7 @@ function delRecord(index) {
 }
 
 function refreshRecordsList() {
-    var buf = "";
+    let buf = "";
     if (recordsBuffer.length > 0) {
         buf = "<label class=\"label\">Records:</label>\n";
     }
@@ -46,28 +46,28 @@ function refreshRecordsList() {
     }
 
     function makeRecord(value, index, array) {
-        var data = value.addr;
+        let data = value.addr;
         if (value.type == "MX") {
             data = value.priority + " " + value.host;
         } else if (value.type == "CNAME" || value.type == "NS") {
             data = value.host;
         } else if (value.type == "TXT" || value.type == "TLSA") {
-            data = value.data;
+            data = value.data.toString();
         } else if (value.type == "SRV") {
             data = value.priority + " " + value.weight + " " + value.port + " " + value.host;
         }
 
-        var text = "<div class=\"field is-grouped\">" +
-               "<input class=\"input\" type=\"text\" value=\"{1}\" readonly>" +
-               "<input class=\"input ml-3 has-text-centered\" type=\"text\" size=\"6\" style=\"width: 20%;\" value=\"{2}\" readonly>" +
-               "<input class=\"input ml-3 has-text-centered\" type=\"text\" size=\"6\" style=\"width: 20%;\" value=\"{3}\" readonly>" +
-               "<input class=\"input ml-3\" type=\"text\" value=\"{4}\" readonly>" +
-               "<button class=\"button is-danger is-outlined ml-3\" id=\"record_delete\" onclick=\"delRecord({5});\">" +
-               "  <span class=\"icon is-small\">" +
-               "    <svg viewBox=\"0 0 24 24\" style=\"width: 20px; height: 20px;\"><path d=\"M22.54 16.88L20.41 19L22.54 21.12L21.12 22.54L19 20.41L16.88 22.54L15.47 21.12L17.59 19L15.47 16.88L16.88 15.47L19 17.59L21.12 15.46L22.54 16.88M12 13C10.9 13 10 13.9 10 15S10.9 17 12 17 14 16.1 14 15 13.1 13 12 13M13.35 21H5.5C4.58 21 3.81 20.38 3.58 19.54L1.04 10.27C1 10.18 1 10.09 1 10C1 9.45 1.45 9 2 9H6.79L11.17 2.45C11.36 2.16 11.68 2 12 2S12.64 2.16 12.83 2.44L17.21 9H22C22.55 9 23 9.45 23 10L22.97 10.27L22 13.81C21.43 13.5 20.79 13.24 20.12 13.11L20.7 11H3.31L5.5 19H13C13 19.7 13.13 20.37 13.35 21M9.2 9H14.8L12 4.8L9.2 9Z\"></path></svg>" +
-               "  </span>" +
-               "</button>" +
-               "</div>";
+        const text = "<div class=\"field is-grouped\">" +
+            "<input class=\"input\" type=\"text\" value=\"{1}\" readonly>" +
+            "<input class=\"input ml-3 has-text-centered\" type=\"text\" size=\"6\" style=\"width: 20%;\" value=\"{2}\" readonly>" +
+            "<input class=\"input ml-3 has-text-centered\" type=\"text\" size=\"6\" style=\"width: 20%;\" value=\"{3}\" readonly>" +
+            "<input class=\"input ml-3\" type=\"text\" value='{4}' readonly>" +
+            "<button class=\"button is-danger is-outlined ml-3\" id=\"record_delete\" onclick=\"delRecord({5});\">" +
+            "  <span class=\"icon is-small\">" +
+            "    <svg viewBox=\"0 0 24 24\" style=\"width: 20px; height: 20px;\"><path d=\"M22.54 16.88L20.41 19L22.54 21.12L21.12 22.54L19 20.41L16.88 22.54L15.47 21.12L17.59 19L15.47 16.88L16.88 15.47L19 17.59L21.12 15.46L22.54 16.88M12 13C10.9 13 10 13.9 10 15S10.9 17 12 17 14 16.1 14 15 13.1 13 12 13M13.35 21H5.5C4.58 21 3.81 20.38 3.58 19.54L1.04 10.27C1 10.18 1 10.09 1 10C1 9.45 1.45 9 2 9H6.79L11.17 2.45C11.36 2.16 11.68 2 12 2S12.64 2.16 12.83 2.44L17.21 9H22C22.55 9 23 9.45 23 10L22.97 10.27L22 13.81C21.43 13.5 20.79 13.24 20.12 13.11L20.7 11H3.31L5.5 19H13C13 19.7 13.13 20.37 13.35 21M9.2 9H14.8L12 4.8L9.2 9Z\"></path></svg>" +
+            "  </span>" +
+            "</button>" +
+            "</div>";
         buf += text.replace("{1}", value.domain)
                    .replace("{2}", value.type)
                    .replace("{3}", value.ttl)
@@ -144,19 +144,19 @@ function formatDate(date) {
 }
 
 function refreshMyDomains() {
-    var row = '<tr class="is-clickable" onclick="editDomain(\'{domain}\', event);"><td class="has-text-weight-semibold">{title}</td><td class="w100"><div class="tags">{tags}</div></td><td>{date1}</td><td>{date2}</td></tr>';
-    var tag = '<span class="tag" title="{ip}">{domain}</span>';
-    var rows = "";
+    const row = '<tr class="is-clickable" onclick="editDomain(\'{domain}\', event);"><td class="has-text-weight-semibold">{title}</td><td class="w100"><div class="tags">{tags}</div></td><td>{date1}</td><td>{date2}</td></tr>';
+    const tag = '<span class="tag" title="{ip}">{domain}</span>';
+    let rows = "";
     myDomains.forEach(function(value, index, array) {
-        var title = value.name;
-        var domain_data = JSON.parse(value.data);
-        var start = formatDate(new Date(value.timestamp * 1000));
-        var expire = formatDate(new Date(value.expire * 1000));
-        var tags = "";
+        const title = value.name;
+        const domain_data = JSON.parse(value.data);
+        const start = formatDate(new Date(value.timestamp * 1000));
+        const expire = formatDate(new Date(value.expire * 1000));
+        let tags = "";
         if (typeof domain_data.records !== 'undefined') {
             domain_data.records.forEach(function(v, i, a) {
                 if (typeof v.domain !== 'undefined') {
-                    var buf = tag.replace("{domain}", v.domain);
+                    let buf = tag.replace("{domain}", v.domain);
                     if (typeof v.addr !== 'undefined') {
                         buf = buf.replace("{ip}", v.addr);
                     } else if (typeof v.host !== 'undefined') {
@@ -171,7 +171,7 @@ function refreshMyDomains() {
         rows = rows + row.replace("{title}", title).replace("{domain}", title).replace("{tags}", tags).replace("{date1}", start).replace("{date2}", expire);
     });
     document.getElementById("my_domains").innerHTML = rows;
-    if (rows != "") {
+    if (rows !== "") {
         document.getElementById("my_domains_table").style.display = 'table';
     } else {
         document.getElementById("my_domains_table").style.display = 'none';
@@ -180,11 +180,11 @@ function refreshMyDomains() {
 
 function editDomain(domain, event) {
     myDomains.forEach(function(value, index, array) {
-        if (domain != value.name) {
+        if (domain !== value.name) {
             return;
         }
-        var title = value.name;
-        var domain_data = JSON.parse(value.data);
+        const title = value.name;
+        const domain_data = JSON.parse(value.data);
         recordsBuffer = [];
         if (typeof domain_data.records !== 'undefined') {
             domain_data.records.forEach(function(v, i, a) {
@@ -197,7 +197,7 @@ function editDomain(domain, event) {
             document.getElementById("info_text").value = domain_data.info;
         }
         if (typeof domain_data.contacts !== 'undefined') {
-            var count = 1;
+            let count = 1;
             domain_data.contacts.forEach(function(v, i, a) {
                 document.getElementById("contact" + count + "_name").value = decodeURIComponent(v.name);
                 document.getElementById("contact" + count + "_value").value = decodeURIComponent(v.value);

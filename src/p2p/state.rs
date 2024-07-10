@@ -5,8 +5,8 @@ use crate::p2p::Message;
 #[derive(Debug, Clone, PartialEq)]
 pub enum State {
     Connecting,
-    Connected,
-    ServerHandshake,
+    Connected { from: Instant },
+    ServerHandshake { from: Instant },
     HandshakeFinished,
     Idle { from: Instant },
     Message { data: Vec<u8> },
@@ -42,6 +42,9 @@ impl State {
             State::Banned => true,
             State::Idle { from } => {
                 from.elapsed().as_secs() > 60
+            }
+            State::Connected { from } => {
+                from.elapsed().as_secs() > 10
             }
             _ => false
         }
