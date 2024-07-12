@@ -76,8 +76,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag_name="${{ needs.get_version.outputs.project_version }}"
-          gh release upload "$tag_name" $(find ./bin -type f -name "alfis-*" -printf "-a %p ")
-          gh release upload "$tag_name" $(find . -type f -name "*.deb" -printf "-a %p ")
+          gh release upload "$tag_name" alfis-*
+          gh release upload "$tag_name" *.deb
 
   build-and-upload-gui-zips:
     name: Create and upload builds
