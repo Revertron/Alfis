@@ -55,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        arch: [ amd64, i686, mips, mipsel, armhf, armlf, arm64 ]
+        arch: [ amd64, i686, armhf, armlf, arm64 ]
     defaults:
       run:
         shell: bash
