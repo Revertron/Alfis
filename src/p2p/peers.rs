@@ -297,7 +297,7 @@ impl Peers {
             }
         }
 
-        // If someone has less blocks (we mined a new block) we send a ping with our height
+        // If someone has fewer blocks (we mined a new block) we send a ping with our height
         if self.need_behind_ping() {
             let mut rng = rand::thread_rng();
             match self.peers

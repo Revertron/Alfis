@@ -76,7 +76,7 @@ impl BlockchainFilter {
             // Create DnsPacket
             let mut packet = DnsPacket::new();
             packet.header.authoritative_answer = true;
-            packet.header.rescode = ResultCode::NOERROR;
+            packet.header.rescode = ResultCode::NXDOMAIN;
             packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
             let serial = self.context.lock().unwrap().chain.get_soa_serial();
             BlockchainFilter::add_soa_record(zone, serial, &mut packet);
@@ -198,9 +198,9 @@ impl DnsFilter for BlockchainFilter {
                 }
 
                 let mut answers: Vec<DnsRecord> = Vec::new();
-                let a_record = qtype == QueryType::A || qtype == QueryType::AAAA;
+                let mut cname: Option<DnsRecord> = None;
                 for mut record in data.records.iter_mut() {
-                    if record.get_querytype() == qtype || (a_record && record.get_querytype() == QueryType::CNAME) {
+                    if record.get_querytype() == qtype || record.get_querytype() == QueryType::CNAME {
                         match &mut record {
                             DnsRecord::A { domain, .. }
                             | DnsRecord::AAAA { domain, .. }
@@ -211,7 +211,7 @@ impl DnsFilter for BlockchainFilter {
                             | DnsRecord::MX { domain, .. }
                             | DnsRecord::UNKNOWN { domain, .. }
                             | DnsRecord::SOA { domain, .. }
-                            | DnsRecord::TXT { domain, .. } if domain == "@" => {
+                            | DnsRecord::TXT { domain, .. } if (domain == "@" && subdomain.is_empty()) || domain == &subdomain => {
                                 *domain = String::from(qname);
                             }
                             _ => ()
@@ -220,65 +220,55 @@ impl DnsFilter for BlockchainFilter {
                         match record.get_domain() {
                             None => {}
                             Some(domain) => {
-                                if domain == top_domain {
-                                    answers.push(record.clone());
-                                } else if domain == subdomain {
-                                    match &mut record {
-                                        DnsRecord::A { domain, .. }
-                                        | DnsRecord::AAAA { domain, .. }
-                                        | DnsRecord::NS { domain, .. }
-                                        | DnsRecord::CNAME { domain, .. }
-                                        | DnsRecord::SRV { domain, .. }
-                                        | DnsRecord::TLSA { domain, .. }
-                                        | DnsRecord::MX { domain, .. }
-                                        | DnsRecord::UNKNOWN { domain, .. }
-                                        | DnsRecord::SOA { domain, .. }
-                                        | DnsRecord::TXT { domain, .. } => {
-                                            *domain = String::from(qname);
-                                        }
-                                        _ => ()
+                                if domain == qname || domain == subdomain {
+                                    if record.get_querytype() == QueryType::CNAME {
+                                        cname = Some(record.clone());
+                                    } else {
+                                        answers.push(record.clone());
                                     }
-                                    answers.push(record.clone());
                                 }
                             }
                         }
                     }
                 }
+                if answers.is_empty() && cname.is_some() {
+                    answers.push(cname.unwrap());
+                }
+                let mut domain_exists = !answers.is_empty();
                 if answers.is_empty() {
                     // If there are no records found we search for *.domain.tld record
                     for mut record in data.records {
-                        if record.get_querytype() == qtype {
-                            match record.get_domain() {
-                                None => {}
-                                Some(domain) => {
-                                    if domain == top_domain {
-                                        answers.push(record.clone());
-                                    } else if domain == "*" {
-                                        match &mut record {
-                                            DnsRecord::A { domain, .. }
-                                            | DnsRecord::AAAA { domain, .. }
-                                            | DnsRecord::NS { domain, .. }
-                                            | DnsRecord::CNAME { domain, .. }
-                                            | DnsRecord::SRV { domain, .. }
-                                            | DnsRecord::TLSA { domain, .. }
-                                            | DnsRecord::MX { domain, .. }
-                                            | DnsRecord::UNKNOWN { domain, .. }
-                                            | DnsRecord::SOA { domain, .. }
-                                            | DnsRecord::TXT { domain, .. } => {
-                                                *domain = String::from(qname);
-                                            }
-                                            _ => ()
-                                        }
-                                        answers.push(record.clone());
-                                    }
+                        let record_domain = record.get_domain().unwrap_or(String::new());
+                        if record.get_querytype() == qtype && record_domain == "*" {
+                            match &mut record {
+                                DnsRecord::A { domain, .. }
+                                | DnsRecord::AAAA { domain, .. }
+                                | DnsRecord::NS { domain, .. }
+                                | DnsRecord::CNAME { domain, .. }
+                                | DnsRecord::SRV { domain, .. }
+                                | DnsRecord::TLSA { domain, .. }
+                                | DnsRecord::MX { domain, .. }
+                                | DnsRecord::UNKNOWN { domain, .. }
+                                | DnsRecord::SOA { domain, .. }
+                                | DnsRecord::TXT { domain, .. } => {
+                                    *domain = String::from(qname);
                                 }
+                                _ => ()
                             }
+                            answers.push(record.clone());
+                        }
+                        if !domain_exists && (record_domain == subdomain || record_domain == "*") {
+                            domain_exists = true;
                         }
                     }
                 }
 
-                //debug!("Answers: {:?}", &answers);
-                return self.create_packet(qname, qtype, zone, answers);
+                if let Some(mut packet) = self.create_packet(qname, qtype, zone, answers) {
+                    if domain_exists && packet.answers.is_empty() {
+                        packet.header.rescode = ResultCode::NOERROR;
+                    }
+                    return Some(packet);
+                }
             }
         }
 
