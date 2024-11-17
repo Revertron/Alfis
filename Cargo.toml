@@ -14,14 +14,12 @@ exclude = ["blockchain.db", "alfis.toml"]
 getopts = "0.2.21"
 log = "0.4.22"
 simplelog = "0.12.2"
-toml = "0.8.14"
-digest = "0.10.7"
+toml = "0.8.19"
 sha2 = "0.10.8"
 ed25519-dalek = "2.1.1"
 x25519-dalek = { version = "2.0.1", features = ["reusable_secrets"] }
 ecies-ed25519-ng = { git = "https://github.com/Revertron/ecies-ed25519-ng", rev = "554ca29", version = "0.5.3" }
 chacha20poly1305 = "0.10.1"
-signature = "2.2.0"
 blakeout = "0.3.0"
 num_cpus = "1.16.0"
 byteorder = "1.5.0"
@@ -29,40 +27,31 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 bincode = "1.3.3"
 serde_cbor = "0.11.2"
-base64 = "0.22.1"
 num-bigint = "0.4.6"
-num-traits = "0.2.19"
 chrono = { version = "0.4.38", features = ["serde"] }
 time = "0.3.36"
 rand = { package = "rand", version = "0.8.5" }
 sqlite = "0.36.0"
-uuid = { version = "1.7.0", features = ["serde", "v4"] }
+uuid = { version = "1.11.0", features = ["serde", "v4"] }
 mio = { version = "1.0.0", features = ["os-poll", "net"] }
-ureq = { version = "2.9", optional = true, git = "https://github.com/algesten/ureq" }
+ureq = { version = "2.10", optional = true }
 lru = "0.12"
-derive_more = "0.99.18"
+derive_more = { version = "1.0.0", features = ["display", "error", "from"] }
 lazy_static = "1.5.0"
 spmc = "0.3.0"
+thread-priority = "1.2.0"
 
 # Optional dependencies regulated by features
 web-view = { git = "https://github.com/Boscop/web-view", features = [], optional = true }
 tinyfiledialogs = { version = "3.9.1", optional = true }
-open = { version = "5.2.0", optional = true }
+open = { version = "5.3.0", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = ["impl-default", "wincon", "shellscalingapi"] }
 windows-service = "0.7.0"
-thread-priority = "1.1.0"
-
-[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))'.dependencies]
-thread-priority = "1.1.0"
 
 [build-dependencies]
 winres = "0.1.12"
-
-[dev-dependencies]
-serde_bytes = "0.11.7"
-serde_derive = "1.0.126"
 
 [profile.release]
 opt-level = 3

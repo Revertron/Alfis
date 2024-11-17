@@ -97,26 +97,27 @@ function showNewRecordDialog() {
 }
 
 function getRecordFromDialog() {
-    var record_name = document.getElementById("record_name").value.toLowerCase();
-    var record_type = document.getElementById("record_type").value;
-    var record_ttl = parseInt(document.getElementById("record_ttl").value);
-    var record_data = document.getElementById("record_data").value;
+    let record_priority;
+    const record_name = document.getElementById("record_name").value.toLowerCase();
+    const record_type = document.getElementById("record_type").value;
+    const record_ttl = parseInt(document.getElementById("record_ttl").value);
+    let record_data = document.getElementById("record_data").value;
     if (record_type == "CNAME" || record_type == "NS") {
         return { type: record_type, domain: record_name, ttl: record_ttl, host: record_data }
     } else if (record_type == "MX") {
-        var record_priority = parseInt(document.getElementById("record_priority").value);
+        record_priority = parseInt(document.getElementById("record_priority").value);
         return { type: record_type, domain: record_name, ttl: record_ttl, priority: record_priority, host: record_data }
     }  else if (record_type == "TXT") {
         return { type: record_type, domain: record_name, ttl: record_ttl, data: record_data }
     } else if (record_type == "SRV") {
-        var record_priority = parseInt(document.getElementById("record_priority").value);
-        var record_weight = parseInt(document.getElementById("record_weight").value);
-        var record_port = parseInt(document.getElementById("record_port").value);
+        record_priority = parseInt(document.getElementById("record_priority").value);
+        const record_weight = parseInt(document.getElementById("record_weight").value);
+        const record_port = parseInt(document.getElementById("record_port").value);
         return { type: record_type, domain: record_name, ttl: record_ttl, priority: record_priority, weight: record_weight, port: record_port, host: record_data }
     } else if (record_type == "TLSA") {
-        var certificate_usage = parseInt(document.getElementById("record_priority").value);
-        var selector = parseInt(document.getElementById("record_weight").value);
-        var matching_type = parseInt(document.getElementById("record_port").value);
+        const certificate_usage = parseInt(document.getElementById("record_priority").value);
+        const selector = parseInt(document.getElementById("record_weight").value);
+        const matching_type = parseInt(document.getElementById("record_port").value);
         record_data = hexToBytes(record_data);
         return { type: record_type, domain: record_name, ttl: record_ttl, certificate_usage: certificate_usage, selector: selector, matching_type: matching_type, data: record_data }
     }
