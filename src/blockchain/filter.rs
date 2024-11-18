@@ -234,7 +234,7 @@ impl DnsFilter for BlockchainFilter {
                 if answers.is_empty() && cname.is_some() {
                     answers.push(cname.unwrap());
                 }
-                let mut domain_exists = !answers.is_empty();
+                let mut domain_exists = !answers.is_empty() || subdomain.is_empty();
                 if answers.is_empty() {
                     // If there are no records found we search for *.domain.tld record
                     for mut record in data.records {
