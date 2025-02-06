@@ -78,7 +78,7 @@ emerge --sync dm9pZCAq
 emerge net-dns/alfis
 ```
 
-### ![NixOS Logo](https://nixos.org/favicon.ico) On Nix/NixOS
+### <img src="https://nixos.org/favicon.ico" alt="NixOS Logo" style="height: 1em"> On Nix/NixOS
 `nix-shell` in this repo and then run `cargo build --release` and `cargo install` after you have entered the shell.
 
 ## Installation
