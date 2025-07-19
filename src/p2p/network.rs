@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::{Error, ErrorKind, Read, Write};
 use std::net::{IpAddr, Shutdown, SocketAddr, SocketAddrV4, ToSocketAddrs};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, mpsc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 use std::{io, thread};
 
@@ -16,8 +16,8 @@ use log::{debug, error, info, trace, warn};
 use mio::event::Event;
 use mio::net::{TcpListener, TcpStream};
 use mio::{Events, Interest, Poll, Registry, Token};
-use rand::{random, Rng, RngCore};
 use rand::prelude::thread_rng;
+use rand::{random, Rng, RngCore};
 use x25519_dalek::{PublicKey, ReusableSecret};
 
 use crate::blockchain::types::BlockQuality;
@@ -37,7 +37,7 @@ pub struct Network {
     // States of peer connections, and some data to send when sockets become writable
     peers: Peers,
     // Orphan blocks from future
-    future_blocks: HashMap<u64, Block>
+    future_blocks: HashMap<u64, Block>,
 }
 
 impl Network {
@@ -51,9 +51,9 @@ impl Network {
     }
 
     pub fn start(&mut self) {
-        let (listen_addr, peers_addrs, yggdrasil_only) = {
+        let (listen_addr, peers_addrs, mycelium_mode, yggdrasil_mode) = {
             let c = self.context.lock().unwrap();
-            (c.settings.net.listen.clone(), c.settings.net.peers.clone(), c.settings.net.yggdrasil_only)
+            (c.settings.net.listen.clone(), c.settings.net.peers.clone(), c.settings.net.mycelium_mode, c.settings.net.yggdrasil_mode)
         };
 
         let running = Arc::new(AtomicBool::new(true));
@@ -71,7 +71,7 @@ impl Network {
 
         // Starting peer connections to bootstrap nodes
         wait_for_internet(WAIT_FOR_INTERNET);
-        self.peers.connect_peers(&peers_addrs, poll.registry(), &mut self.token, yggdrasil_only);
+        self.peers.connect_peers(&peers_addrs, poll.registry(), &mut self.token, mycelium_mode, yggdrasil_mode);
 
         let mut ui_timer = Instant::now();
         let mut log_timer = Instant::now();
@@ -109,14 +109,13 @@ impl Network {
                 warn!("Restarting swarm connections...");
                 wait_for_internet(WAIT_FOR_INTERNET);
                 // Starting peer connections to bootstrap nodes
-                self.peers.connect_peers(&peers_addrs, poll.registry(), &mut self.token, yggdrasil_only);
+                self.peers.connect_peers(&peers_addrs, poll.registry(), &mut self.token, mycelium_mode, yggdrasil_mode);
                 bootstrap_timer = Instant::now();
                 last_events_time = Instant::now();
             }
             let _ = debug_send.send(String::from("Poll events"));
             // Poll Mio for events, blocking until we get an event.
-            poll.poll(&mut events, POLL_TIMEOUT)
-                .unwrap_or_else(|e| warn!("Error polling sockets: {}", e));
+            poll.poll(&mut events, POLL_TIMEOUT).unwrap_or_else(|e| warn!("Error polling sockets: {}", e));
             if !running.load(Ordering::SeqCst) {
                 break;
             }
@@ -149,8 +148,9 @@ impl Network {
                                 continue;
                             }
 
-                            if yggdrasil_only && !is_yggdrasil(&address.ip()) {
-                                debug!("Dropping connection from Internet");
+                            let ip = address.ip(); // allocate once
+                            if !is_match_network(&ip, mycelium_mode, yggdrasil_mode) {
+                                debug!("Dropping connection from a restricted network address '{ip}'");
                                 stream.shutdown(Shutdown::Both).unwrap_or_else(|e| {
                                     warn!("Error in shutdown, {}", e);
                                 });
@@ -161,7 +161,7 @@ impl Network {
                             //debug!("Accepted connection from: {} to local IP: {}", address, local_ip);
                             let token = self.next_token();
                             poll.registry().register(&mut stream, token, Interest::READABLE).expect("Error registering poll");
-                            let peer = Peer::new(address, stream, State::Connected{ from: Instant::now() }, true);
+                            let peer = Peer::new(address, stream, State::Connected { from: Instant::now() }, true);
                             self.peers.add_peer(token, peer);
                         }
                         if let Err(e) = poll.registry().reregister(&mut server, SERVER, Interest::READABLE) {
@@ -171,7 +171,7 @@ impl Network {
                     token => {
                         let peer = match self.peers.get_peer(&token) {
                             None => "None".to_string(),
-                            Some(p) => p.to_string()
+                            Some(p) => p.to_string(),
                         };
                         let _ = debug_send.send(format!("Handle connection event: {:?} for peer {}", &event, &peer));
                         if !self.handle_connection_event(poll.registry(), event, &mut seen_blocks, &mut buffer) {
@@ -233,7 +233,7 @@ impl Network {
                         seen_blocks.clear();
                     }
                     if nodes < MAX_NODES && connect_timer.elapsed().as_secs() >= 2 {
-                        self.peers.connect_new_peers(poll.registry(), &mut self.token, yggdrasil_only);
+                        self.peers.connect_new_peers(poll.registry(), &mut self.token, mycelium_mode, yggdrasil_mode);
                         connect_timer = Instant::now();
                     }
                     (blocks, max_height, context.chain.get_last_hash())
@@ -300,7 +300,7 @@ impl Network {
                                     let chacha = Chacha::new(shared.as_bytes(), &nonce);
                                     registry.reregister(stream, event.token(), Interest::WRITABLE).unwrap();
                                     peer.set_cipher(chacha);
-                                    peer.set_state(State::ServerHandshake{ from: Instant::now() });
+                                    peer.set_state(State::ServerHandshake { from: Instant::now() });
                                     //trace!("Client hello read successfully");
                                     true
                                 }
@@ -405,7 +405,7 @@ impl Network {
             let error = data_size.err().unwrap();
             let addr = match self.peers.get_peer(&event.token()) {
                 None => String::from("unknown"),
-                Some(peer) => peer.get_addr().to_string()
+                Some(peer) => peer.get_addr().to_string(),
             };
             debug!("Error reading message from {}, error = {}", addr, error);
             return false;
@@ -421,7 +421,7 @@ impl Network {
                     if send_client_handshake(peer.get_stream(), self.public_key.as_bytes()).is_err() {
                         return false;
                     }
-                    peer.set_state(State::ServerHandshake{ from: Instant::now() });
+                    peer.set_state(State::ServerHandshake { from: Instant::now() });
                     peer.set_active(true);
                 }
                 State::ServerHandshake { .. } => {
@@ -488,7 +488,13 @@ impl Network {
         let (my_height, my_hash, my_origin, my_version, me_public) = {
             let context = self.context.lock().unwrap();
             // TODO cache it somewhere
-            (context.chain.get_height(), context.chain.get_last_hash(), &context.settings.origin.clone(), CHAIN_VERSION, context.settings.net.public)
+            (
+                context.chain.get_height(),
+                context.chain.get_last_hash(),
+                &context.settings.origin.clone(),
+                CHAIN_VERSION,
+                context.settings.net.public,
+            )
         };
         let my_id = self.peers.get_my_id().to_owned();
         let answer = match message {
@@ -620,7 +626,7 @@ impl Network {
                 let context = self.context.lock().unwrap();
                 match context.chain.get_block(index) {
                     Some(block) => State::message(Message::block(block.index, block.as_bytes())),
-                    None => State::Error
+                    None => State::Error,
                 }
             }
             Message::Block { index, block } => {
@@ -644,7 +650,7 @@ impl Network {
                 }
             }
             Message::Twin => State::Twin,
-            Message::Loop => State::Loop
+            Message::Loop => State::Loop,
         };
         answer
     }
@@ -687,7 +693,9 @@ impl Network {
                 let keys = context.chain.get_users_count();
                 post(crate::event::Event::NetworkStatus { blocks: my_height, domains, keys, nodes: peers_count });
             }
-            BlockQuality::Twin => { debug!("Ignoring duplicate block {}", block.index); }
+            BlockQuality::Twin => {
+                debug!("Ignoring duplicate block {}", block.index);
+            }
             BlockQuality::Future => {
                 debug!("Got future block {}", block.index);
                 self.future_blocks.insert(block.index, block);
@@ -746,7 +754,7 @@ fn subscribe_to_bus(running: Arc<AtomicBool>) {
 fn encode_bytes(data: &[u8], cipher: &Option<Chacha>) -> Result<Vec<u8>, chacha20poly1305::aead::Error> {
     match cipher {
         None => Ok(data.to_owned()),
-        Some(chacha) => chacha.encrypt(data)
+        Some(chacha) => chacha.encrypt(data),
     }
 }
 
@@ -774,7 +782,7 @@ fn encode_message(message: &Message, cipher: &Option<Chacha>) -> Result<Vec<u8>,
 fn decode_message(data: &[u8], cipher: &Option<Chacha>) -> Result<Vec<u8>, chacha20poly1305::aead::Error> {
     match cipher {
         None => Ok(data.to_owned()),
-        Some(chacha) => chacha.decrypt(data)
+        Some(chacha) => chacha.decrypt(data),
     }
 }
 
@@ -805,13 +813,13 @@ fn read_message(stream: &mut TcpStream, buf: &mut [u8]) -> Result<usize, Error> 
                 } else {
                     return Err(io::Error::from(ErrorKind::WouldBlock));
                 }
-            },
+            }
             Err(ref err) if interrupted(err) => continue,
             // Other errors we'll consider fatal.
             Err(e) => {
                 debug!("Error reading message, only {}/{} bytes read", bytes_read, data_size);
-                return Err(e)
-            },
+                return Err(e);
+            }
         }
     }
     if bytes_read == data_size {
@@ -924,7 +932,7 @@ fn wait_for_internet(timeout: Duration) {
             Ok(_) => {
                 trace!("We got internet connection!");
                 return;
-            },
+            }
             Err(_) => {
                 thread::sleep(delay);
                 continue;

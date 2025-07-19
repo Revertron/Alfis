@@ -1,8 +1,8 @@
 use std::cmp::min;
 use std::collections::{HashMap, HashSet};
-use std::{io, thread};
 use std::net::{IpAddr, Shutdown, SocketAddr, ToSocketAddrs};
 use std::time::{Duration, Instant};
+use std::{io, thread};
 
 use chrono::Utc;
 #[allow(unused_imports)]
@@ -24,18 +24,12 @@ pub struct Peers {
     new_peers: Vec<SocketAddr>,
     ignored: HashMap<IpAddr, Instant>,
     my_id: String,
-    behind_ping_sent_time: i64
+    behind_ping_sent_time: i64,
 }
 
 impl Peers {
     pub fn new() -> Self {
-        Peers {
-            peers: HashMap::new(),
-            new_peers: Vec::new(),
-            ignored: HashMap::new(),
-            my_id: random_string(6),
-            behind_ping_sent_time: 0
-        }
+        Peers { peers: HashMap::new(), new_peers: Vec::new(), ignored: HashMap::new(), my_id: random_string(6), behind_ping_sent_time: 0 }
     }
 
     pub fn add_peer(&mut self, token: Token, peer: Peer) {
@@ -105,12 +99,10 @@ impl Peers {
     }
 
     pub fn add_peers_from_exchange(&mut self, peers: Vec<String>) {
-        let peers: HashSet<String> = peers
-            .iter()
-            .fold(HashSet::new(), |mut peers, peer| {
-                peers.insert(peer.to_owned());
-                peers
-            });
+        let peers: HashSet<String> = peers.iter().fold(HashSet::new(), |mut peers, peer| {
+            peers.insert(peer.to_owned());
+            peers
+        });
         let mut count = 0;
         // TODO make it return error if these peers are wrong and seem like an attack
         for peer in peers.iter() {
@@ -119,19 +111,15 @@ impl Peers {
                     warn!("Error parsing peer {}", peer);
                     continue;
                 }
-                Ok(addr) => addr
+                Ok(addr) => addr,
             };
 
-            if self.peers
-                .iter()
-                .any(|(_token, peer)| peer.get_addr().ip() == addr.ip()) {
+            if self.peers.iter().any(|(_token, peer)| peer.get_addr().ip() == addr.ip()) {
                 //debug!("Skipping address from exchange: {}", &addr);
                 continue;
             }
 
-            if self.new_peers
-                .iter()
-                .any(|a| a.ip().eq(&addr.ip())) {
+            if self.new_peers.iter().any(|a| a.ip().eq(&addr.ip())) {
                 //debug!("Skipping address from exchange: {}", &addr);
                 continue;
             }
@@ -223,10 +211,7 @@ impl Peers {
         let ip = peer.get_addr().ip();
         self.close_peer(registry, token);
         self.ignored.insert(ip, Instant::now());
-        match self.peers
-            .iter()
-            .find(|(_, p)| p.get_addr().ip() == ip)
-            .map(|(t, _)| *t) {
+        match self.peers.iter().find(|(_, p)| p.get_addr().ip() == ip).map(|(t, _)| *t) {
             None => {}
             Some(t) => {
                 self.close_peer(registry, &t);
@@ -257,23 +242,20 @@ impl Peers {
             if let State::Idle { from } = peer.get_state() {
                 if from.elapsed().as_secs() >= PING_PERIOD + random_time {
                     // Sometimes we check for new peers instead of pinging
-                    let message = if nodes < MAX_NODES && random::<bool>() {
-                        Message::GetPeers
-                    } else {
-                        Message::ping(height, hash.clone())
-                    };
+                    let message =
+                        if nodes < MAX_NODES && random::<bool>() { Message::GetPeers } else { Message::ping(height, hash.clone()) };
 
                     peer.set_state(State::message(message));
                     let stream = peer.get_stream();
                     registry.reregister(stream, *token, Interest::WRITABLE | Interest::READABLE).unwrap();
                 }
             } else {
-                if !matches!(peer.get_state(), State::Connecting {..}) && (peer.get_state().is_timed_out() || !peer.active()) {
+                if !matches!(peer.get_state(), State::Connecting { .. }) && (peer.get_state().is_timed_out() || !peer.active()) {
                     debug!("Stale peer: {}, state: {:?}", peer.get_addr(), peer.get_state());
                     stale_tokens.push((token.clone(), peer.get_addr()));
                     continue;
                 }
-                if matches!(peer.get_state(), State::Message {..}) {
+                if matches!(peer.get_state(), State::Message { .. }) {
                     let stream = peer.get_stream();
                     registry.reregister(stream, *token, Interest::WRITABLE).unwrap();
                 }
@@ -285,7 +267,7 @@ impl Peers {
         }
 
         // Just purging ignored/banned IPs every 10 minutes
-        self.ignored.retain(|_addr, time| { time.elapsed().as_secs() < 600 });
+        self.ignored.retain(|_addr, time| time.elapsed().as_secs() < 600);
 
         // If someone has more blocks we sync
         if nodes >= MIN_CONNECTED_NODES_START_SYNC && height < max_height {
@@ -300,10 +282,18 @@ impl Peers {
         // If someone has fewer blocks (we mined a new block) we send a ping with our height
         if self.need_behind_ping() {
             let mut rng = rand::thread_rng();
-            match self.peers
+            match self
+                .peers
                 .iter_mut()
-                .filter_map(|(token, peer)| if peer.is_lower(height) && peer.get_state().is_idle() && !peer.active_recently() && peer.get_sent_height() < height { Some((token, peer)) } else { None })
-                .choose(&mut rng) {
+                .filter_map(|(token, peer)| {
+                    if peer.is_lower(height) && peer.get_state().is_idle() && !peer.active_recently() && peer.get_sent_height() < height {
+                        Some((token, peer))
+                    } else {
+                        None
+                    }
+                })
+                .choose(&mut rng)
+            {
                 None => {}
                 Some((token, peer)) => {
                     debug!("Peer {} is behind ({}), sending ping", &peer.get_addr().ip(), peer.get_height());
@@ -347,10 +337,12 @@ impl Peers {
     #[allow(dead_code)]
     fn ask_block_from_peer(&mut self, registry: &Registry, height: u64) {
         let mut rng = rand::thread_rng();
-        match self.peers
+        match self
+            .peers
             .iter_mut()
             .filter_map(|(token, peer)| if peer.has_more_blocks(height) { Some((token, peer)) } else { None })
-            .choose(&mut rng) {
+            .choose(&mut rng)
+        {
             None => {}
             Some((token, peer)) => {
                 debug!("Peer {} is higher than we are, requesting block {}", &peer.get_addr().ip(), height + 1);
@@ -362,7 +354,8 @@ impl Peers {
 
     fn ask_blocks_from_peers(&mut self, registry: &Registry, height: u64, max_height: u64, have_blocks: HashSet<u64>) {
         let mut rng = rand::thread_rng();
-        let mut peers = self.peers
+        let mut peers = self
+            .peers
             .iter_mut()
             .filter_map(|(token, peer)| if peer.has_more_blocks(height) { Some((token, peer)) } else { None })
             .choose_multiple(&mut rng, (max_height - height) as usize);
@@ -384,14 +377,14 @@ impl Peers {
         }
     }
 
-    pub fn connect_new_peers(&mut self, registry: &Registry, unique_token: &mut Token, yggdrasil_only: bool) {
+    pub fn connect_new_peers(&mut self, registry: &Registry, unique_token: &mut Token, mycelium_mode: bool, yggdrasil_mode: bool) {
         if self.new_peers.is_empty() {
             return;
         }
         self.new_peers.sort();
         self.new_peers.dedup();
         let addr = self.new_peers.remove(0);
-        match self.connect_peer(&addr, registry, unique_token, yggdrasil_only) {
+        match self.connect_peer(&addr, registry, unique_token, mycelium_mode, yggdrasil_mode) {
             Ok(_) => {}
             Err(_) => {
                 debug!("Could not connect to {}", &addr);
@@ -400,7 +393,9 @@ impl Peers {
     }
 
     /// Connecting to configured (bootstrap) peers
-    pub fn connect_peers(&mut self, peers_addrs: &[String], registry: &Registry, unique_token: &mut Token, yggdrasil_only: bool) {
+    pub fn connect_peers(
+        &mut self, peers_addrs: &[String], registry: &Registry, unique_token: &mut Token, mycelium_mode: bool, yggdrasil_mode: bool,
+    ) {
         let mut set = HashSet::new();
         for peer in peers_addrs.iter() {
             // At first we connect to 10 peer addresses
@@ -412,7 +407,7 @@ impl Peers {
             while !addresses.is_empty() {
                 let addr = addresses.remove(0);
                 if !set.contains(&addr) {
-                    match self.connect_peer(&addr, registry, unique_token, yggdrasil_only) {
+                    match self.connect_peer(&addr, registry, unique_token, mycelium_mode, yggdrasil_mode) {
                         Ok(_) => {
                             set.insert(addr);
                         }
@@ -453,12 +448,15 @@ impl Peers {
         vec![]
     }
 
-    fn connect_peer(&mut self, addr: &SocketAddr, registry: &Registry, unique_token: &mut Token, yggdrasil_only: bool) -> io::Result<()> {
+    fn connect_peer(
+        &mut self, addr: &SocketAddr, registry: &Registry, unique_token: &mut Token, mycelium_mode: bool, yggdrasil_mode: bool,
+    ) -> io::Result<()> {
         if self.ignored.contains_key(&addr.ip()) {
             return Err(io::Error::from(io::ErrorKind::ConnectionAborted));
         }
-        if yggdrasil_only && !is_yggdrasil(&addr.ip()) {
-            debug!("Ignoring not Yggdrasil address '{}'", &addr.ip());
+        let ip = addr.ip(); // allocate once
+        if !is_match_network(&ip, mycelium_mode, yggdrasil_mode) {
+            debug!("Ignoring restricted network address '{ip}'");
             return Err(io::Error::from(io::ErrorKind::InvalidInput));
         }
         trace!("Connecting to peer {}", &addr);
@@ -473,7 +471,7 @@ impl Peers {
                 self.peers.insert(token, peer);
                 Ok(())
             }
-            Err(e) => Err(e)
+            Err(e) => Err(e),
         }
     }
 

@@ -20,7 +20,7 @@ pub struct Settings {
     #[serde(default)]
     pub dns: Dns,
     #[serde(default)]
-    pub mining: Mining
+    pub mining: Mining,
 }
 
 impl Settings {
@@ -34,7 +34,7 @@ impl Settings {
                 }
                 None
             }
-            Err(..) => None
+            Err(..) => None,
         }
     }
 
@@ -55,7 +55,7 @@ impl Default for Settings {
             check_blocks: default_check_blocks(),
             net: Net::default(),
             dns: Default::default(),
-            mining: Mining::default()
+            mining: Mining::default(),
         }
     }
 }
@@ -70,7 +70,7 @@ pub struct Dns {
     #[serde(default = "default_dns_bootstraps")]
     pub bootstraps: Vec<String>,
     #[serde(default)]
-    pub hosts: Vec<String>
+    pub hosts: Vec<String>,
 }
 
 impl Default for Dns {
@@ -80,7 +80,7 @@ impl Default for Dns {
             threads: 20,
             forwarders: vec![String::from("94.140.14.14:53"), String::from("94.140.15.15:53")],
             bootstraps: default_dns_bootstraps(),
-            hosts: Vec::new()
+            hosts: Vec::new(),
         }
     }
 }
@@ -90,7 +90,7 @@ pub struct Mining {
     #[serde(default)]
     pub threads: usize,
     #[serde(default)]
-    pub lower: bool
+    pub lower: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -102,7 +102,9 @@ pub struct Net {
     #[serde(default)]
     pub public: bool,
     #[serde(default)]
-    pub yggdrasil_only: bool
+    pub mycelium_mode: bool,
+    #[serde(default)]
+    pub yggdrasil_mode: bool,
 }
 
 impl Default for Net {
@@ -111,7 +113,8 @@ impl Default for Net {
             peers: vec![String::from("test-ip4.alfis.name:4244"), String::from("test-ip6.alfis.name:4244")],
             listen: String::from("[::]:4244"),
             public: true,
-            yggdrasil_only: false
+            mycelium_mode: false,
+            yggdrasil_mode: false,
         }
     }
 }

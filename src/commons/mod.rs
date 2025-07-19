@@ -22,10 +22,7 @@ pub fn to_hex(buf: &[u8]) -> String {
 }
 
 pub fn from_hex(string: &str) -> Result<Vec<u8>, num::ParseIntError> {
-    split_n(string.trim(), 2)
-        .iter()
-        .map(|b| u8::from_str_radix(b, 16))
-        .collect()
+    split_n(string.trim(), 2).iter().map(|b| u8::from_str_radix(b, 16)).collect()
 }
 
 pub fn check_domain(name: &str, allow_dots: bool) -> bool {
@@ -84,9 +81,7 @@ pub fn get_domain_zone(domain: &str) -> String {
 }
 
 fn split_n(s: &str, n: usize) -> Vec<&str> {
-    (0..=(s.len() - n + 1) / 2)
-        .map(|i| &s[2 * i..2 * i + n])
-        .collect()
+    (0..=(s.len() - n + 1) / 2).map(|i| &s[2 * i..2 * i + n]).collect()
 }
 
 /// Generates random string of given length
@@ -102,6 +97,16 @@ pub fn random_string(length: usize) -> String {
     result
 }
 
+/// Checks if this IP is from Mycelium network
+/// https://github.com/threefoldtech/mycelium
+pub fn is_mycelium(addr: &IpAddr) -> bool {
+    if let IpAddr::V6(ipv6) = addr {
+        let first_byte = ipv6.octets()[0];
+        return first_byte == 4 || first_byte == 5;
+    }
+    false
+}
+
 /// Checks if this IP is from Yggdrasil network
 /// https://yggdrasil-network.github.io
 pub fn is_yggdrasil(addr: &IpAddr) -> bool {
@@ -110,6 +115,11 @@ pub fn is_yggdrasil(addr: &IpAddr) -> bool {
         return first_byte == 2 || first_byte == 3;
     }
     false
+}
+
+/// Checks if this IP is from allowed networks
+pub fn is_match_network(addr: &IpAddr, mycelium_mode: bool, yggdrasil_mode: bool) -> bool {
+    (!yggdrasil_mode & !mycelium_mode) | (yggdrasil_mode & is_yggdrasil(addr)) | (mycelium_mode & is_mycelium(addr))
 }
 
 /// Checks if this record has IP from Yggdrasil network
@@ -155,7 +165,7 @@ pub fn setup_miner_thread(cpu: u32) {
 mod test {
     use std::net::IpAddr;
 
-    use crate::{check_domain, is_yggdrasil};
+    use crate::{check_domain, is_match_network, is_mycelium, is_yggdrasil};
 
     #[test]
     fn test_check_domain() {
@@ -179,18 +189,53 @@ mod test {
     }
 
     #[test]
+    fn test_is_mycelium() {
+        fn from(host: &str) -> IpAddr {
+            host.parse().unwrap()
+        }
+        assert!(is_mycelium(&from("400::1")));
+        assert!(is_mycelium(&from("42b::1")));
+        assert!(is_mycelium(&from("500::1")));
+        assert!(is_mycelium(&from("505::1")));
+        assert!(!is_mycelium(&from("4001::1")));
+        assert!(!is_mycelium(&from("4201::1")));
+    }
+
+    #[test]
     fn test_is_yggdrasil() {
-        let addr: IpAddr = "200::1".parse().unwrap();
-        assert!(is_yggdrasil(&addr));
-        let addr: IpAddr = "226::1".parse().unwrap();
-        assert!(is_yggdrasil(&addr));
-        let addr: IpAddr = "300::1".parse().unwrap();
-        assert!(is_yggdrasil(&addr));
-        let addr: IpAddr = "326::1".parse().unwrap();
-        assert!(is_yggdrasil(&addr));
-        let addr: IpAddr = "2001::1".parse().unwrap();
-        assert!(!is_yggdrasil(&addr));
-        let addr: IpAddr = "2201::1".parse().unwrap();
-        assert!(!is_yggdrasil(&addr));
+        fn from(host: &str) -> IpAddr {
+            host.parse().unwrap()
+        }
+        assert!(is_yggdrasil(&from("200::1")));
+        assert!(is_yggdrasil(&from("226::1")));
+        assert!(is_yggdrasil(&from("300::1")));
+        assert!(is_yggdrasil(&from("326::1")));
+        assert!(!is_yggdrasil(&from("2001::1")));
+        assert!(!is_yggdrasil(&from("2201::1")));
+    }
+
+    #[test]
+    fn test_is_match_network() {
+        fn from(host: &str) -> IpAddr {
+            host.parse().unwrap()
+        }
+
+        let addr = from("200::1");
+        assert!(is_match_network(&addr, true, true));
+        assert!(is_match_network(&addr, false, true));
+        assert!(!is_match_network(&addr, true, false));
+        assert!(is_match_network(&addr, false, false));
+
+        let addr = from("400::1");
+        assert!(is_match_network(&addr, true, true));
+        assert!(!is_match_network(&addr, false, true));
+        assert!(is_match_network(&addr, true, false));
+        assert!(is_match_network(&addr, false, false));
+
+        let addr = from("2001::1");
+        assert!(!is_match_network(&addr, true, true));
+        assert!(!is_match_network(&addr, false, true));
+        assert!(!is_match_network(&addr, true, false));
+        assert!(is_match_network(&addr, false, false));
     }
 }
