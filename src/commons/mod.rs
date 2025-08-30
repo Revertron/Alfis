@@ -139,7 +139,7 @@ pub fn setup_miner_thread(cpu: u32) {
     //let _ = set_current_thread_ideal_processor(IdealProcessor::from(cpu));
 }
 
-#[cfg(any(target_os = "linux", target_os = "openbsd", target_os = "freebsd", target_os = "netbsd"))]
+#[cfg(any(target_os = "linux", target_os = "android", target_os = "openbsd", target_os = "freebsd", target_os = "netbsd"))]
 #[allow(unused_variables)]
 pub fn setup_miner_thread(cpu: u32) {
     let _ = set_current_thread_priority(ThreadPriority::Min);
