@@ -2,6 +2,11 @@
 #rustflags = ["-Ctarget-cpu=native", "-Clink-arg=-s"]
 # or this: "-Ctarget-feature=+aes,+sha,+sse,+sse2,+avx,+avx2"
 
+# Build these targets like this:
+# Install docker
+# cargo install cross
+# cross build --release --no-default-features --target x86_64-unknown-linux-musl
+
 # Cargo configuration for Apple Silicon (M processors)
 # This file automatically sets the correct environment variables
 # for the C compiler when building on aarch64-apple-darwin architecture
@@ -24,16 +29,11 @@ rustflags = ["-C", "link-arg=-framework", "-C", "link-arg=Cocoa", "-C", "link-ar
 [target.x86_64-apple-darwin]
 rustflags = ["-C", "link-arg=-framework", "-C", "link-arg=Cocoa", "-C", "link-arg=-framework", "-C", "link-arg=WebKit"]
 
-# Build profile settings for Apple Silicon optimization
-[profile.release]
-# Optimization for Apple Silicon
-opt-level = 3
-lto = true
-codegen-units = 1
-panic = "abort"
-strip = true
+[target.x86_64-unknown-linux-musl]
+rustflags = ["-Ctarget-feature=+crt-static", "-Clink-arg=-s"]
 
-# Settings for debug build
-[profile.dev]
-opt-level = 2
-debug = true
+[target.i686-unknown-linux-musl]
+rustflags = ["-Ctarget-feature=+crt-static", "-Clink-arg=-s"]
+
+[target.mipsel-unknown-linux-musl]
+rustflags = ["-Ctarget-feature=+crt-static", "-Clink-arg=-s"]
