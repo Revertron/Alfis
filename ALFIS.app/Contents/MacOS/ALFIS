@@ -4,7 +4,7 @@
 # Получаем путь к директории приложения
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ALFIS_BINARY="$SCRIPT_DIR/alfis-binary"
-ALFIS_BACKGROUND="$SCRIPT_DIR/alfis-background"
+ALFIS_SIMPLE="$SCRIPT_DIR/alfis-simple"
 
 # Проверяем наличие бинарника
 if [ ! -f "$ALFIS_BINARY" ]; then
@@ -15,7 +15,7 @@ fi
 # Проверяем аргументы командной строки
 if [ "$1" = "--background" ] || [ "$1" = "-b" ]; then
     # Запуск в фоновом режиме
-    "$ALFIS_BACKGROUND" start
+    "$ALFIS_SIMPLE" start
     
     # Показываем уведомление
     osascript -e 'display notification "ALFIS started in background. Double-click app icon for control menu." with title "ALFIS" subtitle "Background Service Active"'

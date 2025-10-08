@@ -52,7 +52,7 @@
     <key>NSSupportsSuddenTermination</key>
     <true/>
     <key>LSUIElement</key>
-    <true/>
+    <false/>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSAppTransportSecurity</key>
