@@ -1,0 +1,8 @@
+#!/bin/bash
+# ALFIS Tray Manager Script - Simple wrapper for AppleScript
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ALFIS_TRAY_SCRIPT="$SCRIPT_DIR/alfis-tray.scpt"
+
+# Передаем все аргументы в AppleScript
+osascript "$ALFIS_TRAY_SCRIPT" "$@"
