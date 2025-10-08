@@ -1,68 +1,68 @@
-# Патч для Apple Silicon (M процессоры)
+# Apple Silicon (M processors) Patch
 
-Этот патч автоматически настраивает сборку проекта Alfis для Apple Silicon (M1, M2, M3, M4) процессоров.
+This patch automatically configures the Alfis project build for Apple Silicon (M1, M2, M3, M4) processors.
 
-## Что включает патч:
+## What the patch includes:
 
-### 1. Автоматическая настройка компилятора C
-- Устанавливает `CC_aarch64-apple-darwin="clang -Wno-int-conversion"`
-- Подавляет предупреждения о несовместимости типов в C коде
-- Работает для обеих архитектур: Apple Silicon и Intel Mac
+### 1. Automatic C compiler configuration
+- Sets `CC_aarch64-apple-darwin="clang -Wno-int-conversion"`
+- Suppresses type incompatibility warnings in C code
+- Works for both architectures: Apple Silicon and Intel Mac
 
-### 2. Оптимизации для Apple Silicon
-- Включает LTO (Link Time Optimization)
-- Устанавливает `codegen-units = 1` для лучшей оптимизации
-- Включает `strip = true` для уменьшения размера бинарника
-- Настраивает `panic = "abort"` для лучшей производительности
+### 2. Apple Silicon optimizations
+- Enables LTO (Link Time Optimization)
+- Sets `codegen-units = 1` for better optimization
+- Enables `strip = true` to reduce binary size
+- Configures `panic = "abort"` for better performance
 
-### 3. Настройки для GUI
-- Автоматически подключает фреймворки Cocoa и WebKit
-- Настраивает правильные флаги линковщика для macOS
+### 3. GUI settings
+- Automatically links Cocoa and WebKit frameworks
+- Configures proper linker flags for macOS
 
-## Результаты оптимизации:
+## Optimization results:
 
-| Версия | Размер | Оптимизация |
-|--------|--------|-------------|
-| Debug  | 7.6 MB | Базовая отладка |
-| Release| 3.8 MB | Полная оптимизация (-50%) |
+| Version | Size | Optimization |
+|---------|------|-------------|
+| Debug   | 7.6 MB | Basic debugging |
+| Release | 3.8 MB | Full optimization (-50%) |
 
-## Использование:
+## Usage:
 
-### Обычная сборка с GUI:
+### Regular build with GUI:
 ```bash
 cargo build --features webgui
 ```
 
-### Оптимизированная сборка:
+### Optimized build:
 ```bash
 cargo build --release --features webgui
 ```
 
-### Сборка без GUI:
+### Build without GUI:
 ```bash
 cargo build --features "" --no-default-features
 ```
 
-## Файлы патча:
+## Patch files:
 
-- `.cargo/config.toml` - основная конфигурация Cargo
-- Автоматически применяется при каждой сборке
-- Не требует дополнительных действий от пользователя
+- `.cargo/config.toml` - main Cargo configuration
+- Automatically applied on every build
+- Requires no additional user actions
 
-## Совместимость:
+## Compatibility:
 
 - ✅ Apple Silicon (M1, M2, M3, M4)
-- ✅ Intel Mac (для кросс-компиляции)
-- ✅ macOS 10.15+ (Catalina и новее)
+- ✅ Intel Mac (for cross-compilation)
+- ✅ macOS 10.15+ (Catalina and newer)
 - ✅ Rust 1.70+
 
-## Устранение проблем:
+## Troubleshooting:
 
-Если возникают проблемы с компиляцией C кода, убедитесь что:
-1. Установлен Xcode Command Line Tools: `xcode-select --install`
-2. Используется актуальная версия Rust: `rustup update`
-3. Очистите кэш сборки: `cargo clean`
+If you encounter C code compilation issues, make sure:
+1. Xcode Command Line Tools are installed: `xcode-select --install`
+2. Using the latest Rust version: `rustup update`
+3. Clear build cache: `cargo clean`
 
-## Технические детали:
+## Technical details:
 
-Патч решает проблему компиляции библиотеки `webview-sys`, которая содержит C код с предупреждениями о несовместимости типов. Флаг `-Wno-int-conversion` подавляет эти предупреждения, позволяя сборке завершиться успешно на современных версиях Clang.
+The patch solves the compilation issue with the `webview-sys` library, which contains C code with type incompatibility warnings. The `-Wno-int-conversion` flag suppresses these warnings, allowing the build to complete successfully on modern Clang versions.

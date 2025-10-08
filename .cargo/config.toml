@@ -1,35 +1,39 @@
-# Конфигурация Cargo для Apple Silicon (M процессоры)
-# Этот файл автоматически устанавливает правильные переменные окружения
-# для компилятора C при сборке на архитектуре aarch64-apple-darwin
+[build]
+#rustflags = ["-Ctarget-cpu=native", "-Clink-arg=-s"]
+# or this: "-Ctarget-feature=+aes,+sha,+sse,+sse2,+avx,+avx2"
+
+# Cargo configuration for Apple Silicon (M processors)
+# This file automatically sets the correct environment variables
+# for the C compiler when building on aarch64-apple-darwin architecture
 
 [env]
-# Настройки компилятора C для Apple Silicon (M1, M2, M3, M4)
+# C compiler settings for Apple Silicon (M1, M2, M3, M4)
 CC_aarch64-apple-darwin = "clang -Wno-int-conversion"
 
-# Настройки компилятора C для Intel Mac (для кросс-компиляции)
+# C compiler settings for Intel Mac (for cross-compilation)
 CC_x86_64-apple-darwin = "clang -Wno-int-conversion"
 
-# Дополнительные флаги компилятора для подавления предупреждений
+# Additional compiler flags to suppress warnings
 CFLAGS_aarch64-apple-darwin = "-Wno-int-conversion"
 CFLAGS_x86_64-apple-darwin = "-Wno-int-conversion"
 
-# Настройки для сборки с GUI (webview)
+# Settings for building with GUI (webview)
 [target.aarch64-apple-darwin]
 rustflags = ["-C", "link-arg=-framework", "-C", "link-arg=Cocoa", "-C", "link-arg=-framework", "-C", "link-arg=WebKit"]
 
 [target.x86_64-apple-darwin]
 rustflags = ["-C", "link-arg=-framework", "-C", "link-arg=Cocoa", "-C", "link-arg=-framework", "-C", "link-arg=WebKit"]
 
-# Настройки профиля сборки для оптимизации на Apple Silicon
+# Build profile settings for Apple Silicon optimization
 [profile.release]
-# Оптимизация для Apple Silicon
+# Optimization for Apple Silicon
 opt-level = 3
 lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
 
-# Настройки для отладочной сборки
+# Settings for debug build
 [profile.dev]
 opt-level = 2
 debug = true
