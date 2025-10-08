@@ -1,0 +1,32 @@
+#!/bin/bash
+# Скрипт запуска ALFIS macOS приложения
+
+# Получаем путь к директории приложения
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ALFIS_BINARY="$SCRIPT_DIR/alfis-binary"
+
+# Проверяем наличие бинарника
+if [ ! -f "$ALFIS_BINARY" ]; then
+    osascript -e 'display dialog "ALFIS binary not found! Please rebuild the project." buttons {"OK"} default button "OK" with icon stop'
+    exit 1
+fi
+
+# Создаём рабочую директорию в домашней папке пользователя
+WORK_DIR="$HOME/.alfis"
+mkdir -p "$WORK_DIR"
+cd "$WORK_DIR"
+
+# Проверяем наличие конфига
+if [ ! -f "alfis.toml" ]; then
+    osascript -e 'display dialog "Creating configuration file..." buttons {"OK"} default button "OK" with icon note'
+    "$ALFIS_BINARY" --generate > alfis.toml
+fi
+
+# Показываем уведомление о запуске
+osascript -e 'display notification "ALFIS is starting..." with title "ALFIS" subtitle "Alternative Free Identity System"'
+
+# Запускаем ALFIS
+"$ALFIS_BINARY"
+
+# Показываем уведомление о завершении
+osascript -e 'display notification "ALFIS has stopped." with title "ALFIS"'
