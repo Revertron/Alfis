@@ -28,12 +28,12 @@ ALFIS.app/
 - Запустите из терминала: `ALFIS.app/Contents/MacOS/ALFIS --background`
 - Или создайте ярлык с аргументом `--background`
 - Приложение запустится в фоновом режиме
-- Управление через Activity Monitor или команды терминала
+- ALFIS будет резолвить DNS, майнить и работать с P2P сетью в фоне
 
 ### 3. **Управление фоновым режимом**
-- **Activity Monitor** - найдите процесс `alfis-binary` и остановите
 - **Терминал**: `ALFIS.app/Contents/MacOS/alfis-background stop`
 - **Статус**: `ALFIS.app/Contents/MacOS/alfis-background status`
+- **Логи**: `ALFIS.app/Contents/MacOS/alfis-background logs`
 - **Перезапуск**: `ALFIS.app/Contents/MacOS/alfis-background restart`
 
 ### 4. **Остановка**
@@ -99,6 +99,7 @@ ALFIS.app/Contents/MacOS/alfis-background start    # Запустить
 ALFIS.app/Contents/MacOS/alfis-background stop     # Остановить
 ALFIS.app/Contents/MacOS/alfis-background restart   # Перезапустить
 ALFIS.app/Contents/MacOS/alfis-background status    # Показать статус
+ALFIS.app/Contents/MacOS/alfis-background logs      # Показать логи
 ```
 
 ### 🔄 **Автозапуск в фоне:**

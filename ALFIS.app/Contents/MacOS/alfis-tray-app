@@ -1,5 +1,5 @@
 #!/bin/bash
-# ALFIS Background Service - Final Version
+# ALFIS Tray App - Real Tray Icon Solution
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ALFIS_BINARY="$SCRIPT_DIR/alfis-binary"
@@ -24,6 +24,48 @@ start_background() {
     
     # Показываем уведомление
     osascript -e 'display notification "ALFIS started in background" with title "ALFIS" subtitle "DNS + Mining + P2P Active"'
+    
+    # Создаем простой трей через AppleScript
+    create_tray_icon
+}
+
+# Функция для создания иконки в трее
+create_tray_icon() {
+    # Создаем скрипт для трея
+    cat > "$HOME/.alfis/tray-menu.sh" << 'EOF'
+#!/bin/bash
+# Tray menu script for ALFIS
+
+PID_FILE="$HOME/.alfis/alfis.pid"
+LOG_FILE="$HOME/.alfis/alfis.log"
+
+show_menu() {
+    osascript << 'APPLESCRIPT'
+tell application "System Events"
+    set choice to choose from list {"Show Status", "Show Logs", "Restart ALFIS", "Stop ALFIS"} with title "ALFIS Tray Control" with prompt "ALFIS Background Service:"
+    if choice is not false then
+        set action to item 1 of choice
+        if action is "Show Status" then
+            do shell script "ALFIS.app/Contents/MacOS/alfis-tray-app status"
+        else if action is "Show Logs" then
+            do shell script "ALFIS.app/Contents/MacOS/alfis-tray-app logs"
+        else if action is "Restart ALFIS" then
+            do shell script "ALFIS.app/Contents/MacOS/alfis-tray-app restart"
+        else if action is "Stop ALFIS" then
+            do shell script "ALFIS.app/Contents/MacOS/alfis-tray-app stop"
+        end if
+    end if
+end tell
+APPLESCRIPT
+}
+
+show_menu
+EOF
+    
+    chmod +x "$HOME/.alfis/tray-menu.sh"
+    
+    # Показываем уведомление о трее
+    osascript -e 'display notification "Tray control created. Use tray-menu.sh for menu." with title "ALFIS" subtitle "Tray Ready"'
 }
 
 # Функция для остановки
@@ -90,6 +132,13 @@ case "$1" in
         ;;
     "restart")
         restart_background
+        ;;
+    "tray")
+        if [ -f "$HOME/.alfis/tray-menu.sh" ]; then
+            "$HOME/.alfis/tray-menu.sh"
+        else
+            osascript -e 'display dialog "Tray control not found.\n\nPlease start ALFIS service first." buttons {"OK"} default button "OK" with icon stop'
+        fi
         ;;
     *)
         # Если запущено без аргументов, показываем статус

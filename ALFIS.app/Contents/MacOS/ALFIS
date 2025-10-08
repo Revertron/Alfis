@@ -18,7 +18,7 @@ if [ "$1" = "--background" ] || [ "$1" = "-b" ]; then
     "$ALFIS_BACKGROUND" start
     
     # Показываем уведомление
-    osascript -e 'display notification "ALFIS is running in background mode. Use Activity Monitor or terminal to manage." with title "ALFIS" subtitle "Background Mode Active"'
+    osascript -e 'display notification "ALFIS started in background. Double-click app icon for control menu." with title "ALFIS" subtitle "Background Service Active"'
     
     # Ждем завершения
     wait

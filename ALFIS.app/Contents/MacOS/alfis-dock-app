@@ -1,5 +1,5 @@
 #!/bin/bash
-# ALFIS Background Service - Final Version
+# ALFIS Dock App - Simple Background Service
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ALFIS_BINARY="$SCRIPT_DIR/alfis-binary"

@@ -1,0 +1,89 @@
+#!/bin/bash
+# ALFIS Dock App - Simple solution
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ALFIS_BINARY="$SCRIPT_DIR/alfis-binary"
+PID_FILE="$HOME/.alfis/alfis.pid"
+
+# Функция для показа статуса в Dock
+show_dock_status() {
+    if [ -f "$PID_FILE" ]; then
+        PID=$(cat "$PID_FILE")
+        if kill -0 "$PID" 2>/dev/null; then
+            # ALFIS запущен - показываем зеленую иконку
+            osascript -e 'tell application "System Events" to set visible of process "ALFIS" to true'
+            osascript -e 'display notification "ALFIS is running (PID: '"$PID"')" with title "ALFIS Status"'
+        else
+            # ALFIS не запущен - показываем красную иконку
+            osascript -e 'display notification "ALFIS is not running" with title "ALFIS Status"'
+        fi
+    else
+        osascript -e 'display notification "ALFIS is not running" with title "ALFIS Status"'
+    fi
+}
+
+# Функция для запуска ALFIS
+start_alfis() {
+    mkdir -p "$HOME/.alfis"
+    
+    if [ ! -f "$HOME/.alfis/alfis.toml" ]; then
+        osascript -e 'display dialog "Creating configuration file..." buttons {"OK"} default button "OK" with icon note'
+        "$ALFIS_BINARY" --generate > "$HOME/.alfis/alfis.toml"
+    fi
+    
+    cd "$HOME/.alfis"
+    "$ALFIS_BINARY" &
+    echo $! > "$PID_FILE"
+    
+    osascript -e 'display notification "ALFIS started" with title "ALFIS" subtitle "P2P Network Active"'
+}
+
+# Функция для остановки ALFIS
+stop_alfis() {
+    if [ -f "$PID_FILE" ]; then
+        PID=$(cat "$PID_FILE")
+        if kill -0 "$PID" 2>/dev/null; then
+            kill "$PID"
+            rm -f "$PID_FILE"
+            osascript -e 'display notification "ALFIS stopped" with title "ALFIS"'
+        fi
+    fi
+}
+
+# Основная логика
+case "$1" in
+    "start")
+        start_alfis
+        ;;
+    "stop")
+        stop_alfis
+        ;;
+    "status")
+        show_dock_status
+        ;;
+    "restart")
+        stop_alfis
+        sleep 2
+        start_alfis
+        ;;
+    *)
+        # Если запущено без аргументов, показываем меню
+        osascript << 'EOF'
+tell application "System Events"
+    set choice to choose from list {"Start ALFIS", "Stop ALFIS", "Show Status", "Restart ALFIS"} with title "ALFIS Control" with prompt "Choose an action:"
+    if choice is not false then
+        set action to item 1 of choice
+        if action is "Start ALFIS" then
+            do shell script "ALFIS.app/Contents/MacOS/alfis-dock start"
+        else if action is "Stop ALFIS" then
+            do shell script "ALFIS.app/Contents/MacOS/alfis-dock stop"
+        else if action is "Show Status" then
+            do shell script "ALFIS.app/Contents/MacOS/alfis-dock status"
+        else if action is "Restart ALFIS" then
+            do shell script "ALFIS.app/Contents/MacOS/alfis-dock restart"
+        end if
+    end if
+end tell
+EOF
+        ;;
+esac
