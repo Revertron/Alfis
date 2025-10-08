@@ -4,7 +4,7 @@
 # Получаем путь к директории приложения
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ALFIS_BINARY="$SCRIPT_DIR/alfis-binary"
-ALFIS_TRAY="$SCRIPT_DIR/alfis-tray"
+ALFIS_BACKGROUND="$SCRIPT_DIR/alfis-background"
 
 # Проверяем наличие бинарника
 if [ ! -f "$ALFIS_BINARY" ]; then
@@ -13,12 +13,12 @@ if [ ! -f "$ALFIS_BINARY" ]; then
 fi
 
 # Проверяем аргументы командной строки
-if [ "$1" = "--tray" ] || [ "$1" = "-t" ]; then
-    # Запуск в режиме трея
-    "$ALFIS_TRAY" start
+if [ "$1" = "--background" ] || [ "$1" = "-b" ]; then
+    # Запуск в фоновом режиме
+    "$ALFIS_BACKGROUND" start
     
-    # Показываем уведомление о запуске в трее
-    osascript -e 'display notification "ALFIS is running in background mode. Right-click tray icon for options." with title "ALFIS" subtitle "P2P Network Active"'
+    # Показываем уведомление
+    osascript -e 'display notification "ALFIS is running in background mode. Use Activity Monitor or terminal to manage." with title "ALFIS" subtitle "Background Mode Active"'
     
     # Ждем завершения
     wait

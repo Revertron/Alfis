@@ -1,0 +1,73 @@
+#!/bin/bash
+# ALFIS Background Manager - Simple version
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ALFIS_BINARY="$SCRIPT_DIR/alfis-binary"
+PID_FILE="$HOME/.alfis/alfis.pid"
+
+case "$1" in
+    "start")
+        # Создаем директорию конфига
+        mkdir -p "$HOME/.alfis"
+        
+        # Проверяем конфиг
+        if [ ! -f "$HOME/.alfis/alfis.toml" ]; then
+            osascript -e 'display dialog "Creating configuration file..." buttons {"OK"} default button "OK" with icon note'
+            "$ALFIS_BINARY" --generate > "$HOME/.alfis/alfis.toml"
+        fi
+        
+        # Запускаем ALFIS в фоне
+        cd "$HOME/.alfis"
+        "$ALFIS_BINARY" &
+        echo $! > "$PID_FILE"
+        
+        # Показываем уведомление
+        osascript -e 'display notification "ALFIS started in background mode" with title "ALFIS" subtitle "P2P Network Active"'
+        ;;
+        
+    "stop")
+        if [ -f "$PID_FILE" ]; then
+            PID=$(cat "$PID_FILE")
+            if kill -0 "$PID" 2>/dev/null; then
+                kill "$PID"
+                rm -f "$PID_FILE"
+                osascript -e 'display notification "ALFIS stopped" with title "ALFIS"'
+            fi
+        fi
+        ;;
+        
+    "restart")
+        if [ -f "$PID_FILE" ]; then
+            PID=$(cat "$PID_FILE")
+            if kill -0 "$PID" 2>/dev/null; then
+                kill "$PID"
+                sleep 2
+            fi
+            rm -f "$PID_FILE"
+        fi
+        
+        osascript -e 'display notification "Restarting ALFIS..." with title "ALFIS"'
+        mkdir -p "$HOME/.alfis"
+        cd "$HOME/.alfis"
+        "$ALFIS_BINARY" &
+        echo $! > "$PID_FILE"
+        ;;
+        
+    "status")
+        if [ -f "$PID_FILE" ]; then
+            PID=$(cat "$PID_FILE")
+            if kill -0 "$PID" 2>/dev/null; then
+                osascript -e 'display dialog "ALFIS is running (PID: '"$PID"')" buttons {"OK"} default button "OK"'
+            else
+                osascript -e 'display dialog "ALFIS is not running" buttons {"OK"} default button "OK"'
+            fi
+        else
+            osascript -e 'display dialog "ALFIS is not running" buttons {"OK"} default button "OK"'
+        fi
+        ;;
+        
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
