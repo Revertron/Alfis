@@ -226,7 +226,7 @@ where T: Read {
 }
 
 impl<'a, T> StreamPacketBuffer<'a, T> where T: Read + 'a {
-    pub fn new(stream: &'a mut T) -> StreamPacketBuffer<'_, T> {
+    pub fn new(stream: &'a mut T) -> StreamPacketBuffer<'a, T> {
         StreamPacketBuffer {
             stream,
             buffer: Vec::new(),
@@ -300,14 +300,16 @@ impl<'a, T> PacketBuffer for StreamPacketBuffer<'a, T> where T: Read + 'a {
     }
 }
 
+const BUF_SIZE: usize = 4096;
+
 pub struct BytePacketBuffer {
-    pub buf: [u8; 512],
+    pub buf: [u8; BUF_SIZE],
     pub pos: usize
 }
 
 impl BytePacketBuffer {
     pub fn new() -> BytePacketBuffer {
-        BytePacketBuffer { buf: [0; 512], pos: 0 }
+        BytePacketBuffer { buf: [0; BUF_SIZE], pos: 0 }
     }
 }
 
@@ -319,7 +321,7 @@ impl Default for BytePacketBuffer {
 
 impl PacketBuffer for BytePacketBuffer {
     fn read(&mut self) -> Result<u8> {
-        if self.pos >= 512 {
+        if self.pos >= BUF_SIZE {
             return Err(BufferError::EndOfBuffer);
         }
         let res = self.buf[self.pos];
@@ -329,21 +331,21 @@ impl PacketBuffer for BytePacketBuffer {
     }
 
     fn get(&mut self, pos: usize) -> Result<u8> {
-        if pos >= 512 {
+        if pos >= BUF_SIZE {
             return Err(BufferError::EndOfBuffer);
         }
         Ok(self.buf[pos])
     }
 
     fn get_range(&mut self, start: usize, len: usize) -> Result<&[u8]> {
-        if start + len >= 512 {
+        if start + len >= BUF_SIZE {
             return Err(BufferError::EndOfBuffer);
         }
         Ok(&self.buf[start..start + len as usize])
     }
 
     fn write(&mut self, val: u8) -> Result<()> {
-        if self.pos >= 512 {
+        if self.pos >= BUF_SIZE {
             return Err(BufferError::EndOfBuffer);
         }
         self.buf[self.pos] = val;

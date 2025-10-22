@@ -34,7 +34,7 @@ rand = { package = "rand", version = "0.8.5" }
 sqlite = "0.36.0"
 uuid = { version = "1.11.0", features = ["serde", "v4"] }
 mio = { version = "1.0.0", features = ["os-poll", "net"] }
-ureq = { version = "2.10", optional = true }
+ureq = { version = "3.0.10", optional = true }
 lru = "0.12"
 derive_more = { version = "1.0.0", features = ["display", "error", "from"] }
 lazy_static = "1.5.0"

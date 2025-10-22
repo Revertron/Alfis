@@ -60,20 +60,27 @@ impl BlockchainFilter {
         None
     }
 
-    fn create_packet(&self, qname: &str, qtype: QueryType, zone: String, answers: Vec<DnsRecord>) -> Option<DnsPacket> {
+    fn create_packet(&self, qname: &str, qtype: QueryType, zone: String, answers: Vec<DnsRecord>, ns_records: Vec<DnsRecord>, glue_records: Vec<DnsRecord>) -> Option<DnsPacket> {
         if !answers.is_empty() {
-            // Create DnsPacket
+            // Create DnsPacket with answers
             let mut packet = DnsPacket::new();
             packet.header.authoritative_answer = true;
             packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
             for answer in answers {
                 packet.answers.push(answer);
             }
-            packet.authorities.push(DnsRecord::NS { domain: zone, host: String::from(NAME_SERVER), ttl: TransientTtl(600) });
+            // Add NS records to authority section
+            for ns_record in ns_records {
+                packet.authorities.push(ns_record);
+            }
+            // Add GLUE records to additional section (resources)
+            for glue_record in glue_records {
+                packet.resources.push(glue_record);
+            }
             //trace!("Returning packet: {:?}", &packet);
             Some(packet)
         } else {
-            // Create DnsPacket
+            // Create DnsPacket without answers
             let mut packet = DnsPacket::new();
             packet.header.authoritative_answer = true;
             packet.header.rescode = ResultCode::NXDOMAIN;
@@ -85,7 +92,7 @@ impl BlockchainFilter {
         }
     }
 
-    fn resolve_by_ns(qname: &str, qtype: QueryType, top_domain: &String, data: &DomainData) -> (bool, Option<DnsPacket>) {
+    fn resolve_by_ns(qname: &str, qtype: QueryType, top_domain: &String, data: &DomainData, recursive: bool) -> (bool, Option<DnsPacket>) {
         // First we search for NS records, collecting nameserver domains
         let mut hosts = Vec::new();
         for record in data.records.iter() {
@@ -103,7 +110,27 @@ impl BlockchainFilter {
             return (false, None);
         }
 
-        // Searching glue records
+        // If non-recursive, return a referral response with NS and GLUE records
+        if !recursive {
+            trace!("Non-recursive query for delegated domain {}, returning referral", qname);
+            let ns_records = BlockchainFilter::get_ns_records(data, top_domain);
+            let glue_records = BlockchainFilter::get_glue_records(data, top_domain, &hosts);
+
+            let mut packet = DnsPacket::new();
+            packet.header.authoritative_answer = false;  // Not authoritative for the answer, but for the zone
+            packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
+            // Add NS records to authority section
+            for ns_record in ns_records {
+                packet.authorities.push(ns_record);
+            }
+            // Add GLUE records to additional section (resources)
+            for glue_record in glue_records {
+                packet.resources.push(glue_record);
+            }
+            return (true, Some(packet));
+        }
+
+        // For recursive queries, search for glue records to query external servers
         let mut servers = Vec::new();
         for record in data.records.iter() {
             match &record {
@@ -138,10 +165,71 @@ impl BlockchainFilter {
 
         (false, None)
     }
+
+    /// Extract NS records from domain data and return them
+    fn get_ns_records(data: &DomainData, top_domain: &str) -> Vec<DnsRecord> {
+        data.records.iter()
+            .filter_map(|record| {
+                if let DnsRecord::NS { domain, host, ttl } = record {
+                    if domain == "@" {
+                        return Some(DnsRecord::NS {
+                            domain: String::from(top_domain),
+                            host: host.clone(),
+                            ttl: *ttl
+                        });
+                    }
+                }
+                None
+            })
+            .collect()
+    }
+
+    /// Extract GLUE records (A/AAAA records for NS hosts within the same domain)
+    fn get_glue_records(data: &DomainData, top_domain: &str, ns_hosts: &[String]) -> Vec<DnsRecord> {
+        let mut glue_records = Vec::new();
+
+        for record in data.records.iter() {
+            match record {
+                DnsRecord::A { domain, addr, ttl } => {
+                    let full_domain = if domain == "@" {
+                        String::from(top_domain)
+                    } else {
+                        format!("{}.{}", domain, top_domain)
+                    };
+
+                    if ns_hosts.iter().any(|ns| ns == &full_domain) {
+                        glue_records.push(DnsRecord::A {
+                            domain: full_domain,
+                            addr: addr.clone(),
+                            ttl: *ttl
+                        });
+                    }
+                }
+                DnsRecord::AAAA { domain, addr, ttl } => {
+                    let full_domain = if domain == "@" {
+                        String::from(top_domain)
+                    } else {
+                        format!("{}.{}", domain, top_domain)
+                    };
+
+                    if ns_hosts.iter().any(|ns| ns == &full_domain) {
+                        glue_records.push(DnsRecord::AAAA {
+                            domain: full_domain,
+                            addr: addr.clone(),
+                            ttl: *ttl
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        glue_records
+    }
 }
 
 impl DnsFilter for BlockchainFilter {
-    fn lookup(&self, qname: &str, qtype: QueryType) -> Option<DnsPacket> {
+    fn lookup(&self, qname: &str, qtype: QueryType, recursive: bool) -> Option<DnsPacket> {
         let top_domain;
         let subdomain;
         let parts: Vec<&str> = qname.rsplitn(3, '.').collect();
@@ -192,7 +280,7 @@ impl DnsFilter for BlockchainFilter {
                 };
 
                 // Check if this domain has NS records and needs to resolve all records through them
-                let (has_ns, result) = Self::resolve_by_ns(qname, qtype, &top_domain, &data);
+                let (has_ns, result) = Self::resolve_by_ns(qname, qtype, &top_domain, &data, recursive);
                 if has_ns {
                     return result;
                 }
@@ -237,7 +325,7 @@ impl DnsFilter for BlockchainFilter {
                 let mut domain_exists = !answers.is_empty() || subdomain.is_empty();
                 if answers.is_empty() {
                     // If there are no records found we search for *.domain.tld record
-                    for mut record in data.records {
+                    for mut record in data.records.iter_mut() {
                         let record_domain = record.get_domain().unwrap_or(String::new());
                         if record.get_querytype() == qtype && record_domain == "*" {
                             match &mut record {
@@ -263,7 +351,20 @@ impl DnsFilter for BlockchainFilter {
                     }
                 }
 
-                if let Some(mut packet) = self.create_packet(qname, qtype, zone, answers) {
+                // Extract NS records and GLUE records for the response
+                let ns_records = BlockchainFilter::get_ns_records(&data, &top_domain);
+                let ns_hosts: Vec<String> = ns_records.iter()
+                    .filter_map(|record| {
+                        if let DnsRecord::NS { host, .. } = record {
+                            Some(host.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                let glue_records = BlockchainFilter::get_glue_records(&data, &top_domain, &ns_hosts);
+
+                if let Some(mut packet) = self.create_packet(qname, qtype, zone, answers, ns_records, glue_records) {
                     if domain_exists && packet.answers.is_empty() {
                         packet.header.rescode = ResultCode::NOERROR;
                     }

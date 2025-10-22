@@ -53,7 +53,7 @@ impl HostsFilter {
 }
 
 impl DnsFilter for HostsFilter {
-    fn lookup(&self, qname: &str, qtype: QueryType) -> Option<DnsPacket> {
+    fn lookup(&self, qname: &str, qtype: QueryType, _recursive: bool) -> Option<DnsPacket> {
         let mut packet = DnsPacket::new();
         if let Some(list) = self.hosts.get(qname) {
             for addr in list {

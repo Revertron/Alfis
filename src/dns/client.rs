@@ -4,7 +4,7 @@ use std::io::Write;
 #[cfg(feature = "doh")]
 use std::io::Read;
 use std::marker::{Send, Sync};
-use std::net::{SocketAddr, TcpStream, ToSocketAddrs, UdpSocket};
+use std::net::{Ipv4Addr, SocketAddr, TcpStream, ToSocketAddrs, UdpSocket};
 #[cfg(feature = "doh")]
 use std::net::IpAddr;
 #[cfg(feature = "doh")]
@@ -32,6 +32,11 @@ use crate::dns::protocol::{DnsPacket, DnsQuestion, QueryType};
 use crate::dns::protocol::DnsRecord;
 #[cfg(feature = "doh")]
 use lru::LruCache;
+use ureq::Agent;
+use ureq::config::Config;
+use ureq::http::Uri;
+use ureq::unversioned::resolver::{ArrayVec, ResolvedSocketAddrs, Resolver};
+use ureq::unversioned::transport::{DefaultConnector, NextTimeout};
 
 #[derive(Debug, Display, From, Error)]
 pub enum ClientError {
@@ -387,7 +392,7 @@ impl DnsClient for DnsNetworkClient {
 
 #[cfg(feature = "doh")]
 pub struct HttpsDnsClient {
-    agent: ureq::Agent,
+    agent: Agent,
     /// Counter for assigning packet ids
     seq: AtomicUsize,
 }
@@ -402,60 +407,85 @@ impl HttpsDnsClient {
             .collect::<Vec<SocketAddr>>();
         trace!("Using bootstraps: {:?}", &servers);
 
-        let cache: LruCache<String, Vec<SocketAddr>> = LruCache::new(NonZeroUsize::new(10).unwrap());
-        let cache = RwLock::new(cache);
-
-        let agent = ureq::AgentBuilder::new()
+        let agent_config = Agent::config_builder()
             .user_agent(&client_name)
-            .timeout(std::time::Duration::from_secs(3))
+            .timeout_global(Some(std::time::Duration::from_secs(3)))
             .max_idle_connections_per_host(4)
             .max_idle_connections(16)
-            .resolver(move |addr: &str| {
-                let addr = match addr.find(':') {
-                    Some(index) => addr[0..index].to_string(),
-                    None => addr.to_string()
-                };
-                trace!("Resolving {}", addr);
-                if let Some(addrs) = cache.write().unwrap().get(&addr) {
-                    trace!("Found bootstrap ip in cache");
-                    return Ok(addrs.clone());
-                }
-
-                let port = 10000 + (rand::random::<u16>() % 50000);
-                let mut dns_client = DnsNetworkClient::new(port);
-                dns_client.run().unwrap();
-
-                let mut result: Vec<IpAddr> = Vec::new();
-                for server in &servers {
-                    if let Ok(res) = dns_client.send_udp_query(&addr, QueryType::A, server, true) {
-                        for answer in &res.answers {
-                            if let DnsRecord::A { addr, .. } = answer {
-                                result.push(IpAddr::V4(*addr))
-                            }
-                        }
-                    }
-                    if let Ok(res) = dns_client.send_udp_query(&addr, QueryType::AAAA, server, true) {
-                        for answer in &res.answers {
-                            if let DnsRecord::AAAA { addr, .. } = answer {
-                                result.push(IpAddr::V6(*addr))
-                            }
-                        }
-                    }
-                }
-                dns_client.stop();
-
-                result.sort();
-                result.dedup();
-                let addrs = result
-                    .into_iter()
-                    .map(|ip| SocketAddr::new(ip, 443))
-                    .collect::<Vec<_>>();
-                trace!("Resolved addresses: {:?}", &addrs);
-                cache.write().unwrap().put(addr, addrs.clone());
-                Ok(addrs)
-            })
             .build();
+        let agent = Agent::with_parts(agent_config, DefaultConnector::default(), BootstrapResolver::new(servers));
         Self { agent, seq: AtomicUsize::new(1) }
+    }
+}
+
+#[derive(Debug)]
+struct BootstrapResolver {
+    servers: Vec<SocketAddr>,
+    cache: RwLock<LruCache<String, Vec<SocketAddr>>>
+}
+
+impl BootstrapResolver {
+    pub fn new(servers: Vec<SocketAddr>) -> Self {
+        let cache: LruCache<String, Vec<SocketAddr>> = LruCache::new(NonZeroUsize::new(10).unwrap());
+        let cache = RwLock::new(cache);
+        Self { servers, cache }
+    }
+}
+
+impl Resolver for BootstrapResolver {
+    // TODO use timeout parameter
+    fn resolve(&self, uri: &Uri, _config: &Config, _timeout: NextTimeout) -> std::result::Result<ResolvedSocketAddrs, ureq::Error> {
+        let domain = uri.host().unwrap_or("localhost");
+        let port = uri.port_u16().unwrap_or(443);
+        let addr = match domain.find(':') {
+            Some(index) => domain[0..index].to_string(),
+            None => domain.to_string()
+        };
+        trace!("Resolving {}", addr);
+        if let Some(addrs) = self.cache.write().unwrap().get(&addr) {
+            trace!("Found bootstrap ip in cache");
+            let mut results: ResolvedSocketAddrs = ArrayVec::from_fn(|_| SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0));
+            for addr in addrs {
+                results.push(addr.to_owned());
+            }
+            return Ok(results);
+        }
+
+        let client_port = 10000 + (rand::random::<u16>() % 50000);
+        let mut dns_client = DnsNetworkClient::new(client_port);
+        dns_client.run().unwrap();
+
+        let mut result: Vec<IpAddr> = Vec::new();
+        let mut results: ResolvedSocketAddrs = ArrayVec::from_fn(|_| SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0));
+        for server in &self.servers {
+            if let Ok(res) = dns_client.send_udp_query(&addr, QueryType::A, server, true) {
+                for answer in &res.answers {
+                    if let DnsRecord::A { addr, .. } = answer {
+                        results.push(SocketAddr::new(IpAddr::V4(*addr), port));
+                        result.push(IpAddr::V4(*addr))
+                    }
+                }
+            }
+            if let Ok(res) = dns_client.send_udp_query(&addr, QueryType::AAAA, server, true) {
+                for answer in &res.answers {
+                    if let DnsRecord::AAAA { addr, .. } = answer {
+                        results.push(SocketAddr::new(IpAddr::V6(*addr), port));
+                        result.push(IpAddr::V6(*addr))
+                    }
+                }
+            }
+        }
+        dns_client.stop();
+
+        result.sort();
+        result.dedup();
+        let addrs = result
+            .into_iter()
+            .map(|ip| SocketAddr::new(ip, port))
+            .collect::<Vec<_>>();
+        trace!("Resolved addresses: {:?}", &addrs);
+        self.cache.write().unwrap().put(addr, addrs.clone());
+        Ok(results)
     }
 }
 
@@ -497,20 +527,20 @@ impl DnsClient for HttpsDnsClient {
 
         let response = self.agent
             .post(doh_url)
-            .set("Content-Type", "application/dns-message")
-            .send_bytes(req_buffer.buffer.as_slice());
+            .header("Content-Type", "application/dns-message")
+            .send(req_buffer.buffer.as_slice());
 
         match response {
             Ok(response) => {
-                match response.status() {
+                match response.status().as_u16() {
                     200 => {
-                        match response.header("Content-Length") {
+                        match response.headers().get("Content-Length") {
                             None => warn!("No 'Content-Length' header in DoH response!"),
                             Some(str) => {
-                                match str.parse::<usize>() {
+                                match str.to_str().unwrap_or("0").parse::<usize>() {
                                     Ok(size) => {
                                         let mut bytes: Vec<u8> = Vec::with_capacity(size);
-                                        response.into_reader()
+                                        response.into_body().into_reader()
                                             .take(4096)
                                             .read_to_end(&mut bytes)?;
                                         let mut buffer = VectorPacketBuffer::new();
