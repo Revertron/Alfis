@@ -16,7 +16,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ windows-latest, ubuntu-latest, macOS-latest]
+        include:
+          - os: windows-latest
+          - os: ubuntu-22.04
+          - os: macos-latest
+          - os: macos-latest
+            target: aarch64-apple-darwin
 
     steps:
     - uses: actions/checkout@v2
@@ -24,9 +29,16 @@ jobs:
     - name: Install libgtk-dev libwebkit2gtk-4.0
       run: sudo apt update && sudo apt install libwebkit2gtk-4.0-dev
       if: contains(matrix.os, 'ubuntu')
+
     - name: Update Rust
       run: rustup update stable
+
+    - name: Install ARM target (macOS)
+      run: rustup target add aarch64-apple-darwin
+      if: matrix.target == 'aarch64-apple-darwin'
+
     - name: Build
-      run: cargo build --verbose
+      run: cargo build --verbose ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+
     - name: Run tests
-      run: cargo test --all --verbose
+      run: cargo test --all --verbose ${{ matrix.target && format('--target {0}', matrix.target) || '' }}

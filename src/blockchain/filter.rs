@@ -48,10 +48,11 @@ impl BlockchainFilter {
         let port = 10000 + (rand::random::<u16>() % 50000);
         let mut dns_client = DnsNetworkClient::new(port);
         dns_client.run().unwrap();
+        let timeout = std::time::Duration::from_secs(5);
 
         for server in servers {
             let addr = SocketAddr::new(server.to_owned(), 53);
-            if let Ok(res) = dns_client.send_udp_query(qname, qtype, addr, false) {
+            if let Ok(res) = dns_client.send_udp_query(qname, qtype, addr, false, timeout) {
                 dns_client.stop();
                 return Some(res);
             }
