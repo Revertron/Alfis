@@ -24,3 +24,8 @@ rustflags = ["-Ctarget-feature=+crt-static", "-Clink-arg=-s"]
 
 [target.mipsel-unknown-linux-musl]
 rustflags = ["-Ctarget-feature=+crt-static", "-Clink-arg=-s"]
+
+[target.aarch64-apple-darwin]
+rustflags = ["-Ctarget-cpu=native", "-Clink-arg=-s"]
+# Suppress int-conversion warnings in webview-sys for Apple Silicon
+cc = "clang -Wno-int-conversion"
