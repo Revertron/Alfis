@@ -26,6 +26,8 @@ rustflags = ["-Ctarget-feature=+crt-static", "-Clink-arg=-s"]
 rustflags = ["-Ctarget-feature=+crt-static", "-Clink-arg=-s"]
 
 [target.aarch64-apple-darwin]
-rustflags = ["-Ctarget-cpu=native", "-Clink-arg=-s"]
+rustflags = ["-C", "link-arg=-framework", "-C", "link-arg=Cocoa", "-C", "link-arg=-framework", "-C", "link-arg=WebKit"]
+
+[env]
 # Suppress int-conversion warnings in webview-sys for Apple Silicon
-cc = "clang -Wno-int-conversion"
+CC_aarch64_apple_darwin = "clang -Wno-int-conversion"
