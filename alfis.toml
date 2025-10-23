@@ -13,8 +13,10 @@ peers = ["peer-v4.alfis.name:4244", "peer-v6.alfis.name:4244", "peer-ygg.alfis.n
 listen = "[::]:42440"
 # Set true if you want your IP to participate in peer-exchange, or false otherwise
 public = true
-# Allow connections to/from Yggdrasil only (https://yggdrasil-network.github.io)
-yggdrasil_only = false
+# Allow connections to/from Mycelium network (https://github.com/threefoldtech/mycelium)
+mycelium_mode = false
+# Allow connections to/from Yggdrasil network (https://yggdrasil-network.github.io)
+yggdrasil_mode = false
 
 # DNS resolver options
 [dns]
