@@ -281,9 +281,12 @@ impl DnsFilter for BlockchainFilter {
                 };
 
                 // Check if this domain has NS records and needs to resolve all records through them
-                let (has_ns, result) = Self::resolve_by_ns(qname, qtype, &top_domain, &data, recursive);
-                if has_ns {
-                    return result;
+                // But skip this if we're querying for NS records themselves - return them directly
+                if qtype != QueryType::NS {
+                    let (has_ns, result) = Self::resolve_by_ns(qname, qtype, &top_domain, &data, recursive);
+                    if has_ns {
+                        return result;
+                    }
                 }
 
                 let mut answers: Vec<DnsRecord> = Vec::new();
