@@ -1,9 +1,9 @@
 extern crate winres;
 
 fn main() {
-    // Set compiler flags for macOS ARM (Apple Silicon)
+    // Suppress int-conversion warnings for macOS ARM (Apple Silicon) webview compatibility
     if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
-        println!("cargo:rustc-env=CC=clang -Wno-int-conversion");
+        println!("cargo:rustc-env=CFLAGS=-Wno-int-conversion");
     }
 
     if cfg!(target_os = "windows") {

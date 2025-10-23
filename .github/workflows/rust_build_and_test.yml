@@ -20,7 +20,6 @@ jobs:
           - os: windows-latest
           - os: ubuntu-22.04
           - os: macos-latest
-          - os: macos-latest
             target: aarch64-apple-darwin
 
     steps:
