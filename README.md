@@ -8,9 +8,9 @@ This project represents a minimal blockchain without cryptocurrency, capable of 
 Not so clear? Hold on.
 
 ## This software provides:
-- Very small and [peer-to-peer](https://en.wikipedia.org/wiki/Peer-to-peer) synchronized database of domain names.
-The consistency of this database is based on [blockchain](https://en.wikipedia.org/wiki/Blockchain) technology, that prevents retroactive changing of data, and has strict cryptographical consensus.
-- DNS server with cache, like you have in your Internet-router. It resolves the domains from database and forwards all regular DNS-requests to some other resolver - your router, Google DNS, Cloudflare DNS, or [AdGuard DNS](https://dns.adguard.com/) (if you want to block ads and trackers).
+- Tiny and [peer-to-peer](https://en.wikipedia.org/wiki/Peer-to-peer) synchronized database of domain names.
+The consistency of this database is based on [blockchain](https://en.wikipedia.org/wiki/Blockchain) technology that prevents retroactive changing of data, and has strict cryptographical consensus.
+- DNS server with cache and enhanced security features. It resolves the domains from database and forwards all regular DNS-requests to some other resolver – your router, Google DNS, Cloudflare DNS, or [AdGuard DNS](https://dns.adguard.com/) (if you want to block ads and trackers).
 - Other systems need you to organize and run several DNS-servers to resolve their domains and regular domains, we have both in one.
 Moreover, ALFIS can forward requests of regular domains to [DNS-over-HTTPS](https://en.wikipedia.org/wiki/DNS_over_HTTPS) server. The security and privacy is right here.
 - Convenient graphical user interface to create domains in this alternative domain system. If you want just to use it like a DNS-server you can run it with `-n` flag or just build/download the variant without GUI.
@@ -22,7 +22,7 @@ Moreover, ALFIS can forward requests of regular domains to [DNS-over-HTTPS](http
 
 ![Screenshot](img/domains.png)
 
-## How it works?
+## How does it work?
 Every node connects to its siblings and synchronizes the domain database.
 This DB consists of cryptographically bound blocks, that contain encrypted domain names, contacts, and some info, if you wish.
 There are 10 domain zones available to get domain in:
@@ -46,7 +46,7 @@ You don't need any additional steps to build Alfis, just stick to the MSVC versi
 
 If you see an error about missing `VCRUNTIME140.dll` when running alfis you will need to install [VC Redistributable](https://www.microsoft.com/en-us/download/details.aspx?id=52685) from Microsoft.
 
-If you want to use modern browser engine from Edge instead of old from IE, you need to build with this command: `cargo build --release --features "edge"` (or use corresponding build from [releases](https://github.com/Revertron/Alfis/releases)).
+The GUI version uses WebView2 (Edge-based rendering engine), which is included by default on Windows 10/11. If you're on an older system, you may need to install [WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/).
 
 ### ![Windows Logo](/img/windows.svg) On Windows (MINGW64)
 If you'd rather use Gnu version of Rust you can build Alfis by these steps:
@@ -58,8 +58,8 @@ cargo build
 ```
 
 ### ![Linux Logo](/img/linux.svg) On Linux
-If you are building on Linux you must ensure that you have `libwebkitgtk` library installed.
-You can do it by issuing this command: `sudo apt install libwebkit2gtk-4.0-dev` (on Debian/Ubuntu and derivatives).
+If you are building on Linux, you must ensure that you have `libwebkitgtk` library installed.
+You can do it by issuing this command: `sudo apt install libwebkit2gtk-4.1-dev` (on Debian/Ubuntu and derivatives).
 
 #### ![Arch Linux Logo](/img/archlinux.svg) On Arch Linux
 
@@ -93,7 +93,7 @@ Beware of NetworkManager, it can change your resolvers at will.
 gpg --fetch-keys https://deb.revertron.com/key.txt
 gpg --export F244E16645D86D62 | sudo tee /usr/local/apt-keys/alfis.gpg > /dev/null
 ```
-2. Add repository path to sources list
+2. Add a repository path to sources list
 ```
 echo 'deb [signed-by=/usr/local/apt-keys/alfis.gpg] https://deb.revertron.com/ debian alfis' | sudo tee /etc/apt/sources.list.d/alfis.list
 ```
@@ -133,18 +133,18 @@ docker run --rm --name alfis -p 53:53/tcp -p 53:53/udp cofob/alfis
 
 ### GUI version Windows/Linux/macOS (if you want to create and change domains)
 If you want to create and manage your own domains on blockchain, you will need a version with GUI.
-You can download it from [releases](https://github.com/Revertron/Alfis/releases) section, choose appropriate OS and architecture version.
+You can download it from [releases](https://github.com/Revertron/Alfis/releases) section, choose the appropriate OS and architecture version.
 It needs to be without `nogui` suffix.
 
 Just unzip that archive in some directory and run `alfis` (or `alfis.exe`) binary.
-By default, it searches for config file, named `alfis.toml` in current working directory, and creates/changes `blockchain.db` file in the same directory.
+By default, it searches for a config file, named `alfis.toml` in current working directory, and creates/changes `blockchain.db` file in the same directory.
 If you want it to load config from another file you can command it so: `alfis -c /etc/alfis.conf`.
 
 ## Roadmap
-1. Stabilize blockchain functions (domain transfer, info & contacts in UI), bug hunting and fixing.
-2. Change DNS server/proxy to own resource saving implementation (using trust-dns-proto for RR parsing).
+1. Stabilize blockchain functions (domain transfer, info & contacts in UI), bug hunting and fixing. ✅
+2. ~~Change DNS server/proxy to own resource saving implementation (using trust-dns-proto for RR parsing).~~
 3. P2P traffic encryption (ECDH). ✅
-4. Web-GUI to manage you node from browser.
+4. ~~Web-GUI to manage your node from browser.~~
 
 ## Remarkable contributions
 * [@umasterov](https://github.com/umasterov) contributed fantastic logo for this project.
