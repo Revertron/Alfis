@@ -47,13 +47,13 @@ function refreshRecordsList() {
 
     function makeRecord(value, index, array) {
         let data = value.addr;
-        if (value.type == "MX") {
+        if (value.type === "MX") {
             data = value.priority + " " + value.host;
-        } else if (value.type == "CNAME" || value.type == "NS") {
+        } else if (value.type === "CNAME" || value.type === "NS") {
             data = value.host;
-        } else if (value.type == "TXT" || value.type == "TLSA") {
+        } else if (value.type === "TXT" || value.type === "TLSA") {
             data = value.data.toString();
-        } else if (value.type == "SRV") {
+        } else if (value.type === "SRV") {
             data = value.priority + " " + value.weight + " " + value.port + " " + value.host;
         }
 
@@ -212,12 +212,17 @@ function editDomain(domain, event) {
 }
 
 function onLoad() {
-    // Workaround for Arch Linux Webkit
-    // https://github.com/Boscop/web-view/issues/212#issuecomment-671055663
+    // Compatibility shim for wry IPC
     if (typeof window.external == 'undefined' || typeof window.external.invoke == 'undefined') {
         window.external = {
             invoke: function(x) {
-                window.webkit.messageHandlers.external.postMessage(x);
+                // wry uses window.ipc.postMessage
+                if (typeof window.ipc !== 'undefined') {
+                    window.ipc.postMessage(x);
+                } else if (typeof window.webkit !== 'undefined' && typeof window.webkit.messageHandlers !== 'undefined') {
+                    // Fallback for older webkit
+                    window.webkit.messageHandlers.external.postMessage(x);
+                }
             }
         };
     }

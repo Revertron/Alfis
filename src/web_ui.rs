@@ -2,11 +2,10 @@ extern crate open;
 extern crate serde;
 extern crate serde_json;
 extern crate tinyfiledialogs as tfd;
-extern crate web_view;
 
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use alfis::blockchain::transaction::DomainData;
 use alfis::blockchain::types::MineResult;
@@ -17,14 +16,19 @@ use alfis::event::Event;
 use alfis::eventbus::{post, register};
 use alfis::miner::Miner;
 use alfis::{keystore, Block, Bytes, Context, Keystore, Transaction};
-use chrono::{DateTime, Local, Utc};
+use chrono::{Local, Utc};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn, LevelFilter};
 use serde::{Deserialize, Serialize};
-use web_view::Content;
 use Cmd::*;
 
-use self::web_view::{Handle, WebView};
+use tao::{
+    event::{Event as TaoEvent, WindowEvent},
+    event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy},
+    window::WindowBuilder,
+};
+use tao::dpi::PhysicalPosition;
+use wry::WebViewBuilder;
 
 pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let file_content = include_str!("webview/index.html");
@@ -33,213 +37,155 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     styles.push_str(&inline_style(include_str!("webview/busy_indicator.css")));
     let scripts = inline_script(include_str!("webview/scripts.js"));
 
-    let html = Content::Html(file_content.to_owned().replace("{styles}", &styles).replace("{scripts}", &scripts));
+    let html = file_content.to_owned().replace("{styles}", &styles).replace("{scripts}", &scripts);
     let title = format!("ALFIS {}", env!("CARGO_PKG_VERSION"));
-    let mut interface = web_view::builder()
-        .title(&title)
-        .content(html)
-        .size(1023, 720)
-        .min_size(773, 350)
-        .resizable(true)
-        .debug(false)
-        .user_data(())
-        .invoke_handler(|web_view, arg| {
-            debug!("Command {}", arg);
-            match serde_json::from_str(arg).unwrap() {
-                Loaded => { action_loaded(&context, web_view); }
-                LoadKey => { action_load_key(&context, web_view); }
-                CreateKey => { keystore::create_key(Arc::clone(&context)); }
-                SaveKey => { action_save_key(&context); }
-                SelectKey { index } => { action_select_key(&context, web_view, index); }
-                CheckRecord { data } => { action_check_record(web_view, data); }
-                CheckDomain { name } => { action_check_domain(&context, web_view, name); }
-                MineDomain { name, data, signing, encryption, renewal } => {
-                    action_create_domain(Arc::clone(&context), Arc::clone(&miner), web_view, name, data, signing, encryption, renewal);
-                }
-                TransferDomain { name, owner} => { info!("Transferring '{name}' to '{owner}'"); }
-                StopMining => { post(Event::ActionStopMining); }
-                Open { link } => {
-                    if open::that(&link).is_err() {
-                        show_warning(web_view, "Something wrong, I can't open the link 😢");
+
+    // Create event loop and window
+    let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
+    let proxy = event_loop.create_proxy();
+
+    // Get primary monitor and calculate center position
+    let primary_monitor = event_loop.primary_monitor().unwrap();
+    let monitor_size = primary_monitor.size();
+    let monitor_position = primary_monitor.position();
+
+    let window_size = tao::dpi::LogicalSize::new(1024, 720);
+    let scaled = window_size.to_physical::<i32>(primary_monitor.scale_factor());
+    let center_x = monitor_position.x + (monitor_size.width as i32 - scaled.width) / 2;
+    let center_y = monitor_position.y + (monitor_size.height as i32 - scaled.height) / 2;
+
+    let window = WindowBuilder::new()
+        .with_title(&title)
+        .with_inner_size(window_size)
+        .with_min_inner_size(tao::dpi::LogicalSize::new(773, 350))
+        .with_position(PhysicalPosition::new(center_x, center_y))
+        .with_resizable(true)
+        .with_visible(true)
+        .build(&event_loop)
+        .expect("Failed to create the window");
+
+    #[cfg(windows)]
+    {
+        use winapi::um::shellscalingapi::SetProcessDpiAwareness;
+        unsafe {
+            SetProcessDpiAwareness(2);
+        }
+        use tao::platform::windows::IconExtWindows;
+        use tao::window::Icon;
+        let icon = Icon::from_resource(1, None).unwrap();
+        window.set_window_icon(Some(icon));
+    }
+
+    // Clone for the IPC handler
+    let context_ipc = Arc::clone(&context);
+    let miner_ipc = Arc::clone(&miner);
+    let proxy_ipc = proxy.clone();
+
+    // Create webview
+    let builder = WebViewBuilder::new()
+        .with_transparent(false)
+        .with_visible(true)
+        .with_devtools(true)
+        .with_html(html)  // Using test HTML to verify wry works
+        .with_ipc_handler(move |request| {
+            let body = request.body();
+            debug!("Command {}", body);
+
+            match serde_json::from_str(body) {
+                Ok(cmd) => {
+                    match cmd {
+                        Loaded => {
+                            let _ = proxy_ipc.send_event(UserEvent::Loaded);
+                        }
+                        LoadKey => {
+                            action_load_key(&context_ipc, &proxy_ipc);
+                        }
+                        CreateKey => {
+                            keystore::create_key(Arc::clone(&context_ipc));
+                        }
+                        SaveKey => {
+                            action_save_key(&context_ipc);
+                        }
+                        SelectKey { index } => {
+                            action_select_key(&context_ipc, &proxy_ipc, index);
+                        }
+                        CheckRecord { data } => {
+                            let result = check_record(&data);
+                            let _ = proxy_ipc.send_event(UserEvent::EvalJs(format!("recordOkay({})", result)));
+                        }
+                        CheckDomain { name } => {
+                            let available = check_domain_available(&context_ipc, &name);
+                            let _ = proxy_ipc.send_event(UserEvent::EvalJs(format!("domainAvailable({})", available)));
+                        }
+                        MineDomain { name, data, signing, encryption, renewal } => {
+                            action_create_domain(Arc::clone(&context_ipc), Arc::clone(&miner_ipc), &proxy_ipc, name, data, signing, encryption, renewal);
+                        }
+                        TransferDomain { name, owner } => {
+                            info!("Transferring '{name}' to '{owner}'");
+                        }
+                        StopMining => {
+                            post(Event::ActionStopMining);
+                        }
+                        Open { link } => {
+                            if open::that(&link).is_err() {
+                                let _ = proxy_ipc.send_event(UserEvent::ShowWarning("Something wrong, I can't open the link 😢".to_string()));
+                            }
+                        }
                     }
                 }
-            }
-            Ok(())
-        })
-        .build()
-        .expect("Error building GUI");
-
-    run_interface_loop(&mut interface);
-}
-
-/// Indefinitely loops through WebView steps
-fn run_interface_loop(interface: &mut WebView<()>) {
-    // We use this ugly loop to lower CPU usage a lot.
-    // If we use .run() or only .step() in a loop without sleeps it will try
-    // to support 60FPS and uses more CPU than it should.
-    let pause = Duration::from_millis(25);
-    let mut start = Instant::now();
-    loop {
-        match interface.step() {
-            None => {
-                info!("Interface closed, exiting");
-                post(Event::ActionQuit);
-                thread::sleep(Duration::from_millis(100));
-                break;
-            }
-            Some(result) => {
-                match result {
-                    Ok(_) => {}
-                    Err(_) => {
-                        error!("Something wrong with webview, exiting");
-                        break;
-                    }
+                Err(e) => {
+                    error!("Error parsing command: {}", e);
                 }
             }
-        }
-        if start.elapsed().as_millis() > 1 {
-            thread::sleep(pause);
-            start = Instant::now();
-        }
-    }
-}
+        });
 
-fn action_check_record(web_view: &mut WebView<()>, data: String) {
-    match serde_json::from_str::<DnsRecord>(&data) {
-        Ok(record) => {
-            if let Some(string) = record.get_data() {
-                if string.len() > MAX_DATA_LEN {
-                    web_view.eval("recordOkay(false)").expect("Error evaluating!");
-                } else {
-                    web_view.eval("recordOkay(true)").expect("Error evaluating!");
-                }
-            }
-        }
-        Err(e) => {
-            web_view.eval("recordOkay(false)").expect("Error evaluating!");
-            dbg!(e);
-        }
-    }
-}
+    #[cfg(not(target_os = "linux"))]
+    let webview = builder.build(&window).unwrap();
+    #[cfg(target_os = "linux")]
+    let webview = {
+        use tao::platform::unix::WindowExtUnix;
+        use wry::WebViewBuilderExtUnix;
+        let vbox = window.default_vbox().unwrap();
+        builder.build_gtk(vbox).expect("Failed to build webview gtk object")
+    };
 
-fn action_check_domain(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>, name: String) {
-    let c = context.lock().unwrap();
-    if let Some(keystore) = c.get_keystore() {
-        let name = name.to_lowercase();
-        let available = match c.chain.can_mine_domain(c.chain.get_height(), &name, &keystore.get_public()) {
-            MineResult::Fine => true,
-            _ => false
-        };
-        web_view.eval(&format!("domainAvailable({})", available)).expect("Error evaluating!");
-    }
-}
+    let webview = Arc::new(Mutex::new(webview));
+    let webview_clone = Arc::clone(&webview);
 
-fn action_save_key(context: &Arc<Mutex<Context>>) {
-    if !context.lock().unwrap().has_keys() {
-        return;
-    }
-    let result = tfd::save_file_dialog_with_filter("Save keys file", "", &["*.toml"], "Key files (*.toml)");
-    match result {
-        None => {}
-        Some(mut new_path) => {
-            if !new_path.ends_with(".toml") {
-                new_path.push_str(".toml");
-            }
-            let path = new_path.clone();
-            if let Some(keystore) = context.lock().unwrap().get_keystore_mut() {
-                let public = keystore.get_public().to_string();
-                let hash = keystore.get_hash().to_string();
-                keystore.save(&new_path, "");
-                info!("Key file saved to {}", &path);
-                post(Event::KeySaved { path, public, hash });
-            }
-        }
-    }
-}
-
-fn action_select_key(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>, index: usize) {
-    if context.lock().unwrap().select_key_by_index(index) {
-        let (path, public, hash) = {
-            let keystore = context.lock().unwrap().get_keystore().cloned().unwrap();
-            let path = keystore.get_path().to_owned();
-            let public = keystore.get_public().to_string();
-            let hash = keystore.get_hash().to_string();
-            (path, public, hash)
-        };
-        post(Event::KeyLoaded { path, public, hash });
-        web_view.eval(&format!("keySelected({})", index)).expect("Error evaluating!");
-    }
-}
-
-fn action_load_key(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
-    let result = tfd::open_file_dialog("Open keys file", "", Some((&["*.key", "*.toml"], "Key files")));
-    match result {
-        None => {}
-        Some(file_name) => {
-            match Keystore::from_file(&file_name, "") {
-                None => {
-                    error!("Error loading keystore '{}'!", &file_name);
-                    show_warning(web_view, "Error loading key!<br>Key cannot be loaded or its difficulty is not enough.");
-                    event_fail(web_view, &format!("Error loading key from \\'{}\\'!", &file_name));
-                }
-                Some(keystore) => {
-                    info!("Loaded keystore with keys: {:?}, {:?}", &keystore.get_public(), &keystore.get_encryption_public());
-                    let path = keystore.get_path().to_owned();
-                    let public = keystore.get_public().to_string();
-                    let hash = keystore.get_hash().to_string();
-                    post(Event::KeyLoaded { path, public, hash });
-
-                    if !context.lock().unwrap().select_key_by_public(&keystore.get_public()) {
-                        context.lock().unwrap().add_keystore(keystore);
-                    } else {
-                        warn!("This key is already loaded!");
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
-    info!("Interface loaded");
-    web_view.eval("showMiningIndicator(false, false);").expect("Error evaluating!");
-    let handle: Handle<()> = web_view.handle();
+    // Setup event bus listener
+    let proxy_events = proxy.clone();
     let threads = context.lock().unwrap().settings.mining.threads;
     let threads = match threads {
         0 => num_cpus::get(),
         _ => threads
     };
     let status = Arc::new(Mutex::new(UiStatus::new(threads)));
-    let context_copy = Arc::clone(context);
-    let c = context.lock().unwrap();
 
     register(move |_uuid, e| {
-        //debug!("Got event from bus {:?}", &e);
         let status = Arc::clone(&status);
-        let handle = handle.clone();
-        let context_copy = Arc::clone(&context_copy);
-        let _ = thread::Builder::new().name(String::from("webui")).spawn(move || {
+        let proxy = proxy_events.clone();
+
+        thread::Builder::new().name(String::from("webui")).spawn(move || {
             let mut status = status.lock().unwrap();
-            let mut context = context_copy.lock().unwrap();
             let eval = match e {
                 Event::KeyCreated { path, public, hash } => {
-                    load_domains(&mut context, &handle);
-                    send_keys_to_ui(&context, &handle);
-                    event_handle_luck(&handle, "Key successfully created! Don\\'t forget to save it!");
+                    let _ = proxy.send_event(UserEvent::LoadDomains);
+                    let _ = proxy.send_event(UserEvent::SendKeysToUi);
+                    let _ = proxy.send_event(UserEvent::EvalJs(format!("addEvent('luck', '{}', 'Key successfully created! Don\\'t forget to save it!');", Local::now().format("%d.%m.%y %X"))));
                     let mut s = format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash);
                     s.push_str(" showSuccess('New key mined successfully! Save it to a safe place!')");
                     s
                 }
                 Event::KeyLoaded { path, public, hash } |
                 Event::KeySaved { path, public, hash } => {
-                    load_domains(&mut context, &handle);
-                    send_keys_to_ui(&context, &handle);
+                    let _ = proxy.send_event(UserEvent::LoadDomains);
+                    let _ = proxy.send_event(UserEvent::SendKeysToUi);
                     format!("keystoreChanged('{}', '{}', '{}');", &path, &public, &hash)
                 }
                 Event::MinerStarted | Event::KeyGeneratorStarted => {
                     status.mining = true;
                     status.max_diff = 0;
-                    event_handle_info(&handle, "Mining started");
+                    let _ = proxy.send_event(UserEvent::EvalJs(format!("addEvent('info', '{}', 'Mining started');", Local::now().format("%d.%m.%y %X"))));
                     String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
                 }
                 Event::MinerStopped { success, full } => {
@@ -253,12 +199,12 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                     if full {
                         match success {
                             true => {
-                                load_domains(&mut context, &handle);
-                                event_handle_luck(&handle, "Mining is successful!");
+                                let _ = proxy.send_event(UserEvent::LoadDomains);
+                                let _ = proxy.send_event(UserEvent::EvalJs(format!("addEvent('luck', '{}', 'Mining is successful!');", Local::now().format("%d.%m.%y %X"))));
                                 s.push_str(" showSuccess('Block successfully mined!')");
                             }
                             false => {
-                                event_handle_info(&handle, "Mining finished without result.");
+                                let _ = proxy.send_event(UserEvent::EvalJs(format!("addEvent('info', '{}', 'Mining finished without result.');", Local::now().format("%d.%m.%y %X"))));
                                 s.push_str(" showWarning('Mining unsuccessful, sorry.')");
                             }
                         }
@@ -288,7 +234,7 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                     status.syncing = true;
                     status.synced_blocks = have;
                     if height != status.sync_height {
-                        event_handle_info(&handle, "Syncing started...");
+                        let _ = proxy.send_event(UserEvent::EvalJs(format!("addEvent('info', '{}', 'Syncing started...');", Local::now().format("%d.%m.%y %X"))));
                         status.sync_height = height;
                     }
                     if status.mining {
@@ -298,8 +244,8 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                     }
                 }
                 Event::SyncFinished => {
-                    load_domains(&mut context, &handle);
-                    event_handle_info(&handle, "Syncing finished.");
+                    let _ = proxy.send_event(UserEvent::LoadDomains);
+                    let _ = proxy.send_event(UserEvent::EvalJs(format!("addEvent('info', '{}', 'Syncing finished.');", Local::now().format("%d.%m.%y %X"))));
                     status.syncing = false;
                     if status.mining {
                         String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
@@ -316,21 +262,165 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
                 }
                 Event::BlockchainChanged { index } => {
                     debug!("Current blockchain height is {}", index);
-                    event_handle_info(&handle, &format!("Blockchain changed, current block count is {} now.", index));
-                    String::new() // Nothing
+                    let _ = proxy.send_event(UserEvent::EvalJs(format!("addEvent('info', '{}', 'Blockchain changed, current block count is {} now.');", Local::now().format("%d.%m.%y %X"), index)));
+                    String::new()
                 }
                 Event::Error { text } => format!("showError('{}')", &text),
                 _ => String::new()
             };
 
             if !eval.is_empty() {
-                handle.dispatch(move |web_view| {
-                    web_view.eval(&eval.replace("\\", "\\\\"))
-                }).expect("Error dispatching!");
+                let _ = proxy.send_event(UserEvent::EvalJs(eval));
             }
-        });
+        }).ok();
         true
     });
+
+    // Run event loop
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Wait;
+
+        match event {
+            TaoEvent::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                ..
+            } => {
+                info!("Interface closed, exiting");
+                post(Event::ActionQuit);
+                thread::sleep(Duration::from_millis(100));
+                *control_flow = ControlFlow::Exit;
+            }
+            TaoEvent::UserEvent(user_event) => {
+                let wv = webview_clone.lock().unwrap();
+                match user_event {
+                    UserEvent::EvalJs(js) => {
+                        let js_escaped = js.replace("\\", "\\\\");
+                        if let Err(e) = wv.evaluate_script(&js_escaped) {
+                            error!("Error evaluating JavaScript: {}", e);
+                        }
+                    }
+                    UserEvent::Loaded => {
+                        action_loaded(&context, &wv, &proxy);
+                    }
+                    UserEvent::LoadDomains => {
+                        load_domains(&mut context.lock().unwrap(), &wv);
+                    }
+                    UserEvent::SendKeysToUi => {
+                        send_keys_to_ui(&context.lock().unwrap(), &wv);
+                    }
+                    UserEvent::ShowWarning(text) => {
+                        show_warning(&wv, &text);
+                    }
+                }
+            }
+            _ => {}
+        }
+    });
+}
+
+#[derive(Debug)]
+enum UserEvent {
+    EvalJs(String),
+    Loaded,
+    LoadDomains,
+    SendKeysToUi,
+    ShowWarning(String),
+}
+
+fn check_record(data: &str) -> bool {
+    match serde_json::from_str::<DnsRecord>(data) {
+        Ok(record) => {
+            if let Some(string) = record.get_data() {
+                string.len() <= MAX_DATA_LEN
+            } else {
+                false
+            }
+        }
+        Err(_) => false
+    }
+}
+
+fn check_domain_available(context: &Arc<Mutex<Context>>, name: &str) -> bool {
+    let c = context.lock().unwrap();
+    if let Some(keystore) = c.get_keystore() {
+        let name = name.to_lowercase();
+        matches!(c.chain.can_mine_domain(c.chain.get_height(), &name, &keystore.get_public()), MineResult::Fine)
+    } else {
+        false
+    }
+}
+
+fn action_save_key(context: &Arc<Mutex<Context>>) {
+    if !context.lock().unwrap().has_keys() {
+        return;
+    }
+    let result = tfd::save_file_dialog_with_filter("Save keys file", "", &["*.toml"], "Key files (*.toml)");
+    match result {
+        None => {}
+        Some(mut new_path) => {
+            if !new_path.ends_with(".toml") {
+                new_path.push_str(".toml");
+            }
+            let path = new_path.clone();
+            if let Some(keystore) = context.lock().unwrap().get_keystore_mut() {
+                let public = keystore.get_public().to_string();
+                let hash = keystore.get_hash().to_string();
+                keystore.save(&new_path, "");
+                info!("Key file saved to {}", &path);
+                post(Event::KeySaved { path, public, hash });
+            }
+        }
+    }
+}
+
+fn action_select_key(context: &Arc<Mutex<Context>>, proxy: &EventLoopProxy<UserEvent>, index: usize) {
+    if context.lock().unwrap().select_key_by_index(index) {
+        let (path, public, hash) = {
+            let keystore = context.lock().unwrap().get_keystore().cloned().unwrap();
+            let path = keystore.get_path().to_owned();
+            let public = keystore.get_public().to_string();
+            let hash = keystore.get_hash().to_string();
+            (path, public, hash)
+        };
+        post(Event::KeyLoaded { path, public, hash });
+        let _ = proxy.send_event(UserEvent::EvalJs(format!("keySelected({})", index)));
+    }
+}
+
+fn action_load_key(context: &Arc<Mutex<Context>>, proxy: &EventLoopProxy<UserEvent>) {
+    let result = tfd::open_file_dialog("Open keys file", "", Some((&["*.key", "*.toml"], "Key files")));
+    match result {
+        None => {}
+        Some(file_name) => {
+            match Keystore::from_file(&file_name, "") {
+                None => {
+                    error!("Error loading keystore '{}'!", &file_name);
+                    let _ = proxy.send_event(UserEvent::ShowWarning("Error loading key!<br>Key cannot be loaded or its difficulty is not enough.".to_string()));
+                    let _ = proxy.send_event(UserEvent::EvalJs(format!("addEvent('fail', '{}', 'Error loading key from \\\\'{}\\\\!');", Local::now().format("%d.%m.%y %X"), &file_name)));
+                }
+                Some(keystore) => {
+                    info!("Loaded keystore with keys: {:?}, {:?}", &keystore.get_public(), &keystore.get_encryption_public());
+                    let path = keystore.get_path().to_owned();
+                    let public = keystore.get_public().to_string();
+                    let hash = keystore.get_hash().to_string();
+                    post(Event::KeyLoaded { path, public, hash });
+
+                    if !context.lock().unwrap().select_key_by_public(&keystore.get_public()) {
+                        context.lock().unwrap().add_keystore(keystore);
+                    } else {
+                        warn!("This key is already loaded!");
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn action_loaded(context: &Arc<Mutex<Context>>, webview: &wry::WebView, proxy: &EventLoopProxy<UserEvent>) {
+    info!("Interface loaded");
+    let _ = webview.evaluate_script("showMiningIndicator(false, false);");
+
+    let c = context.lock().unwrap();
 
     if let Some(keystore) = c.get_keystore() {
         let path = keystore.get_path().to_owned();
@@ -338,27 +428,31 @@ fn action_loaded(context: &Arc<Mutex<Context>>, web_view: &mut WebView<()>) {
         let hash = keystore.get_hash().to_string();
         post(Event::KeyLoaded { path, public, hash });
     }
+
     let index = c.chain.get_height();
     if index > 0 {
         post(Event::BlockchainChanged { index });
     }
+
     let zones = c.chain.get_zones();
     info!("Loaded zones: {:?}", &zones);
     if let Ok(zones) = serde_json::to_string(&zones) {
-        let _ = web_view.eval(&format!("zonesChanged('{}');", &zones));
+        let _ = webview.evaluate_script(&format!("zonesChanged('{}');", &zones));
     }
-    send_keys_to_ui(&c, &web_view.handle());
+
+    drop(c);
+    let _ = proxy.send_event(UserEvent::SendKeysToUi);
+
+    let c = context.lock().unwrap();
     let command = format!("setStats({}, {}, {}, {});", c.chain.get_height(), c.chain.get_domains_count(), c.chain.get_users_count(), 0);
-    if let Err(e) = web_view.eval(&command) {
+    if let Err(e) = webview.evaluate_script(&command) {
         error!("Error evaluating stats: {}", e);
     }
-    event_info(web_view, "Application loaded");
+    let _ = webview.evaluate_script(&format!("addEvent('info', '{}', 'Application loaded');", Local::now().format("%d.%m.%y %X")));
 }
 
-fn load_domains(context: &mut MutexGuard<Context>, handle: &Handle<()>) {
-    let _ = handle.dispatch(move |web_view|{
-        web_view.eval("clearMyDomains();")
-    });
+fn load_domains(context: &mut MutexGuard<Context>, webview: &wry::WebView) {
+    let _ = webview.evaluate_script("clearMyDomains();");
     let domains = context.chain.get_my_domains(context.get_keystore());
     let mut domains = domains.iter().map(|(_, d)| d).collect::<Vec<_>>();
     domains.sort_by(|a, b| a.0.cmp(&b.0));
@@ -366,16 +460,12 @@ fn load_domains(context: &mut MutexGuard<Context>, handle: &Handle<()>) {
         let d = serde_json::to_string(&data).unwrap();
         let d = d.replace("'", "\\'").replace("\\n", "\\\\n").replace("\"", "\\\"");
         let command = format!("addMyDomain('{}', {}, {}, '{}');", &domain, timestamp, timestamp + DOMAIN_LIFETIME, &d);
-        let _ = handle.dispatch(move |web_view|{
-            web_view.eval(&command)
-        });
+        let _ = webview.evaluate_script(&command);
     }
-    let _ = handle.dispatch(move |web_view|{
-        web_view.eval("refreshMyDomains();")
-    });
+    let _ = webview.evaluate_script("refreshMyDomains();");
 }
 
-fn send_keys_to_ui(context: &MutexGuard<Context>, handle: &Handle<()>) {
+fn send_keys_to_ui(context: &MutexGuard<Context>, webview: &wry::WebView) {
     let keys = {
         let mut keys = Vec::new();
         for key in context.get_keystores() {
@@ -387,94 +477,101 @@ fn send_keys_to_ui(context: &MutexGuard<Context>, handle: &Handle<()>) {
     };
     if !keys.is_empty() {
         let index = context.get_active_key_index();
-        let _ = handle.dispatch(move |web_view| {
-            let command = format!("keysChanged('{}'); keySelected({});", serde_json::to_string(&keys).unwrap(), index);
-            web_view.eval(&command)
-        });
+        let command = format!("keysChanged('{}'); keySelected({});", serde_json::to_string(&keys).unwrap(), index);
+        let _ = webview.evaluate_script(&command);
     }
 }
 
-fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, web_view: &mut WebView<()>, name: String, data: String, signing: String, encryption: String, renewal: bool) {
+fn action_create_domain(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, proxy: &EventLoopProxy<UserEvent>, name: String, data: String, signing: String, encryption: String, renewal: bool) {
     debug!("Creating domain with data: {}", &data);
     let c = Arc::clone(&context);
-    let context = context.lock().unwrap();
-    if !context.has_keys() {
-        show_warning(web_view, "You don't have keys loaded!<br>Load or mine the keys and try again.");
-        let _ = web_view.eval("domainMiningUnavailable();");
+    let context_guard = context.lock().unwrap();
+
+    if !context_guard.has_keys() {
+        let _ = proxy.send_event(UserEvent::ShowWarning("You don't have keys loaded!<br>Load or mine the keys and try again.".to_string()));
+        let _ = proxy.send_event(UserEvent::EvalJs("domainMiningUnavailable();".to_string()));
         return;
     }
-    if context.chain.is_waiting_signers() {
-        show_warning(web_view, "Waiting for last full block to be signed. Try again later.");
-        let _ = web_view.eval("domainMiningUnavailable();");
+
+    if context_guard.chain.is_waiting_signers() {
+        let _ = proxy.send_event(UserEvent::ShowWarning("Waiting for last full block to be signed. Try again later.".to_string()));
+        let _ = proxy.send_event(UserEvent::EvalJs("domainMiningUnavailable();".to_string()));
         info!("Waiting for last full block to be signed. Try again later.");
         return;
     }
-    let keystore = context.get_keystore().unwrap().clone();
+
+    let keystore = context_guard.get_keystore().unwrap().clone();
     let pub_key = keystore.get_public();
     let data = match serde_json::from_str::<DomainData>(&data) {
         Ok(data) => data,
         Err(e) => {
-            show_warning(web_view, "Something wrong with domain data. I cannot mine it.");
-            let _ = web_view.eval("domainMiningUnavailable();");
+            let _ = proxy.send_event(UserEvent::ShowWarning("Something wrong with domain data. I cannot mine it.".to_string()));
+            let _ = proxy.send_event(UserEvent::EvalJs("domainMiningUnavailable();".to_string()));
             warn!("Error parsing data: {}", e);
             return;
         }
     };
+
     info!("Parsed domain data:\n{:#?}", &data);
+
     if data.records.len() > MAX_RECORDS {
-        show_warning(web_view, "Too many records. Mining more than 30 records not allowed.");
-        let _ = web_view.eval("domainMiningUnavailable();");
+        let _ = proxy.send_event(UserEvent::ShowWarning("Too many records. Mining more than 30 records not allowed.".to_string()));
+        let _ = proxy.send_event(UserEvent::EvalJs("domainMiningUnavailable();".to_string()));
         return;
     }
+
     // Check if yggdrasil only quality of zone is not violated
-    let zones = context.chain.get_zones();
+    let zones = context_guard.chain.get_zones();
     for z in zones {
         if z.name == data.zone && z.yggdrasil {
             for record in &data.records {
                 if !is_yggdrasil_record(record) {
-                    show_warning(web_view, &format!("Zone {} is Yggdrasil only, you cannot use IPs from clearnet!", &data.zone));
-                    let _ = web_view.eval("domainMiningUnavailable();");
+                    let _ = proxy.send_event(UserEvent::ShowWarning(format!("Zone {} is Yggdrasil only, you cannot use IPs from clearnet!", &data.zone)));
+                    let _ = proxy.send_event(UserEvent::EvalJs("domainMiningUnavailable();".to_string()));
                     return;
                 }
             }
         }
     }
+
     let (signing, encryption) = if signing.is_empty() || encryption.is_empty() {
         (keystore.get_public(), keystore.get_encryption_public())
     } else {
         (Bytes::new(from_hex(&signing).unwrap()), Bytes::new(from_hex(&encryption).unwrap()))
     };
-    match context.chain.can_mine_domain(context.chain.get_height(), &name, &pub_key) {
+
+    match context_guard.chain.can_mine_domain(context_guard.chain.get_height(), &name, &pub_key) {
         MineResult::Fine => {
-            drop(context);
+            drop(context_guard);
             create_domain(c, miner, CLASS_DOMAIN, &name, data, DOMAIN_DIFFICULTY, &keystore, signing, encryption, renewal);
-            let _ = web_view.eval("domainMiningStarted();");
-            event_info(web_view, &format!("Mining of domain \\'{}\\' has started", &name));
+            let _ = proxy.send_event(UserEvent::EvalJs("domainMiningStarted();".to_string()));
+            let _ = proxy.send_event(UserEvent::EvalJs(format!("addEvent('info', '{}', 'Mining of domain \\\\'{}\\\\' has started');", Local::now().format("%d.%m.%y %X"), &name)));
         }
         MineResult::WrongName => {
-            show_warning(web_view, "You can't mine this domain!");
-            let _ = web_view.eval("domainMiningUnavailable();");
+            let _ = proxy.send_event(UserEvent::ShowWarning("You can't mine this domain!".to_string()));
+            let _ = proxy.send_event(UserEvent::EvalJs("domainMiningUnavailable();".to_string()));
         }
         MineResult::WrongData => {
-            show_warning(web_view, "You have an error in records!");
-            let _ = web_view.eval("domainMiningUnavailable();");
+            let _ = proxy.send_event(UserEvent::ShowWarning("You have an error in records!".to_string()));
+            let _ = proxy.send_event(UserEvent::EvalJs("domainMiningUnavailable();".to_string()));
         }
         MineResult::WrongKey => {
-            show_warning(web_view, "You can't mine with current key!");
-            let _ = web_view.eval("domainMiningUnavailable();");
+            let _ = proxy.send_event(UserEvent::ShowWarning("You can't mine with current key!".to_string()));
+            let _ = proxy.send_event(UserEvent::EvalJs("domainMiningUnavailable();".to_string()));
         }
         MineResult::WrongZone => {
-            show_warning(web_view, "You can't mine domain in this zone!");
-            let _ = web_view.eval("domainMiningUnavailable();");
+            let _ = proxy.send_event(UserEvent::ShowWarning("You can't mine domain in this zone!".to_string()));
+            let _ = proxy.send_event(UserEvent::EvalJs("domainMiningUnavailable();".to_string()));
         }
         MineResult::NotOwned => {
-            show_warning(web_view, "This domain is already taken, and it is not yours!");
-            let _ = web_view.eval("domainMiningUnavailable();");
+            let _ = proxy.send_event(UserEvent::ShowWarning("This domain is already taken, and it is not yours!".to_string()));
+            let _ = proxy.send_event(UserEvent::EvalJs("domainMiningUnavailable();".to_string()));
         }
         MineResult::Cooldown { time } => {
-            event_info(web_view, &format!("You have cooldown {}!", format_cooldown(time)));
-            show_warning(web_view, &format!("You have cooldown {}!", format_cooldown(time)));
-            let _ = web_view.eval("domainMiningUnavailable();");
+            let cooldown = format_cooldown(time);
+            let _ = proxy.send_event(UserEvent::EvalJs(format!("addEvent('info', '{}', 'You have cooldown {}!');", Local::now().format("%d.%m.%y %X"), &cooldown)));
+            let _ = proxy.send_event(UserEvent::ShowWarning(format!("You have cooldown {}!", cooldown)));
+            let _ = proxy.send_event(UserEvent::EvalJs("domainMiningUnavailable();".to_string()));
         }
     }
 }
@@ -490,78 +587,11 @@ fn format_cooldown(time: i64) -> String {
     format!("{} hours", minutes / 60)
 }
 
-fn show_warning(web_view: &mut WebView<()>, text: &str) {
+fn show_warning(webview: &wry::WebView, text: &str) {
     let str = text.replace('\'', "\\'");
-    match web_view.eval(&format!("showWarning('{}');", &str)) {
-        Ok(_) => {}
-        Err(_) => { warn!("Error showing warning!"); }
+    if let Err(e) = webview.evaluate_script(&format!("showWarning('{}');", &str)) {
+        warn!("Error showing warning: {}", e);
     }
-}
-
-#[allow(dead_code)]
-fn show_success(web_view: &mut WebView<()>, text: &str) {
-    let str = text.replace('\'', "\\'");
-    match web_view.eval(&format!("showSuccess('{}');", &str)) {
-        Ok(_) => {}
-        Err(_) => { warn!("Error showing success!"); }
-    }
-}
-
-#[allow(dead_code)]
-fn event_info(web_view: &mut WebView<()>, message: &str) {
-    let _ = web_view.eval(&format_event_now("info", message));
-}
-
-#[allow(dead_code)]
-fn event_warn(web_view: &mut WebView<()>, message: &str) {
-    let _ = web_view.eval(&format_event_now("warn", message));
-}
-
-#[allow(dead_code)]
-fn event_fail(web_view: &mut WebView<()>, message: &str) {
-    let _ = web_view.eval(&format_event_now("fail", message));
-}
-
-#[allow(dead_code)]
-fn event_handle_info(handle: &Handle<()>, message: &str) {
-    let message = message.to_owned();
-    let _ = handle.dispatch(move |web_view|{
-        web_view.eval(&format_event_now("info", &message))
-    });
-}
-
-#[allow(dead_code)]
-fn event_handle_warn(handle: &Handle<()>, message: &str) {
-    let message = message.to_owned();
-    let _ = handle.dispatch(move |web_view|{
-        web_view.eval(&format_event_now("warn", &message))
-    });
-}
-
-#[allow(dead_code)]
-fn event_handle_fail(handle: &Handle<()>, message: &str) {
-    let message = message.to_owned();
-    let _ = handle.dispatch(move |web_view|{
-        web_view.eval(&format_event_now("fail", &message))
-    });
-}
-
-#[allow(dead_code)]
-fn event_handle_luck(handle: &Handle<()>, message: &str) {
-    let message = message.to_owned();
-    let _ = handle.dispatch(move |web_view|{
-        web_view.eval(&format_event_now("luck", &message))
-    });
-}
-
-#[allow(dead_code)]
-fn format_event(kind: &str, time: DateTime<Local>, message: &str) -> String {
-    format!("addEvent('{}', '{}', '{}');", kind, time.format("%d.%m.%y %X"), message)
-}
-
-fn format_event_now(kind: &str, message: &str) -> String {
-    let time = Local::now();
-    format!("addEvent('{}', '{}', '{}');", kind, time.format("%d.%m.%y %X"), message)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -611,7 +641,7 @@ struct UiStatus {
 
 impl UiStatus {
     fn new(threads: usize) -> Self {
-        let speed =vec![0; threads];
+        let speed = vec![0; threads];
         UiStatus { mining: false, syncing: false, synced_blocks: 0, sync_height: 0, max_diff: 0, speed }
     }
 
