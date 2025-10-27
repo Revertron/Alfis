@@ -61,13 +61,13 @@ pub struct ServerContext {
 
 impl Default for ServerContext {
     fn default() -> Self {
-        ServerContext::new(String::from("0.0.0.0:53"), Vec::new())
+        ServerContext::new(String::from("0.0.0.0:53"), Vec::new(), true)
     }
 }
 
 impl ServerContext {
     #[allow(unused_variables)]
-    pub fn new(dns_listen: String, bootstraps: Vec<String>) -> ServerContext {
+    pub fn new(dns_listen: String, bootstraps: Vec<String>, enable_0x20: bool) -> ServerContext {
         #[cfg(not(feature = "doh"))]
         let doh_client = None;
         #[cfg(feature = "doh")]
@@ -77,7 +77,7 @@ impl ServerContext {
             authority: Authority::new(),
             cache: SynchronizedCache::new(),
             filters: Vec::new(),
-            old_client: Box::new(DnsNetworkClient::new(10000 + (rand::random::<u16>() % 50000))),
+            old_client: Box::new(DnsNetworkClient::new_with_0x20(enable_0x20)),
             doh_client,
             dns_listen,
             api_port: 5380,

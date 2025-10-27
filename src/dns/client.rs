@@ -9,7 +9,7 @@ use std::net::{Ipv4Addr, SocketAddr, TcpStream, ToSocketAddrs, UdpSocket};
 use std::net::IpAddr;
 #[cfg(feature = "doh")]
 use std::num::NonZeroUsize;
-use std::sync::atomic::{AtomicUsize, Ordering, AtomicBool};
+use std::sync::atomic::{AtomicUsize, Ordering, AtomicBool, AtomicU16};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 #[cfg(feature = "doh")]
@@ -32,10 +32,15 @@ use crate::dns::protocol::{DnsPacket, DnsQuestion, QueryType};
 use crate::dns::protocol::DnsRecord;
 #[cfg(feature = "doh")]
 use lru::LruCache;
+#[cfg(feature = "doh")]
 use ureq::Agent;
+#[cfg(feature = "doh")]
 use ureq::config::Config;
+#[cfg(feature = "doh")]
 use ureq::http::Uri;
+#[cfg(feature = "doh")]
 use ureq::unversioned::resolver::{ArrayVec, ResolvedSocketAddrs, Resolver};
+#[cfg(feature = "doh")]
 use ureq::unversioned::transport::{DefaultConnector, NextTimeout};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -72,7 +77,10 @@ pub struct DnsNetworkClient {
     total_failed: AtomicUsize,
 
     /// Counter for assigning packet ids
-    seq: AtomicUsize,
+    seq: AtomicU16,
+
+    /// Enable DNS 0x20 encoding for additional security
+    enable_0x20: bool,
 
     /// The requesting socket for IPv4
     socket_ipv4: UdpSocket,
@@ -93,6 +101,8 @@ pub struct DnsNetworkClient {
 struct PendingQuery {
     seq: u16,
     timestamp: DateTime<Local>,
+    /// The query name with 0x20 encoding applied (for validation)
+    query_name: String,
     tx: Sender<Option<DnsPacket>>
 }
 
@@ -101,16 +111,41 @@ unsafe impl Send for DnsNetworkClient {}
 unsafe impl Sync for DnsNetworkClient {}
 
 impl DnsNetworkClient {
-    pub fn new(port: u16) -> DnsNetworkClient {
+    pub fn new() -> DnsNetworkClient {
+        Self::new_with_0x20(true)
+    }
+
+    pub fn new_with_0x20(enable_0x20: bool) -> DnsNetworkClient {
+        let socket_ipv4 = UdpSocket::bind("0.0.0.0:0").expect("Error binding IPv4");
+        let socket_ipv6 = UdpSocket::bind("[::]:0").expect("Error binding IPv6");
+
         DnsNetworkClient {
             total_sent: AtomicUsize::new(0),
             total_failed: AtomicUsize::new(0),
-            seq: AtomicUsize::new(0),
-            socket_ipv4: UdpSocket::bind(format!("0.0.0.0:{}", port)).expect("Error binding IPv4"),
-            socket_ipv6: UdpSocket::bind(format!("[::]:{}", port + 1)).expect("Error binding IPv6"),
+            seq: AtomicU16::new(rand::random::<u16>()),
+            enable_0x20,
+            socket_ipv4,
+            socket_ipv6,
             pending_queries: Arc::new(Mutex::new(Vec::new())),
             stopped: Arc::new(AtomicBool::new(false))
         }
+    }
+
+    /// Apply DNS 0x20 encoding (random case) to domain name for additional entropy
+    /// This helps prevent cache poisoning by adding ~10-15 bits of entropy per query
+    fn apply_0x20_encoding(domain: &str) -> String {
+        domain.chars().map(|c| {
+            if c.is_ascii_alphabetic() {
+                // Randomly uppercase or lowercase each letter
+                if rand::random::<bool>() {
+                    c.to_ascii_uppercase()
+                } else {
+                    c.to_ascii_lowercase()
+                }
+            } else {
+                c
+            }
+        }).collect()
     }
 
     /// Send a DNS query using TCP transport
@@ -161,6 +196,13 @@ impl DnsNetworkClient {
     pub fn send_udp_query<A: ToSocketAddrs>(&self, qname: &str, qtype: QueryType, server: A, recursive: bool, timeout: Duration) -> Result<DnsPacket> {
         let _ = self.total_sent.fetch_add(1, Ordering::Release);
 
+        // Apply DNS 0x20 encoding if enabled (random case for additional entropy)
+        let query_name = if self.enable_0x20 {
+            Self::apply_0x20_encoding(qname)
+        } else {
+            qname.to_string()
+        };
+
         // Prepare request
         let mut packet = DnsPacket::new();
 
@@ -172,13 +214,13 @@ impl DnsNetworkClient {
         packet.header.questions = 1;
         packet.header.recursion_desired = recursive;
 
-        packet.questions.push(DnsQuestion::new(qname.to_string(), qtype));
+        packet.questions.push(DnsQuestion::new(query_name.clone(), qtype));
 
         // Create a return channel and add a `PendingQuery` to the list of lookups in progress
         let (tx, rx) = channel();
         {
             let mut pending_queries = self.pending_queries.lock().map_err(|_| ClientError::PoisonedLock)?;
-            pending_queries.push(PendingQuery { seq: packet.header.id, timestamp: Local::now(), tx });
+            pending_queries.push(PendingQuery { seq: packet.header.id, timestamp: Local::now(), query_name, tx });
         }
 
         // Send a query
@@ -222,16 +264,15 @@ impl DnsClient for DnsNetworkClient {
     /// The run method launches a worker thread. Unless this thread is running, no
     /// responses will ever be generated, and clients will just block indefinitely.
     fn run(&self) -> Result<()> {
-        let timeout = Some(Duration::from_millis(500));
         // Start the thread for handling incoming responses
         {
             let socket_copy = self.socket_ipv4.try_clone()?;
-            let _ = socket_copy.set_read_timeout(timeout);
+            let _ = socket_copy.set_read_timeout(Some(Duration::from_millis(500)));
             let pending_queries_lock = self.pending_queries.clone();
             let stopped = Arc::clone(&self.stopped);
 
             Builder::new()
-                .name("DnsNetworkClient-worker-thread".into())
+                .name("DnsNetworkClient-worker-thread-v4".into())
                 .spawn(move || {
                     loop {
                         if stopped.load(Ordering::SeqCst) {
@@ -240,7 +281,9 @@ impl DnsClient for DnsNetworkClient {
 
                         // Read data into a buffer
                         let mut res_buffer = BytePacketBuffer::new();
-                        match socket_copy.recv_from(&mut res_buffer.buf) {
+                        let recv_result = socket_copy.recv_from(&mut res_buffer.buf);
+
+                        match recv_result {
                             Ok(_) => {}
                             Err(_) => {
                                 continue;
@@ -262,7 +305,17 @@ impl DnsClient for DnsNetworkClient {
                             let mut matched_query = None;
                             for (i, pending_query) in pending_queries.iter().enumerate() {
                                 if pending_query.seq == packet.header.id {
-                                    // Matching query found, send the response
+                                    // Validate 0x20 encoding - response must match query case exactly
+                                    if !packet.questions.is_empty() {
+                                        let response_name = &packet.questions[0].name;
+                                        if response_name != &pending_query.query_name {
+                                            trace!("Rejecting response with mismatched case: expected '{}', got '{}'",
+                                                pending_query.query_name, response_name);
+                                            continue;
+                                        }
+                                    }
+
+                                    // Matching query found with correct case, send the response
                                     let _ = pending_query.tx.send(Some(packet.clone()));
 
                                     // Mark this index for removal from list
@@ -275,7 +328,7 @@ impl DnsClient for DnsNetworkClient {
                             if let Some(idx) = matched_query {
                                 pending_queries.remove(idx);
                             } else {
-                                println!("Discarding response for: {:?}", packet.questions[0]);
+                                trace!("Discarding unsolicited response for: {:?}", packet.questions.get(0));
                             }
                         }
                     }
@@ -285,12 +338,12 @@ impl DnsClient for DnsNetworkClient {
         // Start the same thread for IPv6
         {
             let socket_copy = self.socket_ipv6.try_clone()?;
-            let _ = socket_copy.set_read_timeout(timeout);
+            let _ = socket_copy.set_read_timeout(Some(Duration::from_millis(500)));
             let pending_queries_lock = self.pending_queries.clone();
             let stopped = Arc::clone(&self.stopped);
 
             Builder::new()
-                .name("DnsNetworkClient-worker-thread".into())
+                .name("DnsNetworkClient-worker-thread-v6".into())
                 .spawn(move || {
                     loop {
                         if stopped.load(Ordering::SeqCst) {
@@ -299,7 +352,9 @@ impl DnsClient for DnsNetworkClient {
 
                         // Read data into a buffer
                         let mut res_buffer = BytePacketBuffer::new();
-                        match socket_copy.recv_from(&mut res_buffer.buf) {
+                        let recv_result = socket_copy.recv_from(&mut res_buffer.buf);
+
+                        match recv_result {
                             Ok(_) => {}
                             Err(_) => {
                                 continue;
@@ -321,7 +376,17 @@ impl DnsClient for DnsNetworkClient {
                             let mut matched_query = None;
                             for (i, pending_query) in pending_queries.iter().enumerate() {
                                 if pending_query.seq == packet.header.id {
-                                    // Matching query found, send the response
+                                    // Validate 0x20 encoding - response must match query case exactly
+                                    if !packet.questions.is_empty() {
+                                        let response_name = &packet.questions[0].name;
+                                        if response_name != &pending_query.query_name {
+                                            trace!("Rejecting response with mismatched case: expected '{}', got '{}'",
+                                                pending_query.query_name, response_name);
+                                            continue;
+                                        }
+                                    }
+
+                                    // Matching query found with correct case, send the response
                                     let _ = pending_query.tx.send(Some(packet.clone()));
 
                                     // Mark this index for removal from list
@@ -334,7 +399,7 @@ impl DnsClient for DnsNetworkClient {
                             if let Some(idx) = matched_query {
                                 pending_queries.remove(idx);
                             } else {
-                                println!("Discarding response for: {:?}", packet.questions[0]);
+                                trace!("Discarding unsolicited response for: {:?}", packet.questions.get(0));
                             }
                         }
                     }
@@ -420,12 +485,14 @@ impl HttpsDnsClient {
     }
 }
 
+#[cfg(feature = "doh")]
 #[derive(Debug)]
 struct BootstrapResolver {
     servers: Vec<SocketAddr>,
     cache: RwLock<LruCache<String, Vec<SocketAddr>>>
 }
 
+#[cfg(feature = "doh")]
 impl BootstrapResolver {
     pub fn new(servers: Vec<SocketAddr>) -> Self {
         let cache: LruCache<String, Vec<SocketAddr>> = LruCache::new(NonZeroUsize::new(10).unwrap());
@@ -434,6 +501,7 @@ impl BootstrapResolver {
     }
 }
 
+#[cfg(feature = "doh")]
 impl Resolver for BootstrapResolver {
     // TODO use timeout parameter
     fn resolve(&self, uri: &Uri, _config: &Config, timeout: NextTimeout) -> std::result::Result<ResolvedSocketAddrs, ureq::Error> {
@@ -454,8 +522,7 @@ impl Resolver for BootstrapResolver {
             return Ok(results);
         }
 
-        let client_port = 10000 + (rand::random::<u16>() % 50000);
-        let mut dns_client = DnsNetworkClient::new(client_port);
+        let mut dns_client = DnsNetworkClient::new();
         dns_client.run().unwrap();
 
         let mut result: Vec<IpAddr> = Vec::new();
@@ -613,7 +680,8 @@ pub mod tests {
 
     #[test]
     pub fn test_udp_client() {
-        let client = DnsNetworkClient::new(31456);
+        // Disable 0x20 for testing against public DNS servers that may not preserve case
+        let client = DnsNetworkClient::new_with_0x20(false);
         client.run().unwrap();
 
         let res = client.send_udp_query("google.com", QueryType::A, ("8.8.8.8", 53), true, DEFAULT_TIMEOUT).unwrap();
@@ -631,7 +699,8 @@ pub mod tests {
 
     #[test]
     pub fn test_tcp_client() {
-        let client = DnsNetworkClient::new(31458);
+        // Disable 0x20 for testing against public DNS servers
+        let client = DnsNetworkClient::new_with_0x20(false);
         let res = client.send_tcp_query("google.com", QueryType::A, ("8.8.8.8", 53), true).unwrap();
 
         assert_eq!(res.questions[0].name, "google.com");

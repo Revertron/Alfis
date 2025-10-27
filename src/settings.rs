@@ -70,7 +70,10 @@ pub struct Dns {
     #[serde(default = "default_dns_bootstraps")]
     pub bootstraps: Vec<String>,
     #[serde(default)]
-    pub hosts: Vec<String>
+    pub hosts: Vec<String>,
+    /// Enable DNS 0x20 encoding (random case) for additional security against cache poisoning
+    #[serde(default = "default_dns_0x20")]
+    pub enable_0x20: bool
 }
 
 impl Default for Dns {
@@ -80,7 +83,8 @@ impl Default for Dns {
             threads: 20,
             forwarders: vec![String::from("94.140.14.14:53"), String::from("94.140.15.15:53")],
             bootstraps: default_dns_bootstraps(),
-            hosts: Vec::new()
+            hosts: Vec::new(),
+            enable_0x20: default_dns_0x20()
         }
     }
 }
@@ -144,4 +148,8 @@ fn default_key_files() -> Vec<String> {
 
 fn default_dns_bootstraps() -> Vec<String> {
     vec![String::from("9.9.9.9:53"), String::from("94.140.14.14:53")]
+}
+
+fn default_dns_0x20() -> bool {
+    true
 }

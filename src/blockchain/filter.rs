@@ -45,8 +45,7 @@ impl BlockchainFilter {
     }
 
     fn lookup_from_ns(qname: &str, qtype: QueryType, servers: &Vec<IpAddr>) -> Option<DnsPacket> {
-        let port = 10000 + (rand::random::<u16>() % 50000);
-        let mut dns_client = DnsNetworkClient::new(port);
+        let mut dns_client = DnsNetworkClient::new();
         dns_client.run().unwrap();
         let timeout = std::time::Duration::from_secs(5);
 
