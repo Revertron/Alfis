@@ -441,7 +441,7 @@ mod tests {
         }));
 
         match Arc::get_mut(&mut context) {
-            Some(mut ctx) => {
+            Some(ctx) => {
                 ctx.resolve_strategy = ResolveStrategy::Forward { upstreams: vec![String::from("127.0.0.1:53")] };
             }
             None => panic!()
@@ -460,7 +460,7 @@ mod tests {
             }
         };
 
-        // A successful resolve, that also resolves a CNAME without recursive lookup
+        // A successful resolve that also resolves a CNAME without recursive lookup
         {
             let res = execute_query(Arc::clone(&context), &build_query("www.facebook.com", QueryType::CNAME));
             assert_eq!(2, res.answers.len());
@@ -480,7 +480,7 @@ mod tests {
             }
         };
 
-        // A successful resolve, that also resolves a CNAME through recursive lookup
+        // A successful resolve that also resolves a CNAME through recursive lookup
         {
             let res = execute_query(Arc::clone(&context), &build_query("www.microsoft.com", QueryType::CNAME));
             dbg!(&res);
@@ -503,7 +503,7 @@ mod tests {
 
         // Disable recursive resolves to generate a failure
         match Arc::get_mut(&mut context) {
-            Some(mut ctx) => {
+            Some(ctx) => {
                 ctx.allow_recursive = false;
             }
             None => panic!()
@@ -531,7 +531,7 @@ mod tests {
         }));
 
         match Arc::get_mut(&mut context2) {
-            Some(mut ctx) => {
+            Some(ctx) => {
                 ctx.resolve_strategy = ResolveStrategy::Forward { upstreams: vec![String::from("127.0.0.1:53")] };
             }
             None => panic!()

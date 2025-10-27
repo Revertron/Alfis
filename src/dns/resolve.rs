@@ -251,7 +251,7 @@ mod tests {
 
         let mut resolver = context.create_resolver(Arc::clone(&context));
 
-        // First verify that we get a match back
+        // First, verify that we get a match back
         {
             let res = match resolver.resolve("google.com", QueryType::A, true) {
                 Ok(x) => x,
@@ -268,7 +268,7 @@ mod tests {
             }
         };
 
-        // Do the same lookup again, and verify that it's present in the cache
+        // Do the same lookup again and verify that it's present in the cache
         // and that the counter has been updated
         {
             let res = match resolver.resolve("google.com", QueryType::A, true) {
