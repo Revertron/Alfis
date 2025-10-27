@@ -27,6 +27,7 @@ use tao::{
     event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy},
     window::WindowBuilder,
 };
+use tao::dpi::PhysicalPosition;
 use wry::WebViewBuilder;
 
 pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
@@ -43,22 +44,36 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
     let proxy = event_loop.create_proxy();
 
+    // Get primary monitor and calculate center position
+    let primary_monitor = event_loop.primary_monitor().unwrap();
+    let monitor_size = primary_monitor.size();
+    let monitor_position = primary_monitor.position();
+
+    let window_size = tao::dpi::LogicalSize::new(1024, 720);
+    let scaled = window_size.to_physical::<i32>(primary_monitor.scale_factor());
+    let center_x = monitor_position.x + (monitor_size.width as i32 - scaled.width) / 2;
+    let center_y = monitor_position.y + (monitor_size.height as i32 - scaled.height) / 2;
+
     let window = WindowBuilder::new()
         .with_title(&title)
-        .with_inner_size(tao::dpi::LogicalSize::new(1023, 720))
+        .with_inner_size(window_size)
         .with_min_inner_size(tao::dpi::LogicalSize::new(773, 350))
+        .with_position(PhysicalPosition::new(center_x, center_y))
         .with_resizable(true)
         .with_visible(true)
         .build(&event_loop)
-        .expect("Failed to create window");
+        .expect("Failed to create the window");
 
     #[cfg(windows)]
     {
-        use tao::platform::windows::WindowExtWindows;
         use winapi::um::shellscalingapi::SetProcessDpiAwareness;
         unsafe {
             SetProcessDpiAwareness(2);
         }
+        use tao::platform::windows::IconExtWindows;
+        use tao::window::Icon;
+        let icon = Icon::from_resource(1, None).unwrap();
+        window.set_window_icon(Some(icon));
     }
 
     // Clone for the IPC handler
