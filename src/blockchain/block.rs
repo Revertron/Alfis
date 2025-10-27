@@ -3,7 +3,7 @@ extern crate serde_json;
 
 use std::cell::RefCell;
 use std::fmt::Debug;
-
+use bincode::config;
 use serde::{Deserialize, Serialize};
 
 use crate::blockchain::hash_utils::{hash_difficulty, key_hash_difficulty};
@@ -94,7 +94,7 @@ impl Block {
 
     /// Serializes block to bincode format for hashing.
     pub fn as_bytes_compact(&self) -> Vec<u8> {
-        bincode::serialize(&self).unwrap()
+        bincode::serde::encode_to_vec(&self, config::legacy()).unwrap()
     }
 
     /// Checks if this block is superior to the other

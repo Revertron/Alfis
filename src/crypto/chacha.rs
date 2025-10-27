@@ -15,9 +15,14 @@ pub struct Chacha {
 
 impl Chacha {
     pub fn new(key: &[u8], nonce: &[u8]) -> Self {
-        let key = Key::from_slice(key);
-        let cipher = ChaCha20Poly1305::new(key);
-        let nonce = Nonce::clone_from_slice(nonce);
+        // Convert slices to fixed-size arrays, then to GenericArray
+        let key_array: [u8; 32] = key.try_into().expect("Key must be 32 bytes");
+        let key = Key::from(key_array);
+        let cipher = ChaCha20Poly1305::new(&key);
+
+        let nonce_array: [u8; 12] = nonce.try_into().expect("Nonce must be 12 bytes");
+        let nonce = Nonce::from(nonce_array);
+
         Chacha { cipher, nonce }
     }
 
@@ -30,7 +35,7 @@ impl Chacha {
     }
 
     pub fn get_nonce(&self) -> &[u8] {
-        &self.nonce.as_slice()
+        self.nonce.as_ref()
     }
 }
 

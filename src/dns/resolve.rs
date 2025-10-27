@@ -243,7 +243,7 @@ mod tests {
         }));
 
         match Arc::get_mut(&mut context) {
-            Some(mut ctx) => {
+            Some(ctx) => {
                 ctx.resolve_strategy = ResolveStrategy::Forward { upstreams: vec![String::from("127.0.0.1:53")] };
             }
             None => panic!()
