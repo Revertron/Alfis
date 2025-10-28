@@ -38,6 +38,7 @@ pub enum QueryType {
     SRV,   // 33
     OPT,   // 41
     TLSA,  // 52
+    HTTPS, // 65
 }
 
 impl QueryType {
@@ -55,6 +56,7 @@ impl QueryType {
             QueryType::SRV => 33,
             QueryType::OPT => 41,
             QueryType::TLSA => 52,
+            QueryType::HTTPS => 65,
         }
     }
 
@@ -71,6 +73,7 @@ impl QueryType {
             33 => QueryType::SRV,
             41 => QueryType::OPT,
             52 => QueryType::TLSA,
+            65 => QueryType::HTTPS,
             _ => QueryType::UNKNOWN(num),
         }
     }
@@ -172,6 +175,48 @@ pub enum DnsRecord {
         data: Vec<u8>,
         ttl: TransientTtl
     }, // 52
+    HTTPS {
+        domain: String,
+        priority: u16,
+        target: String,
+        params: Vec<u8>,
+        ttl: TransientTtl
+    }, // 65
+}
+
+/// Read an uncompressed domain name (does not follow compression pointers)
+/// Used for HTTPS/SVCB records per RFC 9460
+fn read_uncompressed_name<T: PacketBuffer>(buffer: &mut T) -> Result<String> {
+    let mut outstr = String::new();
+    let mut delim = "";
+
+    loop {
+        let len = buffer.read()? as usize;
+
+        // Check for compression pointer (RFC 9460: HTTPS TargetName must be uncompressed)
+        // If we encounter one, this is an error - but we'll just stop
+        if (len & 0xC0) > 0 {
+            // This shouldn't happen for HTTPS records per RFC 9460
+            // Skip the second byte of the pointer
+            buffer.read()?;
+            break;
+        }
+
+        // Names are terminated by an empty label of length 0
+        if len == 0 {
+            break;
+        }
+
+        outstr.push_str(delim);
+
+        for _ in 0..len {
+            outstr.push(buffer.read()? as char);
+        }
+
+        delim = ".";
+    }
+
+    Ok(outstr)
 }
 
 impl DnsRecord {
@@ -293,6 +338,34 @@ impl DnsRecord {
                 let data = buffer.get_range(cur_pos, data_len as usize)?.to_vec();
                 buffer.step(data_len as usize)?;
                 Ok(DnsRecord::TLSA { domain, certificate_usage, selector, matching_type, data, ttl: TransientTtl(ttl) })
+            }
+            QueryType::HTTPS => {
+                // Track the start position of the data section
+                let data_start_pos = buffer.pos();
+
+                let priority = buffer.read_u16()?;
+
+                // Read TargetName without compression (RFC 9460 requirement)
+                let target = read_uncompressed_name(buffer)?;
+
+                // Calculate remaining bytes for SvcParams based on data_len
+                let bytes_consumed = buffer.pos() - data_start_pos;
+                let params_len = if data_len as usize > bytes_consumed {
+                    data_len as usize - bytes_consumed
+                } else {
+                    0
+                };
+
+                let params = if params_len > 0 {
+                    let cur_pos = buffer.pos();
+                    let p = buffer.get_range(cur_pos, params_len)?.to_vec();
+                    buffer.step(params_len)?;
+                    p
+                } else {
+                    Vec::new()
+                };
+
+                Ok(DnsRecord::HTTPS { domain, priority, target, params, ttl: TransientTtl(ttl) })
             }
             QueryType::UNKNOWN(_) => {
                 buffer.step(data_len as usize)?;
@@ -452,6 +525,38 @@ impl DnsRecord {
                     buffer.write_u8(*b)?;
                 }
             }
+            DnsRecord::HTTPS { ref domain, priority, ref target, ref params, ttl: TransientTtl(ttl) } => {
+                buffer.write_qname(domain)?;
+                buffer.write_u16(QueryType::HTTPS.to_num())?;
+                buffer.write_u16(1)?;
+                buffer.write_u32(ttl)?;
+
+                let pos = buffer.pos();
+                buffer.write_u16(0)?;
+
+                buffer.write_u16(priority)?;
+
+                // Write TargetName WITHOUT compression (RFC 9460 requirement)
+                let split_str = target.split('.').collect::<Vec<&str>>();
+                for label in split_str.iter() {
+                    if label.is_empty() {
+                        continue;
+                    }
+                    let len = label.len();
+                    buffer.write_u8(len as u8)?;
+                    for b in label.as_bytes() {
+                        buffer.write_u8(*b)?;
+                    }
+                }
+                buffer.write_u8(0)?; // Terminate with null label
+
+                for b in params {
+                    buffer.write_u8(*b)?;
+                }
+
+                let size = buffer.pos() - (pos + 2);
+                buffer.set_u16(pos, size as u16)?;
+            }
             DnsRecord::OPT { packet_len, flags, ref data } => {
                 buffer.write_u8(0)?;
                 buffer.write_u16(QueryType::OPT.to_num())?;
@@ -485,6 +590,7 @@ impl DnsRecord {
             DnsRecord::TXT { .. } => QueryType::TXT,
             DnsRecord::OPT { .. } => QueryType::OPT,
             DnsRecord::TLSA { .. } => QueryType::TLSA,
+            DnsRecord::HTTPS { .. } => QueryType::HTTPS,
         }
     }
 
@@ -500,7 +606,8 @@ impl DnsRecord {
             | DnsRecord::UNKNOWN { ref domain, .. }
             | DnsRecord::SOA { ref domain, .. }
             | DnsRecord::TXT { ref domain, .. }
-            | DnsRecord::TLSA { ref domain, .. } => Some(domain.clone()),
+            | DnsRecord::TLSA { ref domain, .. }
+            | DnsRecord::HTTPS { ref domain, .. } => Some(domain.clone()),
             DnsRecord::OPT { .. } => None
         }
     }
@@ -517,7 +624,8 @@ impl DnsRecord {
             | DnsRecord::UNKNOWN { ref mut domain, .. }
             | DnsRecord::SOA { ref mut domain, .. }
             | DnsRecord::TXT { ref mut domain, .. }
-            | DnsRecord::TLSA { ref mut domain, .. } => *domain = new_domain,
+            | DnsRecord::TLSA { ref mut domain, .. }
+            | DnsRecord::HTTPS { ref mut domain, .. } => *domain = new_domain,
             DnsRecord::OPT { .. } => {} // OPT records don't have a domain field
         }
     }
@@ -543,6 +651,10 @@ impl DnsRecord {
                 let data = crate::commons::to_hex(data);
                 Some(format!("{} {} {} {} {}", domain, certificate_usage, selector, matching_type, &data))
             },
+            DnsRecord::HTTPS { ref target, priority, ref params, .. } => {
+                let params_hex = crate::commons::to_hex(params);
+                Some(format!("{} {} {}", priority, target, params_hex))
+            },
             DnsRecord::OPT { .. } => None,
         }
     }
@@ -558,8 +670,9 @@ impl DnsRecord {
             | DnsRecord::MX { ttl: TransientTtl(ttl), .. }
             | DnsRecord::UNKNOWN { ttl: TransientTtl(ttl), .. }
             | DnsRecord::SOA { ttl: TransientTtl(ttl), .. }
-            | DnsRecord::TXT { ttl: TransientTtl(ttl), .. } => ttl,
-            | DnsRecord::TLSA { ttl: TransientTtl(ttl), .. } => ttl,
+            | DnsRecord::TXT { ttl: TransientTtl(ttl), .. }
+            | DnsRecord::TLSA { ttl: TransientTtl(ttl), .. }
+            | DnsRecord::HTTPS { ttl: TransientTtl(ttl), .. } => ttl,
             DnsRecord::OPT { .. } => 0
         }
     }

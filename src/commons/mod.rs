@@ -128,6 +128,7 @@ pub fn is_yggdrasil_record(record: &DnsRecord) -> bool {
         DnsRecord::SRV { .. } => {}
         DnsRecord::OPT { .. } => {}
         DnsRecord::TLSA { .. } => {}
+        DnsRecord::HTTPS { .. } => {}
     }
     true
 }
