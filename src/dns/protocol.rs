@@ -505,6 +505,23 @@ impl DnsRecord {
         }
     }
 
+    pub fn set_domain(&mut self, new_domain: String) {
+        match self {
+            DnsRecord::A { ref mut domain, .. }
+            | DnsRecord::AAAA { ref mut domain, .. }
+            | DnsRecord::NS { ref mut domain, .. }
+            | DnsRecord::CNAME { ref mut domain, .. }
+            | DnsRecord::SRV { ref mut domain, .. }
+            | DnsRecord::PTR { ref mut domain, .. }
+            | DnsRecord::MX { ref mut domain, .. }
+            | DnsRecord::UNKNOWN { ref mut domain, .. }
+            | DnsRecord::SOA { ref mut domain, .. }
+            | DnsRecord::TXT { ref mut domain, .. }
+            | DnsRecord::TLSA { ref mut domain, .. } => *domain = new_domain,
+            DnsRecord::OPT { .. } => {} // OPT records don't have a domain field
+        }
+    }
+
     pub fn get_data(&self) -> Option<String> {
         match *self {
             DnsRecord::A { ref addr, .. } => Some(addr.to_string()),

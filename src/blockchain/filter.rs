@@ -230,9 +230,11 @@ impl BlockchainFilter {
 
 impl DnsFilter for BlockchainFilter {
     fn lookup(&self, qname: &str, qtype: QueryType, recursive: bool) -> Option<DnsPacket> {
+        // Lowercase for case-insensitive lookup (blockchain stores domains as lowercase)
+        let qname_lower = qname.to_lowercase();
         let top_domain;
         let subdomain;
-        let parts: Vec<&str> = qname.rsplitn(3, '.').collect();
+        let parts: Vec<&str> = qname_lower.rsplitn(3, '.').collect();
         match parts.len() {
             1 => {
                 let mut packet = DnsPacket::new();

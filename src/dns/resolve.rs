@@ -87,7 +87,7 @@ impl DnsResolver for ForwardingDnsResolver {
     fn perform(&mut self, qname: &str, qtype: QueryType) -> Result<DnsPacket> {
         let mut random = rand::thread_rng();
         let upstream = self.upstreams.iter().choose(&mut random).unwrap();
-        let result = match self.context.cache.lookup(qname, qtype) {
+        let mut result = match self.context.cache.lookup(qname, qtype) {
             None => {
                 if is_url(upstream) {
                     if let Some(client) = &self.context.doh_client {
@@ -104,6 +104,17 @@ impl DnsResolver for ForwardingDnsResolver {
         };
 
         self.context.cache.store(&result.answers)?;
+
+        // Fix domain names in answers to match original query case (DNS 0x20 may have randomized them)
+        let qname_lower = qname.to_lowercase();
+        for answer in &mut result.answers {
+            if let Some(domain) = answer.get_domain() {
+                // Only fix if it matches the query (case-insensitive)
+                if domain.to_lowercase() == qname_lower {
+                    answer.set_domain(qname.to_string());
+                }
+            }
+        }
 
         Ok(result)
     }
@@ -169,7 +180,18 @@ impl DnsResolver for RecursiveDnsResolver {
                 let _ = self.context.cache.store(&response.answers);
                 let _ = self.context.cache.store(&response.authorities);
                 let _ = self.context.cache.store(&response.resources);
-                return Ok(response);
+
+                // Fix domain names in answers to match original query case
+                let qname_lower = qname.to_lowercase();
+                let mut fixed_response = response;
+                for answer in &mut fixed_response.answers {
+                    if let Some(domain) = answer.get_domain() {
+                        if domain.to_lowercase() == qname_lower {
+                            answer.set_domain(qname.to_string());
+                        }
+                    }
+                }
+                return Ok(fixed_response);
             }
 
             if response.header.rescode == ResultCode::NXDOMAIN {
@@ -194,7 +216,19 @@ impl DnsResolver for RecursiveDnsResolver {
             // If not, we'll have to resolve the ip of a NS record
             let new_ns_name = match response.get_unresolved_ns(qname) {
                 Some(x) => x,
-                None => return Ok(response)
+                None => {
+                    // Fix domain names before returning
+                    let qname_lower = qname.to_lowercase();
+                    let mut fixed_response = response;
+                    for answer in &mut fixed_response.answers {
+                        if let Some(domain) = answer.get_domain() {
+                            if domain.to_lowercase() == qname_lower {
+                                answer.set_domain(qname.to_string());
+                            }
+                        }
+                    }
+                    return Ok(fixed_response);
+                }
             };
 
             // Recursively resolve the NS
@@ -204,7 +238,17 @@ impl DnsResolver for RecursiveDnsResolver {
             if let Some(new_ns) = recursive_response.get_random_a() {
                 ns = new_ns.clone();
             } else {
-                return Ok(response);
+                // Fix domain names before returning
+                let qname_lower = qname.to_lowercase();
+                let mut fixed_response = response;
+                for answer in &mut fixed_response.answers {
+                    if let Some(domain) = answer.get_domain() {
+                        if domain.to_lowercase() == qname_lower {
+                            answer.set_domain(qname.to_string());
+                        }
+                    }
+                }
+                return Ok(fixed_response);
             }
         }
     }

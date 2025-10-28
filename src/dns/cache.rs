@@ -132,7 +132,7 @@ impl DomainEntry {
         }
     }
 
-    pub fn fill_queryresult(&self, qtype: QueryType, result_vec: &mut Vec<DnsRecord>) {
+    pub fn fill_queryresult(&self, qname: &str, qtype: QueryType, result_vec: &mut Vec<DnsRecord>) {
         let now = Local::now();
 
         let current_set = match self.record_types.get(&qtype) {
@@ -149,7 +149,10 @@ impl DomainEntry {
                 }
 
                 if entry.record.get_querytype() == qtype {
-                    result_vec.push(entry.record.clone());
+                    let mut record = entry.record.clone();
+                    // Preserve the original query case in the response
+                    record.set_domain(qname.to_string());
+                    result_vec.push(record);
                 }
             }
         }
@@ -174,17 +177,21 @@ impl Cache {
     }
 
     fn fill_queryresult(&mut self, qname: &str, qtype: QueryType, result_vec: &mut Vec<DnsRecord>, increment_stats: bool) {
-        if let Some(domain_entry) = self.domain_entries.get_mut(qname).and_then(Arc::get_mut) {
+        // DNS is case-insensitive, so lowercase for cache lookup
+        let qname_lower = qname.to_lowercase();
+        if let Some(domain_entry) = self.domain_entries.get_mut(&qname_lower).and_then(Arc::get_mut) {
             if increment_stats {
                 domain_entry.hits += 1
             }
 
-            domain_entry.fill_queryresult(qtype, result_vec);
+            domain_entry.fill_queryresult(qname, qtype, result_vec);
         }
     }
 
     pub fn lookup(&mut self, qname: &str, qtype: QueryType) -> Option<DnsPacket> {
-        match self.get_cache_state(qname, qtype) {
+        // DNS is case-insensitive, so lowercase for cache lookup
+        let qname_lower = qname.to_lowercase();
+        match self.get_cache_state(&qname_lower, qtype) {
             CacheState::PositiveCache => {
                 let mut qr = DnsPacket::new();
                 self.fill_queryresult(qname, qtype, &mut qr.answers, true);
@@ -208,27 +215,31 @@ impl Cache {
                 Some(x) => x,
                 None => continue
             };
+            // Store with a lowercase key for case-insensitive lookups
+            let domain_lower = domain.to_lowercase();
 
-            if let Some(ref mut rs) = self.domain_entries.get_mut(&domain).and_then(Arc::get_mut) {
+            if let Some(ref mut rs) = self.domain_entries.get_mut(&domain_lower).and_then(Arc::get_mut) {
                 rs.store_record(rec);
                 continue;
             }
 
-            let mut rs = DomainEntry::new(domain.clone());
+            let mut rs = DomainEntry::new(domain_lower.clone());
             rs.store_record(rec);
-            self.domain_entries.insert(domain.clone(), Arc::new(rs));
+            self.domain_entries.insert(domain_lower, Arc::new(rs));
         }
     }
 
     pub fn store_nxdomain(&mut self, qname: &str, qtype: QueryType, ttl: u32) {
-        if let Some(ref mut rs) = self.domain_entries.get_mut(qname).and_then(Arc::get_mut) {
+        // Store with lowercase key for case-insensitive lookups
+        let qname_lower = qname.to_lowercase();
+        if let Some(ref mut rs) = self.domain_entries.get_mut(&qname_lower).and_then(Arc::get_mut) {
             rs.store_nxdomain(qtype, ttl);
             return;
         }
 
-        let mut rs = DomainEntry::new(qname.to_string());
+        let mut rs = DomainEntry::new(qname_lower.clone());
         rs.store_nxdomain(qtype, ttl);
-        self.domain_entries.insert(qname.to_string(), Arc::new(rs));
+        self.domain_entries.insert(qname_lower, Arc::new(rs));
     }
 }
 

@@ -103,8 +103,8 @@ pub struct Dns {
 impl Default for Dns {
     fn default() -> Self {
         Dns {
-            listen: String::from("127.0.0.1:53"),
-            threads: 20,
+            listen: default_listen_dns(),
+            threads: 10,
             forwarders: vec![String::from("94.140.14.14:53"), String::from("94.140.15.15:53")],
             bootstraps: default_dns_bootstraps(),
             hosts: Vec::new(),
@@ -136,7 +136,7 @@ pub struct Net {
 impl Default for Net {
     fn default() -> Self {
         Net {
-            peers: vec![String::from("test-ip4.alfis.name:4244"), String::from("test-ip6.alfis.name:4244")],
+            peers: vec![String::from("peer-v4.alfis.name:4244"), String::from("peer-v6.alfis.name:4244")],
             listen: String::from("[::]:4244"),
             public: true,
             yggdrasil_only: false
@@ -149,11 +149,11 @@ fn default_listen() -> String {
 }
 
 fn default_listen_dns() -> String {
-    String::from("0.0.0.0:53")
+    String::from("127.0.0.3:53")
 }
 
 fn default_threads() -> usize {
-    100
+    10
 }
 
 fn default_check_blocks() -> u64 {

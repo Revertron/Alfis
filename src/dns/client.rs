@@ -271,6 +271,8 @@ impl DnsClient for DnsNetworkClient {
             let pending_queries_lock = self.pending_queries.clone();
             let stopped = Arc::clone(&self.stopped);
 
+            let match_case = self.enable_0x20;
+
             Builder::new()
                 .name("DnsNetworkClient-worker-thread-v4".into())
                 .spawn(move || {
@@ -308,7 +310,8 @@ impl DnsClient for DnsNetworkClient {
                                     // Validate 0x20 encoding - response must match query case exactly
                                     if !packet.questions.is_empty() {
                                         let response_name = &packet.questions[0].name;
-                                        if response_name != &pending_query.query_name {
+                                        if (match_case && response_name != &pending_query.query_name)
+                                            || (pending_query.query_name.to_lowercase() != response_name.to_lowercase()) {
                                             trace!("Rejecting response with mismatched case: expected '{}', got '{}'",
                                                 pending_query.query_name, response_name);
                                             continue;
@@ -341,6 +344,8 @@ impl DnsClient for DnsNetworkClient {
             let _ = socket_copy.set_read_timeout(Some(Duration::from_millis(500)));
             let pending_queries_lock = self.pending_queries.clone();
             let stopped = Arc::clone(&self.stopped);
+
+            let match_case = self.enable_0x20;
 
             Builder::new()
                 .name("DnsNetworkClient-worker-thread-v6".into())
@@ -379,7 +384,8 @@ impl DnsClient for DnsNetworkClient {
                                     // Validate 0x20 encoding - response must match query case exactly
                                     if !packet.questions.is_empty() {
                                         let response_name = &packet.questions[0].name;
-                                        if response_name != &pending_query.query_name {
+                                        if (match_case && response_name != &pending_query.query_name)
+                                            || (pending_query.query_name.to_lowercase() != response_name.to_lowercase()) {
                                             trace!("Rejecting response with mismatched case: expected '{}', got '{}'",
                                                 pending_query.query_name, response_name);
                                             continue;
@@ -461,7 +467,7 @@ impl DnsClient for DnsNetworkClient {
 pub struct HttpsDnsClient {
     agent: Agent,
     /// Counter for assigning packet ids
-    seq: AtomicUsize,
+    seq: AtomicU16,
 }
 
 #[cfg(feature = "doh")]
@@ -481,7 +487,7 @@ impl HttpsDnsClient {
             .max_idle_connections(16)
             .build();
         let agent = Agent::with_parts(agent_config, DefaultConnector::default(), BootstrapResolver::new(servers));
-        Self { agent, seq: AtomicUsize::new(1) }
+        Self { agent, seq: AtomicU16::new(rand::random::<u16>()) }
     }
 }
 
