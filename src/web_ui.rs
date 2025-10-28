@@ -95,7 +95,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let builder = WebViewBuilder::new()
         .with_transparent(false)
         .with_visible(true)
-        .with_devtools(true)
+        .with_devtools(cfg!(debug_assertions))
         .with_html(html)  // Using test HTML to verify wry works
         .with_ipc_handler(move |request| {
             let body = request.body();
@@ -158,6 +158,9 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
         let vbox = window.default_vbox().unwrap();
         builder.build_gtk(vbox).expect("Failed to build webview gtk object")
     };
+    // Disabling context menu on the page in release build
+    #[cfg(not(debug_assertions))]
+    let _ = webview.evaluate_script("document.addEventListener('contextmenu', e => e.preventDefault());");
 
     let webview = Arc::new(Mutex::new(webview));
     let webview_clone = Arc::clone(&webview);
