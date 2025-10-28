@@ -339,8 +339,9 @@ fn setup_logger(opt_matches: &Matches, console_attached: bool) {
     }
     let mut builder = ConfigBuilder::new();
     let config = builder.add_filter_ignore_str("mio::poll")
-        .add_filter_ignore_str("rustls::client")
+        .add_filter_ignore_str("rustls::")
         .add_filter_ignore_str("ureq::")
+        .add_filter_ignore_str("ureq_proto::")
         .set_thread_level(LevelFilter::Error)
         .set_location_level(LevelFilter::Off)
         .set_target_level(LevelFilter::Error)
