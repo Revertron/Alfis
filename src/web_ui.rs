@@ -44,24 +44,34 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
     let proxy = event_loop.create_proxy();
 
-    // Get primary monitor and calculate center position
-    let primary_monitor = event_loop.primary_monitor().unwrap();
-    let monitor_size = primary_monitor.size();
-    let monitor_position = primary_monitor.position();
-
     let window_size = tao::dpi::LogicalSize::new(1024, 720);
-    let scaled = window_size.to_physical::<i32>(primary_monitor.scale_factor());
-    let center_x = monitor_position.x + (monitor_size.width as i32 - scaled.width) / 2;
-    let center_y = monitor_position.y + (monitor_size.height as i32 - scaled.height) / 2;
+    // Get primary monitor and calculate center position
+    let position = match event_loop.primary_monitor() {
+        Some(monitor) => {
+            let monitor_size = monitor.size();
+            let monitor_position = monitor.position();
 
-    let window = WindowBuilder::new()
+            let scaled = window_size.to_physical::<i32>(monitor.scale_factor());
+            let center_x = monitor_position.x + (monitor_size.width as i32 - scaled.width) / 2;
+            let center_y = monitor_position.y + (monitor_size.height as i32 - scaled.height) / 2;
+
+            Some(PhysicalPosition::new(center_x, center_y))
+        }
+        None => None,
+    };
+
+    let mut builder = WindowBuilder::new()
         .with_title(&title)
         .with_inner_size(window_size)
         .with_min_inner_size(tao::dpi::LogicalSize::new(773, 350))
-        .with_position(PhysicalPosition::new(center_x, center_y))
         .with_resizable(true)
-        .with_visible(true)
-        .build(&event_loop)
+        .with_visible(true);
+
+    if let Some(position) = position {
+        builder = builder.with_position(position);
+    }
+
+    let window = builder.build(&event_loop)
         .expect("Failed to create the window");
 
     #[cfg(windows)]
