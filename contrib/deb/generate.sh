@@ -35,10 +35,10 @@ elif [ $PKGARCH = "i686" ]; then TARGET='i686-unknown-linux-musl'
 elif [ $PKGARCH = "mipsel" ]; then TARGET='mipsel-unknown-linux-musl'
 elif [ $PKGARCH = "mips" ]; then TARGET='mips-unknown-linux-musl'
 elif [ $PKGARCH = "armhf" ]; then TARGET='armv7-unknown-linux-musleabihf'
-elif [ $PKGARCH = "armlf" ]; then TARGET='arm-unknown-linux-musleabi'
+elif [ $PKGARCH = "armel" ]; then TARGET='arm-unknown-linux-musleabi'
 elif [ $PKGARCH = "arm64" ]; then TARGET='aarch64-unknown-linux-musl'
 else
-  echo "Specify PKGARCH=amd64,i686,mips,mipsel,armhf,armlf,arm64"
+  echo "Specify PKGARCH=amd64,i686,mips,mipsel,armhf,armel,arm64"
   exit 1
 fi
 
