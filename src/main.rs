@@ -297,6 +297,12 @@ fn load_keys(settings: &Settings) -> Vec<Keystore> {
 }
 
 pub fn start_services(settings: &Settings, context: &Arc<Mutex<Context>>) -> (bool, Arc<Mutex<Miner>>, JoinHandle<()>) {
+    let dns_server_ok = if settings.dns.threads > 0 {
+        dns_utils::start_dns_server(&context, &settings)
+    } else {
+        true
+    };
+    
     if let Ok(mut context) = context.lock() {
         context.chain.check_chain(settings.check_blocks);
         match context.chain.get_block(1) {
@@ -308,12 +314,6 @@ pub fn start_services(settings: &Settings, context: &Arc<Mutex<Context>>) -> (bo
             }
         }
     }
-
-    let dns_server_ok = if settings.dns.threads > 0 {
-        dns_utils::start_dns_server(&context, &settings)
-    } else {
-        true
-    };
 
     let mut miner_obj = Miner::new(Arc::clone(&context));
     miner_obj.start_mining_thread();

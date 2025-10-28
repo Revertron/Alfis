@@ -85,7 +85,7 @@ fn run_service_logic() -> Result<()> {
     let (_dns_server_ok, _miner, _network) = start_services(&settings, &context);
 
     loop {
-        thread::sleep(Duration::from_secs(1));
+        thread::sleep(Duration::from_millis(50));
         // Poll shutdown event.
         match shutdown_rx.recv_timeout(Duration::from_secs(1)) {
             // Break the loop either upon stop or channel disconnect
