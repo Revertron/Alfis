@@ -18,6 +18,7 @@ use alfis::eventbus::{post, register};
 use alfis::miner::Miner;
 use alfis::{keystore, Block, Bytes, Context, Keystore, Transaction};
 use chrono::{Local, Utc};
+use image::GenericImageView;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn, LevelFilter};
 use serde::{Deserialize, Serialize};
@@ -56,8 +57,10 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, hid
     #[cfg(windows)]
     let icon = tray_icon::Icon::from_resource(1, None).unwrap();
     // Create tray icon
-    #[cfg(windows)]
-    let _tray_icon = TrayIconBuilder::new()
+    #[cfg(not(target_os = "windows"))]
+    let icon = load_icon_from_png();
+
+    let tray_icon = TrayIconBuilder::new()
         .with_menu(Box::new(tray_menu))
         .with_tooltip(&title)
         .with_icon(icon)
@@ -370,7 +373,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, hid
                             TrayIconEvent::Enter { .. } => {
                                 let nodes = connected_nodes.load(Ordering::SeqCst);
                                 let title = format!("ALFIS {}\nConnected: {nodes}", env!("CARGO_PKG_VERSION"));
-                                let _ = _tray_icon.set_tooltip(Some(title));
+                                let _ = tray_icon.set_tooltip(Some(title));
                             }
                             _ => {}
                         }
@@ -401,6 +404,23 @@ enum UserEvent {
     ShowWarning(String),
     TrayIconEvent(TrayIconEvent),
     MenuEvent(MenuEvent)
+}
+
+/// Load icon from embedded in binary PNG file. Only needed in Linux/macOS builds.
+#[cfg(not(target_os = "windows"))]
+fn load_icon_from_png() -> tray_icon::Icon {
+    // Include PNG in binary
+    const ICON_BYTES: &[u8] = include_bytes!("../img/logo/alfis_icon32.png");
+
+    // decode image by crate `image`
+    let image = image::load_from_memory(ICON_BYTES)
+        .expect("Error loading image from png");
+    let rgba = image.to_rgba8();
+    let (width, height) = image.dimensions();
+
+    // Convert to format for tray_icon
+    tray_icon::Icon::from_rgba(rgba.into_vec(), width, height)
+        .expect("Error loading icon")
 }
 
 fn check_record(data: &str) -> bool {

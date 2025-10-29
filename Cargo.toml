@@ -48,6 +48,9 @@ tray-icon = { version = "0.21.2", optional = true }
 tinyfiledialogs = { version = "3.9.1", optional = true }
 open = { version = "5.3.0", optional = true }
 
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }
+
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = ["impl-default", "wincon", "shellscalingapi"] }
 windows-service = "0.8.0"

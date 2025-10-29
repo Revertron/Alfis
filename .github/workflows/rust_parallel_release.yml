@@ -67,7 +67,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt upgrade
-          sudo apt install libwebkit2gtk-4.1-dev libsoup-3.0-dev upx-ucl
+          sudo apt install libwebkit2gtk-4.1-dev libxdo-dev libsoup-3.0-dev upx-ucl
           cargo install cross
 
       - name: Build and package deb packages
@@ -99,7 +99,7 @@ jobs:
 
       - name: install dependencies
         if: contains(matrix.os, 'ubuntu')
-        run: sudo apt update && sudo apt install --no-install-recommends libwebkit2gtk-4.1-dev libsoup-3.0-dev upx-ucl
+        run: sudo apt update && sudo apt install --no-install-recommends libwebkit2gtk-4.1-dev libxdo-dev libsoup-3.0-dev upx-ucl
 
       - name: Build release binaries
         run: cargo build --release
