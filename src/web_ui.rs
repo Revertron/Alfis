@@ -4,6 +4,7 @@ extern crate serde_json;
 extern crate tinyfiledialogs as tfd;
 
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::Duration;
 
@@ -28,9 +29,11 @@ use tao::{
     window::WindowBuilder,
 };
 use tao::dpi::PhysicalPosition;
+use tray_icon::menu::{Menu, MenuEvent, MenuItem};
+use tray_icon::{TrayIconBuilder, TrayIconEvent};
 use wry::WebViewBuilder;
 
-pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
+pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, hide: bool) {
     let file_content = include_str!("webview/index.html");
     let mut styles = inline_style(include_str!("webview/bulma.css"));
     styles.push_str(&inline_style(include_str!("webview/styles.css")));
@@ -42,7 +45,25 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
 
     // Create event loop and window
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
-    let proxy = event_loop.create_proxy();
+
+    // Create tray menu
+    let tray_menu = Menu::new();
+    let show_item = MenuItem::new("Show Window", true, None);
+    let quit_item = MenuItem::new("Quit", true, None);
+    tray_menu.append(&show_item).unwrap();
+    tray_menu.append(&quit_item).unwrap();
+
+    #[cfg(windows)]
+    let icon = tray_icon::Icon::from_resource(1, None).unwrap();
+    // Create tray icon
+    #[cfg(windows)]
+    let _tray_icon = TrayIconBuilder::new()
+        .with_menu(Box::new(tray_menu))
+        .with_tooltip(&title)
+        .with_icon(icon)
+        .with_menu_on_left_click(false)
+        .build()
+        .unwrap();
 
     let window_size = tao::dpi::LogicalSize::new(1024, 720);
     // Get primary monitor and calculate center position
@@ -65,7 +86,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
         .with_inner_size(window_size)
         .with_min_inner_size(tao::dpi::LogicalSize::new(773, 350))
         .with_resizable(true)
-        .with_visible(true);
+        .with_visible(!hide);
 
     if let Some(position) = position {
         builder = builder.with_position(position);
@@ -89,6 +110,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
     // Clone for the IPC handler
     let context_ipc = Arc::clone(&context);
     let miner_ipc = Arc::clone(&miner);
+    let proxy = event_loop.create_proxy();
     let proxy_ipc = proxy.clone();
 
     // Create webview
@@ -173,10 +195,13 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
         _ => threads
     };
     let status = Arc::new(Mutex::new(UiStatus::new(threads)));
+    let connected_nodes = Arc::new(AtomicUsize::new(0));
+    let nodes_copy = Arc::clone(&connected_nodes);
 
     register(move |_uuid, e| {
         let status = Arc::clone(&status);
         let proxy = proxy_events.clone();
+        let nodes_copy = Arc::clone(&nodes_copy);
 
         thread::Builder::new().name(String::from("webui")).spawn(move || {
             let mut status = status.lock().unwrap();
@@ -267,6 +292,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                     }
                 }
                 Event::NetworkStatus { blocks, domains, keys, nodes } => {
+                    nodes_copy.store(nodes, Ordering::SeqCst);
                     if status.mining || status.syncing || nodes < 3 {
                         format!("setStats({}, {}, {}, {});", blocks, domains, keys, nodes)
                     } else {
@@ -289,6 +315,18 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
         true
     });
 
+    let proxy = event_loop.create_proxy();
+    TrayIconEvent::set_event_handler(Some(move |event| {
+        let _ = proxy.send_event(UserEvent::TrayIconEvent(event));
+    }));
+
+    let proxy = event_loop.create_proxy();
+    MenuEvent::set_event_handler(Some(move |event| {
+        let _ = proxy.send_event(UserEvent::MenuEvent(event));
+    }));
+
+    let proxy = event_loop.create_proxy();
+
     // Run event loop
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -298,10 +336,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                 event: WindowEvent::CloseRequested,
                 ..
             } => {
-                info!("Interface closed, exiting");
-                post(Event::ActionQuit);
-                thread::sleep(Duration::from_millis(100));
-                *control_flow = ControlFlow::Exit;
+                window.set_visible(false);
             }
             TaoEvent::UserEvent(user_event) => {
                 let wv = webview_clone.lock().unwrap();
@@ -324,6 +359,32 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>) {
                     UserEvent::ShowWarning(text) => {
                         show_warning(&wv, &text);
                     }
+                    UserEvent::TrayIconEvent(event) => {
+                        match event {
+                            TrayIconEvent::DoubleClick { button, .. } => {
+                                if button == tray_icon::MouseButton::Left {
+                                    window.set_visible(true);
+                                    window.set_focus();
+                                }
+                            }
+                            TrayIconEvent::Enter { .. } => {
+                                let nodes = connected_nodes.load(Ordering::SeqCst);
+                                let title = format!("ALFIS {}\nConnected: {nodes}", env!("CARGO_PKG_VERSION"));
+                                let _ = _tray_icon.set_tooltip(Some(title));
+                            }
+                            _ => {}
+                        }
+                    }
+                    UserEvent::MenuEvent(event) => {
+                        if event.id == show_item.id() {
+                            window.set_visible(true);
+                        } else if event.id == quit_item.id() {
+                            info!("Interface closed, exiting");
+                            post(Event::ActionQuit);
+                            thread::sleep(Duration::from_millis(100));
+                            *control_flow = ControlFlow::Exit;
+                        }
+                    }
                 }
             }
             _ => {}
@@ -338,6 +399,8 @@ enum UserEvent {
     LoadDomains,
     SendKeysToUi,
     ShowWarning(String),
+    TrayIconEvent(TrayIconEvent),
+    MenuEvent(MenuEvent)
 }
 
 fn check_record(data: &str) -> bool {
