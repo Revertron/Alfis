@@ -44,8 +44,12 @@ thread-priority = "3.0.0"
 # Optional dependencies regulated by features
 wry = { version = "0.53", optional = true }
 tao = { version = "0.34", optional = true }
+tray-icon = { version = "0.21.2", optional = true }
 tinyfiledialogs = { version = "3.9.1", optional = true }
 open = { version = "5.3.0", optional = true }
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = ["impl-default", "wincon", "shellscalingapi"] }
@@ -70,6 +74,6 @@ ProductName="ALFIS"
 FileDescription="Alternative Free Identity System"
 
 [features]
-webgui = ["wry", "tao", "tinyfiledialogs", "open"]
+webgui = ["wry", "tao", "tray-icon", "tinyfiledialogs", "open"]
 doh = ["ureq"]
 default = ["webgui", "doh"]

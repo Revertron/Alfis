@@ -58,8 +58,8 @@ cargo build
 ```
 
 ### ![Linux Logo](/img/linux.svg) On Linux
-If you are building on Linux, you must ensure that you have `libwebkitgtk` library installed.
-You can do it by issuing this command: `sudo apt install libwebkit2gtk-4.1-dev` (on Debian/Ubuntu and derivatives).
+If you are building on Linux, you must ensure that you have `libwebkitgtk` and `libxdo` libraries installed (for UI and tray icon respectively).
+You can do it by issuing this command: `sudo apt install libwebkit2gtk-4.1-dev libxdo-dev` (on Debian/Ubuntu and derivatives).
 
 #### ![Arch Linux Logo](/img/archlinux.svg) On Arch Linux
 
