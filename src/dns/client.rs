@@ -482,9 +482,10 @@ impl HttpsDnsClient {
 
         let agent_config = Agent::config_builder()
             .user_agent(&client_name)
-            .timeout_global(Some(Duration::from_secs(3)))
-            .max_idle_connections_per_host(4)
+            .timeout_global(Some(Duration::from_secs(5)))
+            .max_idle_connections_per_host(8)
             .max_idle_connections(16)
+            .max_idle_age(Duration::from_secs(300))
             .build();
         let agent = Agent::with_parts(agent_config, DefaultConnector::default(), BootstrapResolver::new(servers));
         Self { agent, seq: AtomicU16::new(rand::random::<u16>()) }
