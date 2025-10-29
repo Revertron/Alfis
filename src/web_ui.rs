@@ -18,6 +18,7 @@ use alfis::eventbus::{post, register};
 use alfis::miner::Miner;
 use alfis::{keystore, Block, Bytes, Context, Keystore, Transaction};
 use chrono::{Local, Utc};
+#[cfg(not(target_os = "windows"))]
 use image::GenericImageView;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn, LevelFilter};
