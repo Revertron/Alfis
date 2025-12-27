@@ -310,7 +310,11 @@ impl DnsServer for DnsTcpServer {
                 loop {
                     let mut stream = match rx.recv() {
                         Ok(x) => x,
-                        Err(_) => continue
+                        Err(e) => {
+                            // Channel closed - main thread may have terminated
+                            debug!("TCP worker thread {}: channel closed, exiting: {}", thread_id, e);
+                            break;
+                        }
                     };
 
                     let _ = context.statistics.tcp_query_count.fetch_add(1, Ordering::Release);
@@ -366,9 +370,16 @@ impl DnsServer for DnsTcpServer {
                     // Hand it off to a worker thread
                     let thread_no = random::<usize>() % self.thread_count;
                     match self.senders[thread_no].send(stream) {
-                        Ok(_) => {}
+                        Ok(_) => {
+                            // Stream successfully sent to worker thread
+                        }
                         Err(e) => {
-                            warn!("Failed to send TCP request for processing on thread {}: {}", thread_no, e);
+                            // Channel is closed - worker thread may have terminated
+                            // The stream is returned in the error, extract it and drop explicitly
+                            // to free memory immediately
+                            let dropped_stream = e.0; // Extract stream from SendError
+                            drop(dropped_stream); // Explicitly drop to free memory
+                            warn!("Failed to send TCP request for processing on thread {}: channel closed. Stream dropped to prevent memory leak.", thread_no);
                         }
                     }
                 }
