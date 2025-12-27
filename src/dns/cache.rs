@@ -171,6 +171,10 @@ impl Cache {
 
     /// Remove expired entries from cache to prevent memory leak
     fn cleanup_expired(&mut self) {
+        // #region agent log
+        let cache_size_before = self.domain_entries.len();
+        let mut total_expired_records = 0;
+        // #endregion
         let now = Local::now();
         let mut to_remove = Vec::new();
         
@@ -194,6 +198,10 @@ impl Cache {
                                 }
                             }
                             // Remove expired entries
+                            let expired_count = expired_entries.len();
+                            // #region agent log
+                            total_expired_records += expired_count;
+                            // #endregion
                             for expired in expired_entries {
                                 records.remove(&expired);
                             }
@@ -226,10 +234,23 @@ impl Cache {
             }
         }
         
+        // #region agent log
+        let total_expired_domains = to_remove.len();
+        // #endregion
         // Remove domains with no valid records
         for domain in to_remove {
             self.domain_entries.remove(&domain);
         }
+        // #region agent log
+        let cache_size_after = self.domain_entries.len();
+        // Log cleanup results
+        use std::fs::OpenOptions;
+        use std::io::Write;
+        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("/tmp/alfis-debug.log") {
+            let _ = writeln!(file, r#"{{"id":"cache_cleanup","timestamp":{},"location":"dns/cache.rs:173","message":"DNS cache cleanup executed","data":{{"size_before":{},"size_after":{},"expired_records":{},"expired_domains":{}}},"sessionId":"debug-session","runId":"run1","hypothesisId":"A"}}"#, 
+                chrono::Utc::now().timestamp_millis(), cache_size_before, cache_size_after, total_expired_records, total_expired_domains);
+        }
+        // #endregion
     }
 
     fn get_cache_state(&mut self, qname: &str, qtype: QueryType) -> CacheState {
@@ -254,10 +275,23 @@ impl Cache {
     pub fn lookup(&mut self, qname: &str, qtype: QueryType) -> Option<DnsPacket> {
         // #region agent log
         let cache_size = self.domain_entries.len();
+        // Log cache size periodically (every 10 lookups) to monitor growth
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static LOOKUP_COUNTER: AtomicU64 = AtomicU64::new(0);
+        let lookup_count = LOOKUP_COUNTER.fetch_add(1, Ordering::Relaxed);
+        // Log every 10 lookups or when cache size changes significantly
+        if lookup_count % 10 == 0 || (cache_size > 0 && cache_size % 10 == 0) {
+            use std::fs::OpenOptions;
+            use std::io::Write;
+            if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("/tmp/alfis-debug.log") {
+                let _ = writeln!(file, r#"{{"id":"dns_cache_size","timestamp":{},"location":"dns/cache.rs:256","message":"DNS cache size monitoring","data":{{"cache_size":{},"lookup_count":{},"qname":"{}"}},"sessionId":"debug-session","runId":"run1","hypothesisId":"A"}}"#, 
+                    chrono::Utc::now().timestamp_millis(), cache_size, lookup_count, qname);
+            }
+        }
         // #endregion
         // Cleanup expired entries periodically to prevent memory leak
         // Cleanup every 1000 lookups to balance performance and memory usage
-        if cache_size > 0 && cache_size % 1000 == 0 {
+        if lookup_count > 0 && lookup_count % 1000 == 0 {
             self.cleanup_expired();
         }
         // DNS is case-insensitive, so lowercase for cache lookup
@@ -281,7 +315,7 @@ impl Cache {
                 if cache_size % 5000 == 0 {
                     use std::fs::OpenOptions;
                     use std::io::Write;
-                    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("/root/.cursor/debug.log") {
+                    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("/tmp/alfis-debug.log") {
                         let _ = writeln!(file, r#"{{"id":"cache_lookup","timestamp":{},"location":"dns/cache.rs:191","message":"DNS cache lookup - cache size","data":{{"cache_size":{}}},"sessionId":"debug-session","runId":"run1","hypothesisId":"A"}}"#, 
                             chrono::Utc::now().timestamp_millis(), cache_size);
                     }
@@ -318,7 +352,7 @@ impl Cache {
         if cache_size_after > cache_size_before || cache_size_after % 1000 == 0 {
             use std::fs::OpenOptions;
             use std::io::Write;
-            if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("/root/.cursor/debug.log") {
+            if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("/tmp/alfis-debug.log") {
                 let _ = writeln!(file, r#"{{"id":"cache_store","timestamp":{},"location":"dns/cache.rs:212","message":"DNS cache store","data":{{"size_before":{},"size_after":{},"records_count":{}}},"sessionId":"debug-session","runId":"run1","hypothesisId":"A"}}"#, 
                     chrono::Utc::now().timestamp_millis(), cache_size_before, cache_size_after, records.len());
             }

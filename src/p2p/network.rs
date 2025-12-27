@@ -229,6 +229,17 @@ impl Network {
                         if elapsed >= 30 {
                             warn!("Last network events time {} seconds ago", elapsed);
                         }
+                        // #region agent log
+                        let future_blocks_size = self.future_blocks.len();
+                        let seen_blocks_size = seen_blocks.len();
+                        use std::fs::OpenOptions;
+                        use std::io::Write;
+                        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("/tmp/alfis-debug.log") {
+                            let _ = writeln!(file, r#"{{"id":"p2p_memory_monitor","timestamp":{},"location":"p2p/network.rs:233","message":"P2P memory monitoring","data":{{"future_blocks":{},"seen_blocks":{},"peers":{}}},"sessionId":"debug-session","runId":"run1","hypothesisId":"B"}}"#, 
+                                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64, 
+                                future_blocks_size, seen_blocks_size, nodes);
+                        }
+                        // #endregion
                         log_timer = Instant::now();
                         seen_blocks.clear();
                     }
@@ -690,7 +701,24 @@ impl Network {
             BlockQuality::Twin => { debug!("Ignoring duplicate block {}", block.index); }
             BlockQuality::Future => {
                 debug!("Got future block {}", block.index);
+                // #region agent log
+                let future_blocks_size_before = self.future_blocks.len();
+                let block_index = block.index; // Save index before move
+                // #endregion
                 self.future_blocks.insert(block.index, block);
+                // #region agent log
+                let future_blocks_size_after = self.future_blocks.len();
+                // Log if size increased or periodically (every 10 blocks)
+                if future_blocks_size_after > future_blocks_size_before || future_blocks_size_after % 10 == 0 {
+                    use std::fs::OpenOptions;
+                    use std::io::Write;
+                    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("/tmp/alfis-debug.log") {
+                        let _ = writeln!(file, r#"{{"id":"future_blocks_insert","timestamp":{},"location":"p2p/network.rs:693","message":"Future blocks insert","data":{{"size_before":{},"size_after":{},"block_index":{}}},"sessionId":"debug-session","runId":"run1","hypothesisId":"B"}}"#, 
+                            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64, 
+                            future_blocks_size_before, future_blocks_size_after, block_index);
+                    }
+                }
+                // #endregion
             }
             BlockQuality::Bad => {
                 // TODO save bad public keys to banned table
