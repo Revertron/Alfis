@@ -169,6 +169,69 @@ impl Cache {
         Cache { domain_entries: BTreeMap::new() }
     }
 
+    /// Remove expired entries from cache to prevent memory leak
+    fn cleanup_expired(&mut self) {
+        let now = Local::now();
+        let mut to_remove = Vec::new();
+        
+        for (domain, entry_arc) in &mut self.domain_entries {
+            if let Some(entry) = Arc::get_mut(entry_arc) {
+                let mut has_valid_records = false;
+                let mut record_types_to_remove = Vec::new();
+                
+                // Check each record type and remove expired entries
+                for (qtype, record_set) in &mut entry.record_types {
+                    match record_set {
+                        RecordSet::Records { ref mut records, .. } => {
+                            let mut expired_entries = Vec::new();
+                            for entry in records.iter() {
+                                let ttl_offset = Duration::seconds(entry.record.get_ttl() as i64);
+                                let expires = entry.timestamp + ttl_offset;
+                                if expires < now {
+                                    expired_entries.push(entry.clone());
+                                } else {
+                                    has_valid_records = true;
+                                }
+                            }
+                            // Remove expired entries
+                            for expired in expired_entries {
+                                records.remove(&expired);
+                            }
+                            // If all records expired, mark for removal
+                            if records.is_empty() {
+                                record_types_to_remove.push(*qtype);
+                            }
+                        }
+                        RecordSet::NoRecords { ttl, timestamp, .. } => {
+                            let ttl_offset = Duration::seconds(*ttl as i64);
+                            let expires = *timestamp + ttl_offset;
+                            if expires >= now {
+                                has_valid_records = true;
+                            } else {
+                                record_types_to_remove.push(*qtype);
+                            }
+                        }
+                    }
+                }
+                
+                // Remove expired record types
+                for qtype in record_types_to_remove {
+                    entry.record_types.remove(&qtype);
+                }
+                
+                // If domain has no valid records, mark for removal
+                if !has_valid_records && entry.record_types.is_empty() {
+                    to_remove.push(domain.clone());
+                }
+            }
+        }
+        
+        // Remove domains with no valid records
+        for domain in to_remove {
+            self.domain_entries.remove(&domain);
+        }
+    }
+
     fn get_cache_state(&mut self, qname: &str, qtype: QueryType) -> CacheState {
         match self.domain_entries.get(qname) {
             Some(x) => x.get_cache_state(qtype),
@@ -189,6 +252,14 @@ impl Cache {
     }
 
     pub fn lookup(&mut self, qname: &str, qtype: QueryType) -> Option<DnsPacket> {
+        // #region agent log
+        let cache_size = self.domain_entries.len();
+        // #endregion
+        // Cleanup expired entries periodically to prevent memory leak
+        // Cleanup every 1000 lookups to balance performance and memory usage
+        if cache_size > 0 && cache_size % 1000 == 0 {
+            self.cleanup_expired();
+        }
         // DNS is case-insensitive, so lowercase for cache lookup
         let qname_lower = qname.to_lowercase();
         match self.get_cache_state(&qname_lower, qtype) {
@@ -205,11 +276,26 @@ impl Cache {
 
                 Some(qr)
             }
-            CacheState::NotCached => None
+            CacheState::NotCached => {
+                // #region agent log
+                if cache_size % 5000 == 0 {
+                    use std::fs::OpenOptions;
+                    use std::io::Write;
+                    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("/root/.cursor/debug.log") {
+                        let _ = writeln!(file, r#"{{"id":"cache_lookup","timestamp":{},"location":"dns/cache.rs:191","message":"DNS cache lookup - cache size","data":{{"cache_size":{}}},"sessionId":"debug-session","runId":"run1","hypothesisId":"A"}}"#, 
+                            chrono::Utc::now().timestamp_millis(), cache_size);
+                    }
+                }
+                // #endregion
+                None
+            }
         }
     }
 
     pub fn store(&mut self, records: &[DnsRecord]) {
+        // #region agent log
+        let cache_size_before = self.domain_entries.len();
+        // #endregion
         for rec in records {
             let domain = match rec.get_domain() {
                 Some(x) => x,
@@ -227,6 +313,17 @@ impl Cache {
             rs.store_record(rec);
             self.domain_entries.insert(domain_lower, Arc::new(rs));
         }
+        // #region agent log
+        let cache_size_after = self.domain_entries.len();
+        if cache_size_after > cache_size_before || cache_size_after % 1000 == 0 {
+            use std::fs::OpenOptions;
+            use std::io::Write;
+            if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("/root/.cursor/debug.log") {
+                let _ = writeln!(file, r#"{{"id":"cache_store","timestamp":{},"location":"dns/cache.rs:212","message":"DNS cache store","data":{{"size_before":{},"size_after":{},"records_count":{}}},"sessionId":"debug-session","runId":"run1","hypothesisId":"A"}}"#, 
+                    chrono::Utc::now().timestamp_millis(), cache_size_before, cache_size_after, records.len());
+            }
+        }
+        // #endregion
     }
 
     pub fn store_nxdomain(&mut self, qname: &str, qtype: QueryType, ttl: u32) {
