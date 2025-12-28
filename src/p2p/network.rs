@@ -709,17 +709,37 @@ impl Network {
                 // #endregion
                 
                 // Prevent memory leak: limit future_blocks size
+                // Smart cleanup: remove blocks that are too far from current height
+                // This preserves blocks that might be needed soon
                 if self.future_blocks.len() >= MAX_FUTURE_BLOCKS {
-                    // Remove oldest blocks (lowest index) to make room
-                    let mut indices: Vec<u64> = self.future_blocks.keys().cloned().collect();
-                    indices.sort();
-                    // Remove 25% of oldest blocks
-                    let to_remove = (MAX_FUTURE_BLOCKS / 4).max(1);
-                    for i in 0..to_remove {
-                        if i < indices.len() {
-                            self.future_blocks.remove(&indices[i]);
-                            warn!("Removed old future block {} to prevent memory leak (future_blocks limit: {})", indices[i], MAX_FUTURE_BLOCKS);
+                    let my_height = context.chain.get_height();
+                    let mut to_remove = Vec::new();
+                    
+                    // Remove blocks that are too far ahead (more than 2000 blocks ahead)
+                    // or too far behind (more than 100 blocks behind current height)
+                    for (index, _) in &self.future_blocks {
+                        if *index > my_height + 2000 || *index < my_height.saturating_sub(100) {
+                            to_remove.push(*index);
                         }
+                    }
+                    
+                    // If still need to remove more, remove oldest blocks (lowest index)
+                    if to_remove.len() < (MAX_FUTURE_BLOCKS / 4) {
+                        let mut indices: Vec<u64> = self.future_blocks.keys()
+                            .filter(|idx| !to_remove.contains(idx))
+                            .cloned()
+                            .collect();
+                        indices.sort();
+                        let additional = (MAX_FUTURE_BLOCKS / 4) - to_remove.len();
+                        for i in 0..additional.min(indices.len()) {
+                            to_remove.push(indices[i]);
+                        }
+                    }
+                    
+                    // Remove selected blocks
+                    for index in &to_remove {
+                        self.future_blocks.remove(index);
+                        warn!("Removed future block {} (too far from height {}) to prevent memory leak (limit: {})", index, my_height, MAX_FUTURE_BLOCKS);
                     }
                 }
                 
