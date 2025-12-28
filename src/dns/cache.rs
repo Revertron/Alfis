@@ -159,6 +159,9 @@ impl DomainEntry {
     }
 }
 
+// Maximum cache size to prevent unlimited memory growth
+const MAX_CACHE_SIZE: usize = 10_000; // Максимум 10,000 доменов в кэше
+
 #[derive(Default)]
 pub struct Cache {
     domain_entries: BTreeMap<String, Arc<DomainEntry>>
@@ -253,6 +256,47 @@ impl Cache {
         // #endregion
     }
 
+    /// Remove oldest entries when cache exceeds limit
+    fn cleanup_oldest(&mut self, target_size: usize) {
+        let current_size = self.domain_entries.len();
+        if current_size <= target_size {
+            return;
+        }
+        
+        let to_remove = current_size - target_size;
+        let mut entries: Vec<_> = self.domain_entries.iter()
+            .map(|(domain, entry)| {
+                // Get the oldest timestamp from all records
+                let mut oldest_timestamp = None;
+                for record_set in entry.record_types.values() {
+                    match record_set {
+                        RecordSet::Records { ref records, .. } => {
+                            for entry in records {
+                                if oldest_timestamp.is_none() || entry.timestamp < oldest_timestamp.unwrap() {
+                                    oldest_timestamp = Some(entry.timestamp);
+                                }
+                            }
+                        }
+                        RecordSet::NoRecords { timestamp, .. } => {
+                            if oldest_timestamp.is_none() || *timestamp < oldest_timestamp.unwrap() {
+                                oldest_timestamp = Some(*timestamp);
+                            }
+                        }
+                    }
+                }
+                (domain.clone(), oldest_timestamp.unwrap_or(Local::now()))
+            })
+            .collect();
+        
+        // Sort by timestamp (oldest first)
+        entries.sort_by_key(|(_, timestamp)| *timestamp);
+        
+        // Remove oldest entries
+        for (domain, _) in entries.iter().take(to_remove) {
+            self.domain_entries.remove(domain);
+        }
+    }
+
     fn get_cache_state(&mut self, qname: &str, qtype: QueryType) -> CacheState {
         match self.domain_entries.get(qname) {
             Some(x) => x.get_cache_state(qtype),
@@ -289,10 +333,24 @@ impl Cache {
             }
         }
         // #endregion
-        // Cleanup expired entries periodically to prevent memory leak
-        // Cleanup every 1000 lookups to balance performance and memory usage
-        if lookup_count > 0 && lookup_count % 1000 == 0 {
+        // Adaptive cleanup: more frequent at high load to prevent memory growth
+        let cache_size = self.domain_entries.len();
+        let cleanup_interval = if cache_size > 5000 {
+            500  // Every 500 lookups when cache is large
+        } else if cache_size > 2000 {
+            750  // Every 750 lookups when cache is medium
+        } else {
+            1000 // Every 1000 lookups when cache is small
+        };
+        
+        // Cleanup expired entries periodically or when cache exceeds limit
+        if lookup_count > 0 && (lookup_count % cleanup_interval == 0 || cache_size >= MAX_CACHE_SIZE) {
             self.cleanup_expired();
+            
+            // If after cleanup cache still exceeds limit, remove oldest entries
+            if self.domain_entries.len() >= MAX_CACHE_SIZE {
+                self.cleanup_oldest(MAX_CACHE_SIZE / 2); // Remove half of oldest entries
+            }
         }
         // DNS is case-insensitive, so lowercase for cache lookup
         let qname_lower = qname.to_lowercase();
