@@ -35,7 +35,9 @@ pub fn start_dns_server(context: &Arc<Mutex<Context>>, settings: &Settings) -> b
             
             // Check memory and cleanup if needed
             let memory_usage = cache_context.cache.estimate_memory_usage();
-            info!("DNS cache cleanup: current cache memory usage: {}MB, limit: {}MB", memory_usage / (1024 * 1024), max_memory_bytes / (1024 * 1024));
+            let memory_mb = memory_usage as f64 / (1024.0 * 1024.0);
+            let limit_mb = max_memory_bytes as f64 / (1024.0 * 1024.0);
+            info!("DNS cache cleanup: current cache memory usage: {:.2}MB, limit: {:.2}MB", memory_mb, limit_mb);
             
             // Always cleanup if we're close to limit (80% threshold for proactive cleanup)
             let cleanup_threshold = (max_memory_bytes * 80) / 100;
