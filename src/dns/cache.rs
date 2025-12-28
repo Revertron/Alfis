@@ -339,17 +339,30 @@ impl Cache {
             500  // Every 500 lookups when cache is large
         } else if cache_size > 2000 {
             750  // Every 750 lookups when cache is medium
+        } else if cache_size > 500 {
+            500  // Every 500 lookups when cache is medium-small (more aggressive)
         } else {
             1000 // Every 1000 lookups when cache is small
         };
         
         // Cleanup expired entries periodically or when cache exceeds limit
-        if lookup_count > 0 && (lookup_count % cleanup_interval == 0 || cache_size >= MAX_CACHE_SIZE) {
+        // Also cleanup more aggressively if cache is growing (every 250 lookups when > 300 entries)
+        let should_cleanup = lookup_count > 0 && (
+            lookup_count % cleanup_interval == 0 || 
+            cache_size >= MAX_CACHE_SIZE ||
+            (cache_size > 300 && lookup_count % 250 == 0) // More frequent cleanup when cache > 300
+        );
+        
+        if should_cleanup {
             self.cleanup_expired();
             
             // If after cleanup cache still exceeds limit, remove oldest entries
-            if self.domain_entries.len() >= MAX_CACHE_SIZE {
+            let cache_size_after = self.domain_entries.len();
+            if cache_size_after >= MAX_CACHE_SIZE {
                 self.cleanup_oldest(MAX_CACHE_SIZE / 2); // Remove half of oldest entries
+            } else if cache_size_after > 500 && cache_size_after > cache_size * 2 {
+                // If cache doubled in size during this period, remove some oldest entries
+                self.cleanup_oldest(cache_size_after * 3 / 4); // Remove 25% of entries
             }
         }
         // DNS is case-insensitive, so lowercase for cache lookup
