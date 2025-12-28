@@ -28,6 +28,8 @@ use crate::p2p::{Message, Peer, Peers, State};
 use crate::{Block, Bytes, Context};
 
 const SERVER: Token = Token(0);
+// Maximum number of future blocks to prevent memory leak
+const MAX_FUTURE_BLOCKS: usize = 1000;
 
 pub struct Network {
     context: Arc<Mutex<Context>>,
@@ -705,6 +707,22 @@ impl Network {
                 let future_blocks_size_before = self.future_blocks.len();
                 let block_index = block.index; // Save index before move
                 // #endregion
+                
+                // Prevent memory leak: limit future_blocks size
+                if self.future_blocks.len() >= MAX_FUTURE_BLOCKS {
+                    // Remove oldest blocks (lowest index) to make room
+                    let mut indices: Vec<u64> = self.future_blocks.keys().cloned().collect();
+                    indices.sort();
+                    // Remove 25% of oldest blocks
+                    let to_remove = (MAX_FUTURE_BLOCKS / 4).max(1);
+                    for i in 0..to_remove {
+                        if i < indices.len() {
+                            self.future_blocks.remove(&indices[i]);
+                            warn!("Removed old future block {} to prevent memory leak (future_blocks limit: {})", indices[i], MAX_FUTURE_BLOCKS);
+                        }
+                    }
+                }
+                
                 self.future_blocks.insert(block.index, block);
                 // #region agent log
                 let future_blocks_size_after = self.future_blocks.len();
