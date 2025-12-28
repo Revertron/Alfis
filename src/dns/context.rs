@@ -56,7 +56,9 @@ pub struct ServerContext {
     pub enable_tcp: bool,
     pub enable_api: bool,
     pub statistics: ServerStatistics,
-    pub zones_dir: &'static str
+    pub zones_dir: &'static str,
+    pub cache_max_memory_bytes: usize,
+    pub cache_cleanup_interval_sec: u64
 }
 
 impl Default for ServerContext {
@@ -87,7 +89,9 @@ impl ServerContext {
             enable_tcp: true,
             enable_api: false,
             statistics: ServerStatistics { tcp_query_count: AtomicUsize::new(0), udp_query_count: AtomicUsize::new(0) },
-            zones_dir: "zones"
+            zones_dir: "zones",
+            cache_max_memory_bytes: 100 * 1024 * 1024, // Default: 100 MB
+            cache_cleanup_interval_sec: 300 // Default: 300 seconds
         }
     }
 

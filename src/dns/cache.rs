@@ -8,6 +8,7 @@ use std::sync::{Arc, RwLock};
 
 use chrono::*;
 use derive_more::{Display, Error, From};
+use log::warn;
 use serde::{Deserialize, Serialize};
 
 use crate::dns::protocol::{DnsPacket, DnsRecord, QueryType, ResultCode};
@@ -159,17 +160,35 @@ impl DomainEntry {
     }
 }
 
-// Maximum cache size to prevent unlimited memory growth
-const MAX_CACHE_SIZE: usize = 10_000; // Максимум 10,000 доменов в кэше
+// Conservative memory estimate per domain entry: ~1.5KB
+// Includes: DomainEntry (~500 bytes) + RecordSet overhead + Arc overhead + String overhead
+const ESTIMATED_BYTES_PER_DOMAIN: usize = 1536;
 
 #[derive(Default)]
 pub struct Cache {
-    domain_entries: BTreeMap<String, Arc<DomainEntry>>
+    domain_entries: BTreeMap<String, Arc<DomainEntry>>,
+    max_memory_bytes: usize
 }
 
 impl Cache {
     pub fn new() -> Cache {
-        Cache { domain_entries: BTreeMap::new() }
+        Cache { 
+            domain_entries: BTreeMap::new(),
+            max_memory_bytes: 100 * 1024 * 1024 // Default: 100 MB
+        }
+    }
+
+    pub fn with_memory_limit(max_memory_bytes: usize) -> Cache {
+        Cache {
+            domain_entries: BTreeMap::new(),
+            max_memory_bytes
+        }
+    }
+
+    /// Estimate memory usage of the cache in bytes
+    /// Uses conservative estimate of ~1.5KB per domain entry
+    pub fn estimate_memory_usage(&self) -> usize {
+        self.domain_entries.len() * ESTIMATED_BYTES_PER_DOMAIN
     }
 
     /// Remove expired entries from cache to prevent memory leak
@@ -256,7 +275,70 @@ impl Cache {
         // #endregion
     }
 
-    /// Remove oldest entries when cache exceeds limit
+    /// Remove oldest entries until memory usage is below limit
+    fn cleanup_oldest_by_memory(&mut self, max_memory_bytes: usize) {
+        let current_memory = self.estimate_memory_usage();
+        if current_memory <= max_memory_bytes {
+            return;
+        }
+        
+        let cache_size_before = self.domain_entries.len();
+        
+        // Calculate target number of entries to keep
+        let target_entries = max_memory_bytes / ESTIMATED_BYTES_PER_DOMAIN;
+        let current_size = self.domain_entries.len();
+        
+        if current_size <= target_entries {
+            return;
+        }
+        
+        let to_remove = current_size - target_entries;
+        let mut entries: Vec<_> = self.domain_entries.iter()
+            .map(|(domain, entry)| {
+                // Get the oldest timestamp from all records
+                let mut oldest_timestamp = None;
+                for record_set in entry.record_types.values() {
+                    match record_set {
+                        RecordSet::Records { ref records, .. } => {
+                            for entry in records {
+                                if oldest_timestamp.is_none() || entry.timestamp < oldest_timestamp.unwrap() {
+                                    oldest_timestamp = Some(entry.timestamp);
+                                }
+                            }
+                        }
+                        RecordSet::NoRecords { timestamp, .. } => {
+                            if oldest_timestamp.is_none() || *timestamp < oldest_timestamp.unwrap() {
+                                oldest_timestamp = Some(*timestamp);
+                            }
+                        }
+                    }
+                }
+                (domain.clone(), oldest_timestamp.unwrap_or(Local::now()))
+            })
+            .collect();
+        
+        // Sort by timestamp (oldest first)
+        entries.sort_by_key(|(_, timestamp)| *timestamp);
+        
+        // Remove oldest entries
+        let mut removed_count = 0;
+        for (domain, _) in entries.iter().take(to_remove) {
+            if self.domain_entries.remove(domain).is_some() {
+                removed_count += 1;
+            }
+        }
+        
+        let cache_size_after = self.domain_entries.len();
+        let memory_after = self.estimate_memory_usage();
+        
+        if removed_count > 0 {
+            warn!("DNS cache cleanup: removed {} oldest entries ({} -> {} domains, {}MB -> {}MB, limit: {}MB)",
+                removed_count, cache_size_before, cache_size_after,
+                current_memory / (1024 * 1024), memory_after / (1024 * 1024), max_memory_bytes / (1024 * 1024));
+        }
+    }
+
+    /// Remove oldest entries when cache exceeds count limit (kept for backward compatibility)
     fn cleanup_oldest(&mut self, target_size: usize) {
         let current_size = self.domain_entries.len();
         if current_size <= target_size {
@@ -333,36 +415,15 @@ impl Cache {
             }
         }
         // #endregion
-        // Adaptive cleanup: more frequent at high load to prevent memory growth
-        let cache_size = self.domain_entries.len();
-        let cleanup_interval = if cache_size > 5000 {
-            500  // Every 500 lookups when cache is large
-        } else if cache_size > 2000 {
-            750  // Every 750 lookups when cache is medium
-        } else if cache_size > 500 {
-            500  // Every 500 lookups when cache is medium-small (more aggressive)
-        } else {
-            1000 // Every 1000 lookups when cache is small
-        };
-        
-        // Cleanup expired entries periodically or when cache exceeds limit
-        // Also cleanup more aggressively if cache is growing (every 250 lookups when > 300 entries)
-        let should_cleanup = lookup_count > 0 && (
-            lookup_count % cleanup_interval == 0 || 
-            cache_size >= MAX_CACHE_SIZE ||
-            (cache_size > 300 && lookup_count % 250 == 0) // More frequent cleanup when cache > 300
-        );
-        
-        if should_cleanup {
+        // Check memory usage and cleanup if exceeds limit
+        // Periodic cleanup thread handles most cleanup, but we check here as a safety measure
+        let memory_usage = self.estimate_memory_usage();
+        if memory_usage > self.max_memory_bytes {
             self.cleanup_expired();
-            
-            // If after cleanup cache still exceeds limit, remove oldest entries
-            let cache_size_after = self.domain_entries.len();
-            if cache_size_after >= MAX_CACHE_SIZE {
-                self.cleanup_oldest(MAX_CACHE_SIZE / 2); // Remove half of oldest entries
-            } else if cache_size_after > 500 && cache_size_after > cache_size * 2 {
-                // If cache doubled in size during this period, remove some oldest entries
-                self.cleanup_oldest(cache_size_after * 3 / 4); // Remove 25% of entries
+            // Re-check memory after expired cleanup
+            let memory_after_expired = self.estimate_memory_usage();
+            if memory_after_expired > self.max_memory_bytes {
+                self.cleanup_oldest_by_memory(self.max_memory_bytes);
             }
         }
         // DNS is case-insensitive, so lowercase for cache lookup
@@ -445,7 +506,6 @@ impl Cache {
     }
 }
 
-#[derive(Default)]
 pub struct SynchronizedCache {
     pub cache: RwLock<Cache>
 }
@@ -453,6 +513,12 @@ pub struct SynchronizedCache {
 impl SynchronizedCache {
     pub fn new() -> SynchronizedCache {
         SynchronizedCache { cache: RwLock::new(Cache::new()) }
+    }
+
+    pub fn with_memory_limit(max_memory_bytes: usize) -> SynchronizedCache {
+        SynchronizedCache { 
+            cache: RwLock::new(Cache::with_memory_limit(max_memory_bytes))
+        }
     }
 
     pub fn list(&self) -> Result<Vec<Arc<DomainEntry>>> {
@@ -489,6 +555,25 @@ impl SynchronizedCache {
 
         cache.store_nxdomain(qname, qtype, ttl);
 
+        Ok(())
+    }
+
+    pub fn estimate_memory_usage(&self) -> usize {
+        match self.cache.read() {
+            Ok(cache) => cache.estimate_memory_usage(),
+            Err(_) => 0
+        }
+    }
+
+    pub fn cleanup_expired(&self) -> Result<()> {
+        let mut cache = self.cache.write().map_err(|_| CacheError::PoisonedLock)?;
+        cache.cleanup_expired();
+        Ok(())
+    }
+
+    pub fn cleanup_oldest_by_memory(&self, max_memory_bytes: usize) -> Result<()> {
+        let mut cache = self.cache.write().map_err(|_| CacheError::PoisonedLock)?;
+        cache.cleanup_oldest_by_memory(max_memory_bytes);
         Ok(())
     }
 }

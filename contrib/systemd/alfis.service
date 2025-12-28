@@ -9,6 +9,13 @@ After=alfis-default-config.service
 User=alfis
 Group=alfis
 
+# Memory limits to prevent OOM kills and memory leaks
+# MemoryHigh: soft limit - systemd will throttle the process if exceeded
+# MemoryMax: hard limit - process will be killed if exceeded
+# Default values: 2GB (can be adjusted based on system resources)
+MemoryHigh=2G
+MemoryMax=2G
+
 ProtectHome=true
 ProtectSystem=true
 
