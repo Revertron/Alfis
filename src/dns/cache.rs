@@ -276,6 +276,7 @@ impl Cache {
     }
 
     /// Remove oldest entries until memory usage is below limit
+    /// Works purely based on memory usage, not domain count
     fn cleanup_oldest_by_memory(&mut self, max_memory_bytes: usize) {
         let current_memory = self.estimate_memory_usage();
         if current_memory <= max_memory_bytes {
@@ -283,16 +284,9 @@ impl Cache {
         }
         
         let cache_size_before = self.domain_entries.len();
+        let memory_before = current_memory;
         
-        // Calculate target number of entries to keep
-        let target_entries = max_memory_bytes / ESTIMATED_BYTES_PER_DOMAIN;
-        let current_size = self.domain_entries.len();
-        
-        if current_size <= target_entries {
-            return;
-        }
-        
-        let to_remove = current_size - target_entries;
+        // Sort all entries by timestamp (oldest first)
         let mut entries: Vec<_> = self.domain_entries.iter()
             .map(|(domain, entry)| {
                 // Get the oldest timestamp from all records
@@ -320,9 +314,16 @@ impl Cache {
         // Sort by timestamp (oldest first)
         entries.sort_by_key(|(_, timestamp)| *timestamp);
         
-        // Remove oldest entries
+        // Remove oldest entries until memory usage is below limit
         let mut removed_count = 0;
-        for (domain, _) in entries.iter().take(to_remove) {
+        for (domain, _) in entries.iter() {
+            // Check current memory before removal
+            let current_memory = self.estimate_memory_usage();
+            if current_memory <= max_memory_bytes {
+                break;
+            }
+            
+            // Remove entry and check memory after
             if self.domain_entries.remove(domain).is_some() {
                 removed_count += 1;
             }
@@ -334,50 +335,10 @@ impl Cache {
         if removed_count > 0 {
             warn!("DNS cache cleanup: removed {} oldest entries ({} -> {} domains, {}MB -> {}MB, limit: {}MB)",
                 removed_count, cache_size_before, cache_size_after,
-                current_memory / (1024 * 1024), memory_after / (1024 * 1024), max_memory_bytes / (1024 * 1024));
+                memory_before / (1024 * 1024), memory_after / (1024 * 1024), max_memory_bytes / (1024 * 1024));
         }
     }
 
-    /// Remove oldest entries when cache exceeds count limit (kept for backward compatibility)
-    fn cleanup_oldest(&mut self, target_size: usize) {
-        let current_size = self.domain_entries.len();
-        if current_size <= target_size {
-            return;
-        }
-        
-        let to_remove = current_size - target_size;
-        let mut entries: Vec<_> = self.domain_entries.iter()
-            .map(|(domain, entry)| {
-                // Get the oldest timestamp from all records
-                let mut oldest_timestamp = None;
-                for record_set in entry.record_types.values() {
-                    match record_set {
-                        RecordSet::Records { ref records, .. } => {
-                            for entry in records {
-                                if oldest_timestamp.is_none() || entry.timestamp < oldest_timestamp.unwrap() {
-                                    oldest_timestamp = Some(entry.timestamp);
-                                }
-                            }
-                        }
-                        RecordSet::NoRecords { timestamp, .. } => {
-                            if oldest_timestamp.is_none() || *timestamp < oldest_timestamp.unwrap() {
-                                oldest_timestamp = Some(*timestamp);
-                            }
-                        }
-                    }
-                }
-                (domain.clone(), oldest_timestamp.unwrap_or(Local::now()))
-            })
-            .collect();
-        
-        // Sort by timestamp (oldest first)
-        entries.sort_by_key(|(_, timestamp)| *timestamp);
-        
-        // Remove oldest entries
-        for (domain, _) in entries.iter().take(to_remove) {
-            self.domain_entries.remove(domain);
-        }
-    }
 
     fn get_cache_state(&mut self, qname: &str, qtype: QueryType) -> CacheState {
         match self.domain_entries.get(qname) {
