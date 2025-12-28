@@ -4,7 +4,7 @@ use std::io::Write;
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream, UdpSocket};
 use std::num::NonZeroUsize;
 use std::sync::atomic::Ordering;
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::{sync_channel, SyncSender};
 use std::sync::Arc;
 use std::thread::Builder;
 
@@ -284,9 +284,12 @@ impl DnsServer for DnsUdpServer {
 /// TCP DNS server
 pub struct DnsTcpServer {
     context: Arc<ServerContext>,
-    senders: Vec<Sender<TcpStream>>,
+    senders: Vec<SyncSender<TcpStream>>,
     thread_count: usize
 }
+
+// Maximum queue size per TCP worker thread to prevent memory accumulation
+const MAX_TCP_QUEUE_SIZE: usize = 100;
 
 impl DnsTcpServer {
     pub fn new(context: Arc<ServerContext>, thread_count: usize) -> DnsTcpServer {
@@ -300,7 +303,7 @@ impl DnsServer for DnsTcpServer {
 
         // Spawn threads for handling requests, and create the channels
         for thread_id in 0..self.thread_count {
-            let (tx, rx) = channel();
+            let (tx, rx) = sync_channel(MAX_TCP_QUEUE_SIZE);
             self.senders.push(tx);
 
             let context = Arc::clone(&self.context);
@@ -368,18 +371,24 @@ impl DnsServer for DnsTcpServer {
                     };
 
                     // Hand it off to a worker thread
+                    // Use try_send to prevent blocking and memory accumulation
                     let thread_no = random::<usize>() % self.thread_count;
-                    match self.senders[thread_no].send(stream) {
+                    match self.senders[thread_no].try_send(stream) {
                         Ok(_) => {
                             // Stream successfully sent to worker thread
                         }
                         Err(e) => {
-                            // Channel is closed - worker thread may have terminated
-                            // The stream is returned in the error, extract it and drop explicitly
-                            // to free memory immediately
-                            let dropped_stream = e.0; // Extract stream from SendError
-                            drop(dropped_stream); // Explicitly drop to free memory
-                            warn!("Failed to send TCP request for processing on thread {}: channel closed. Stream dropped to prevent memory leak.", thread_no);
+                            // Channel is full or closed - drop stream immediately to prevent memory leak
+                            match e {
+                                std::sync::mpsc::TrySendError::Full(stream) => {
+                                    drop(stream); // Explicitly drop to free memory
+                                    warn!("TCP queue full on thread {}, dropping connection to prevent memory leak", thread_no);
+                                }
+                                std::sync::mpsc::TrySendError::Disconnected(stream) => {
+                                    drop(stream); // Explicitly drop to free memory
+                                    warn!("Failed to send TCP request for processing on thread {}: channel closed. Stream dropped to prevent memory leak.", thread_no);
+                                }
+                            }
                         }
                     }
                 }
