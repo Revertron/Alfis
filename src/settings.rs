@@ -138,7 +138,10 @@ pub struct Net {
     #[serde(default)]
     pub public: bool,
     #[serde(default)]
-    pub yggdrasil_only: bool
+    pub yggdrasil_only: bool,
+    /// Maximum number of new peer addresses in queue to prevent memory leak (default: 1000)
+    #[serde(default = "default_max_new_peers")]
+    pub max_new_peers: usize
 }
 
 impl Default for Net {
@@ -147,7 +150,8 @@ impl Default for Net {
             peers: vec![String::from("peer-v4.alfis.name:4244"), String::from("peer-v6.alfis.name:4244")],
             listen: String::from("[::]:4244"),
             public: true,
-            yggdrasil_only: false
+            yggdrasil_only: false,
+            max_new_peers: default_max_new_peers()
         }
     }
 }
@@ -192,6 +196,10 @@ fn default_cache_max_memory_mb() -> u64 {
 
 fn default_cache_cleanup_interval_sec() -> u64 {
     300
+}
+
+fn default_max_new_peers() -> usize {
+    1000
 }
 
 #[cfg(test)]

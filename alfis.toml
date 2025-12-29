@@ -15,6 +15,9 @@ listen = "[::]:4244"
 public = true
 # Allow connections to/from Yggdrasil only (https://yggdrasil-network.github.io)
 yggdrasil_only = false
+# Maximum number of new peer addresses in queue to prevent memory leak (default: 1000)
+# Limits the size of the peer connection queue
+max_new_peers = 1000
 
 # DNS resolver options
 [dns]

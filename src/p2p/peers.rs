@@ -24,7 +24,8 @@ pub struct Peers {
     new_peers: Vec<SocketAddr>,
     ignored: HashMap<IpAddr, Instant>,
     my_id: String,
-    behind_ping_sent_time: i64
+    behind_ping_sent_time: i64,
+    max_new_peers: usize
 }
 
 impl Peers {
@@ -34,8 +35,13 @@ impl Peers {
             new_peers: Vec::new(),
             ignored: HashMap::new(),
             my_id: random_string(6),
-            behind_ping_sent_time: 0
+            behind_ping_sent_time: 0,
+            max_new_peers: MAX_NEW_PEERS // Default value, can be changed via set_max_new_peers()
         }
+    }
+
+    pub fn set_max_new_peers(&mut self, max_new_peers: usize) {
+        self.max_new_peers = max_new_peers;
     }
 
     pub fn add_peer(&mut self, token: Token, peer: Peer) {
@@ -147,10 +153,10 @@ impl Peers {
             }
             
             // Prevent memory leak: limit new_peers queue size
-            if self.new_peers.len() >= MAX_NEW_PEERS {
+            if self.new_peers.len() >= self.max_new_peers {
                 // Remove oldest entry (FIFO) to make room
                 self.new_peers.remove(0);
-                debug!("new_peers queue reached limit ({}), removed oldest entry", MAX_NEW_PEERS);
+                debug!("new_peers queue reached limit ({}), removed oldest entry", self.max_new_peers);
             }
             self.new_peers.push(addr);
             count += 1;
@@ -434,13 +440,13 @@ impl Peers {
             if !addresses.is_empty() {
                 // Prevent memory leak: limit new_peers queue size
                 let mut removed_count = 0;
-                while self.new_peers.len() >= MAX_NEW_PEERS && !addresses.is_empty() {
+                while self.new_peers.len() >= self.max_new_peers && !addresses.is_empty() {
                     // Remove oldest entry (FIFO) to make room
                     self.new_peers.remove(0);
                     removed_count += 1;
                 }
                 if removed_count > 0 {
-                    debug!("new_peers queue reached limit ({}), removed {} oldest entries", MAX_NEW_PEERS, removed_count);
+                    debug!("new_peers queue reached limit ({}), removed {} oldest entries", self.max_new_peers, removed_count);
                 }
                 if !addresses.is_empty() {
                     self.new_peers.append(&mut addresses);

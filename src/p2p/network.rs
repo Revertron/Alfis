@@ -55,10 +55,13 @@ impl Network {
     }
 
     pub fn start(&mut self) {
-        let (listen_addr, peers_addrs, yggdrasil_only) = {
+        let (listen_addr, peers_addrs, yggdrasil_only, max_new_peers) = {
             let c = self.context.lock().unwrap();
-            (c.settings.net.listen.clone(), c.settings.net.peers.clone(), c.settings.net.yggdrasil_only)
+            (c.settings.net.listen.clone(), c.settings.net.peers.clone(), c.settings.net.yggdrasil_only, c.settings.net.max_new_peers)
         };
+
+        // Set max_new_peers limit from configuration
+        self.peers.set_max_new_peers(max_new_peers);
 
         let running = Arc::new(AtomicBool::new(true));
         subscribe_to_bus(Arc::clone(&running));
