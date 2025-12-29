@@ -30,6 +30,8 @@ use crate::{Block, Bytes, Context};
 const SERVER: Token = Token(0);
 // Maximum number of future blocks to prevent memory leak
 const MAX_FUTURE_BLOCKS: usize = 1000;
+// Maximum number of seen block hashes to prevent memory leak
+const MAX_SEEN_BLOCKS: usize = 10000;
 
 pub struct Network {
     context: Arc<Mutex<Context>>,
@@ -243,6 +245,11 @@ impl Network {
                         }
                         // #endregion
                         log_timer = Instant::now();
+                        // Prevent memory leak: clear seen_blocks periodically or if limit exceeded
+                        if seen_blocks.len() > MAX_SEEN_BLOCKS {
+                            warn!("seen_blocks size {} exceeds limit {}, clearing to prevent memory leak", 
+                                  seen_blocks.len(), MAX_SEEN_BLOCKS);
+                        }
                         seen_blocks.clear();
                     }
                     if nodes < MAX_NODES && connect_timer.elapsed().as_secs() >= 2 {
@@ -663,6 +670,12 @@ impl Network {
     }
 
     fn handle_block(&mut self, token: &Token, block: Block, seen_blocks: &mut HashSet<Bytes>) -> State {
+        // Prevent memory leak: clear if limit exceeded before inserting
+        if seen_blocks.len() >= MAX_SEEN_BLOCKS {
+            warn!("seen_blocks size {} reached limit {}, clearing to prevent memory leak", 
+                  seen_blocks.len(), MAX_SEEN_BLOCKS);
+            seen_blocks.clear();
+        }
         seen_blocks.insert(block.hash.clone());
         let peers_count = self.peers.get_peers_active_count();
         let peer = self.peers.get_mut_peer(token).unwrap();
