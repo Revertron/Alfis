@@ -334,48 +334,6 @@ const MAX_SEEN_BLOCKS: usize = 10000;
 - HashSet growth: Limited to 10000 entries
 - Memory impact: Minimal, automatic cleanup prevents accumulation
 
-## Additional Fix: DoH Build Configuration
-
-During deployment, we discovered that the build was missing DoH (DNS over HTTPS) support, causing DNS resolution failures.
-
-### DoH Problem
-
-The build was compiled with `--no-default-features`, which disabled DoH support:
-- **Error**: "This build doesn't support DoH" in logs
-- **DNS resolution failures**: External domains could not be resolved
-- **Missing feature**: DoH client was `None` even though DoH servers were configured
-
-### DoH Solution
-
-1. **Correct build flags**:
-   - Changed from `--no-default-features` to `--no-default-features --features doh`
-   - Enables DoH support without GUI dependencies
-   - DoH client is properly initialized in `ServerContext`
-
-2. **Build configuration**:
-   - DoH feature requires `ureq` crate (HTTP client)
-   - No GUI dependencies needed (gdk-3.0 not required)
-   - Build works correctly on headless servers
-
-### DoH Changes
-
-**Build process**:
-- Updated build command to include `--features doh`
-- DoH client properly initialized when feature is enabled
-- No code changes needed - only build configuration fix
-
-### DoH Testing Results
-
-**Before Fix**:
-- Error: "This build doesn't support DoH"
-- DNS resolution failures for external domains
-- DoH client was `None`
-
-**After Fix**:
-- No DoH errors in logs
-- DNS resolution works correctly
-- DoH client properly initialized
-
 ## Additional Improvements: Memory-Based Cache Limits and Systemd Configuration
 
 ### Memory-Based DNS Cache Management
@@ -425,7 +383,6 @@ Added memory limits to systemd unit file to prevent OOM kills:
 - `src/settings.rs`: Added `cache_max_memory_mb` and `cache_cleanup_interval_sec` configuration options
 - `alfis.toml`: Added default cache configuration parameters
 - `contrib/systemd/alfis.service`: Added MemoryHigh/MemoryMax limits
-- **Build configuration**: Fixed DoH support by including `--features doh` in build flags
 
 ## Testing Checklist
 
@@ -450,8 +407,6 @@ Added memory limits to systemd unit file to prevent OOM kills:
 - [x] Independent cleanup thread runs periodically
 - [x] Cache configuration parameters work in alfis.toml
 - [x] Systemd memory limits prevent OOM kills
-- [x] DoH support works correctly (no "This build doesn't support DoH" errors)
-- [x] DNS resolution works for external domains via DoH
 
 ---
 
