@@ -52,3 +52,5 @@ pub const MAX_READ_BLOCK_TIME: u128 = 100;
 pub const MAX_RECONNECTS: u32 = 5;
 pub const MAX_IDLE_SECONDS: u64 = 180;
 pub const MAX_NODES: usize = 15;
+/// Maximum number of new peer addresses in queue to prevent memory leak
+pub const MAX_NEW_PEERS: usize = 1000;

@@ -145,6 +145,13 @@ impl Peers {
                 //debug!("Skipping address from exchange: {}", &addr);
                 continue; // Return error in future
             }
+            
+            // Prevent memory leak: limit new_peers queue size
+            if self.new_peers.len() >= MAX_NEW_PEERS {
+                // Remove oldest entry (FIFO) to make room
+                self.new_peers.remove(0);
+                debug!("new_peers queue reached limit ({}), removed oldest entry", MAX_NEW_PEERS);
+            }
             self.new_peers.push(addr);
             count += 1;
         }
@@ -425,7 +432,19 @@ impl Peers {
 
             // Copy others to new_peers, to connect later
             if !addresses.is_empty() {
-                self.new_peers.append(&mut addresses);
+                // Prevent memory leak: limit new_peers queue size
+                let mut removed_count = 0;
+                while self.new_peers.len() >= MAX_NEW_PEERS && !addresses.is_empty() {
+                    // Remove oldest entry (FIFO) to make room
+                    self.new_peers.remove(0);
+                    removed_count += 1;
+                }
+                if removed_count > 0 {
+                    debug!("new_peers queue reached limit ({}), removed {} oldest entries", MAX_NEW_PEERS, removed_count);
+                }
+                if !addresses.is_empty() {
+                    self.new_peers.append(&mut addresses);
+                }
             }
         }
     }
