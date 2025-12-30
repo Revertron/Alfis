@@ -267,6 +267,95 @@ const MAX_UDP_QUEUE_SIZE: usize = 1000;
 - No blocking of main thread
 - Packets dropped when queue full (prevents memory leak)
 
+## Additional Optimization: DoH Query Handling and UDP Queue Size
+
+During high-load testing, we identified performance bottlenecks in DoH query handling and UDP queue capacity.
+
+### DoH Query Optimization Problem
+
+The DoH client had several issues affecting performance under high load:
+- **Long timeout (5 seconds)**: Blocked worker threads for too long, reducing throughput
+- **No negative caching**: Repeated queries to unavailable domains wasted resources
+- **Verbose logging**: Too many warnings for expected timeouts and network errors
+
+### DoH Query Optimization Solution
+
+1. **Reduced DoH timeout**:
+   - Changed from 5 seconds to 2 seconds
+   - Faster failure handling
+   - Worker threads unblock faster, improving throughput
+   - Reduces memory accumulation from blocked threads
+
+2. **Added negative caching**:
+   - Failed queries cached for 30 seconds (short TTL)
+   - Prevents repeated attempts to unavailable domains
+   - Reduces load on DoH servers
+   - Allows retry after network issues resolve
+
+3. **Improved error logging**:
+   - Timeouts logged as `debug` level (reduces log noise)
+   - Network errors logged as `debug` level
+   - Only unexpected errors logged as `warn` level
+   - Cleaner logs under high load
+
+### UDP Queue Size Optimization
+
+The initial UDP queue size (1000 packets) was insufficient for very high load scenarios:
+- Queue overflowed frequently under extreme load (10,000+ packets/minute)
+- Packets dropped even with proper protection
+- Needed larger buffer for traffic spikes
+
+**Solution**: Increased UDP queue size from 1000 to 5000 packets:
+- Better handling of traffic spikes
+- Reduces packet drops under high load
+- Still bounded to prevent memory leaks
+- Reasonable balance between capacity and memory usage
+
+### DoH and UDP Optimization Changes
+
+**`src/dns/client.rs`**:
+
+1. **Reduced DoH timeout**:
+```rust
+.timeout_global(Some(Duration::from_secs(2))) // Reduced from 5s to 2s
+```
+
+2. **Improved error logging**:
+   - Timeouts: `debug` level with timeout duration
+   - Network errors: `debug` level
+   - Unexpected errors: `warn` level
+
+**`src/dns/resolve.rs`**:
+
+1. **Added negative caching for failed queries**:
+   - Stores failed queries with 30-second TTL
+   - Prevents repeated attempts to unavailable domains
+   - Allows retry after network issues resolve
+
+**`src/dns/server.rs`**:
+
+1. **Increased UDP queue size**:
+```rust
+// Increased from 1000 to 5000 to handle high load better
+const MAX_UDP_QUEUE_SIZE: usize = 5000;
+```
+
+### DoH and UDP Optimization Testing Results
+
+**Before Optimization**:
+- DoH timeout: 5 seconds (too long)
+- No negative caching (repeated failed queries)
+- UDP queue: 1000 packets (frequent overflows under high load)
+- Verbose logging (too many warnings)
+
+**After Optimization**:
+- DoH timeout: 2 seconds (faster failure handling)
+- Negative caching: Failed queries cached for 30 seconds
+- UDP queue: 5000 packets (better handling of traffic spikes)
+- Cleaner logs: Timeouts and network errors as debug level
+- Improved throughput: Worker threads unblock faster
+- Reduced load: Less repeated queries to unavailable domains
+
 ## Additional Fix: P2P Network Memory Leak
 
 During extended stress testing, we identified a third critical memory leak in the P2P network component.
@@ -538,8 +627,9 @@ Added memory limits to systemd unit file to prevent OOM kills:
 ## Files Changed
 
 - `src/dns/cache.rs`: Added memory-based cache limits, improved cleanup logic, and logging
-- `src/dns/server.rs`: Fixed TCP server memory leak with bounded channel and non-blocking send; Fixed UDP server memory leak with bounded channel and non-blocking send
-- `src/dns/client.rs`: Improved DoH error logging with detailed status codes, response sizes, and error messages
+- `src/dns/server.rs`: Fixed TCP server memory leak with bounded channel and non-blocking send; Fixed UDP server memory leak with bounded channel and non-blocking send; Increased UDP queue size from 1000 to 5000 for better high-load handling
+- `src/dns/client.rs`: Improved DoH error logging with detailed status codes, response sizes, and error messages; Reduced DoH timeout from 5s to 2s; Improved error logging levels
+- `src/dns/resolve.rs`: Added negative caching for failed queries (30s TTL) to prevent repeated attempts
 - `src/dns/buffer.rs`: Added bounds checking to prevent panics from out-of-bounds access
 - `src/p2p/network.rs`: Fixed P2P network memory leaks (future_blocks and seen_blocks) with size limits and cleanup; reads max_new_peers from config
 - `src/p2p/peers.rs`: Fixed P2P network memory leak (new_peers queue) with configurable size limit and FIFO eviction
@@ -565,6 +655,10 @@ Added memory limits to systemd unit file to prevent OOM kills:
 - [x] TCP connections are properly closed when queue is full
 - [x] UDP server handles high load without memory accumulation
 - [x] UDP packets are properly dropped when queue is full
+- [x] UDP queue size increased to 5000 for better traffic spike handling
+- [x] DoH timeout reduced to 2s for faster failure handling
+- [x] Negative caching works for failed queries (30s TTL)
+- [x] DoH error logging improved (timeouts as debug level)
 - [x] P2P network future_blocks limited to prevent OOM
 - [x] Smart cleanup preserves blocks needed for synchronization
 - [x] P2P network seen_blocks limited to prevent memory accumulation
