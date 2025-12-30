@@ -482,7 +482,7 @@ impl HttpsDnsClient {
 
         let agent_config = Agent::config_builder()
             .user_agent(&client_name)
-            .timeout_global(Some(Duration::from_secs(5)))
+            .timeout_global(Some(Duration::from_secs(2))) // Reduced from 5s to 2s for faster failure handling
             .max_idle_connections_per_host(8)
             .max_idle_connections(16)
             .max_idle_age(Duration::from_secs(300))
@@ -667,8 +667,14 @@ impl DnsClient for HttpsDnsClient {
             Err(e) => {
                 let error_msg = e.to_string();
                 if error_msg.contains("timeout") {
-                    debug!("DoH timeout for {}: {}", qname, error_msg);
+                    // Log timeout as debug to reduce log noise under high load
+                    // Timeouts are expected and handled via negative caching
+                    debug!("DoH timeout for {} ({}s timeout): {}", qname, 2, error_msg);
+                } else if error_msg.contains("Connection refused") || error_msg.contains("network") {
+                    // Network errors are also common and should be debug level
+                    debug!("DoH network error for {}: {}", qname, error_msg);
                 } else {
+                    // Only log unexpected errors as warnings
                     warn!("DoH error for {}: {}", qname, error_msg);
                 }
             }

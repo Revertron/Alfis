@@ -307,7 +307,8 @@ pub struct DnsTcpServer {
 // Maximum queue size per TCP worker thread to prevent memory accumulation
 const MAX_TCP_QUEUE_SIZE: usize = 100;
 // Maximum queue size for UDP server to prevent memory accumulation
-const MAX_UDP_QUEUE_SIZE: usize = 1000;
+// Increased from 1000 to 5000 to handle high load better
+const MAX_UDP_QUEUE_SIZE: usize = 5000;
 
 impl DnsTcpServer {
     pub fn new(context: Arc<ServerContext>, thread_count: usize) -> DnsTcpServer {

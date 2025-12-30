@@ -89,15 +89,28 @@ impl DnsResolver for ForwardingDnsResolver {
         let upstream = self.upstreams.iter().choose(&mut random).unwrap();
         let mut result = match self.context.cache.lookup(qname, qtype) {
             None => {
-                if is_url(upstream) {
+                let query_result = if is_url(upstream) {
                     if let Some(client) = &self.context.doh_client {
-                        client.send_query(qname, qtype, upstream, true)?
+                        client.send_query(qname, qtype, upstream, true)
                     } else {
                         log::error!("This build doesn't support DoH");
                         return Err(ResolveError::NoServerFound);
                     }
                 } else {
-                    self.context.old_client.send_query(qname, qtype, upstream, true)?
+                    self.context.old_client.send_query(qname, qtype, upstream, true)
+                };
+                
+                match query_result {
+                    Ok(packet) => packet,
+                    Err(e) => {
+                        // Store negative cache entry for failed queries to prevent repeated attempts
+                        // Use short TTL (30 seconds) for failed queries to allow retry after network issues resolve
+                        let negative_ttl = 30;
+                        if let Err(cache_err) = self.context.cache.store_nxdomain(qname, qtype, negative_ttl) {
+                            log::warn!("Failed to store negative cache entry for {}: {:?}", qname, cache_err);
+                        }
+                        return Err(ResolveError::Client(e));
+                    }
                 }
             },
             Some(packet) => packet
