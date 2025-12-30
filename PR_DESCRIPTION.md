@@ -1,4 +1,4 @@
-# Fix Memory Leak in DNS Cache - Prevent Unlimited Memory Growth
+# Fix Multiple Memory Leaks: DNS Cache, TCP Server, and P2P Network
 
 ## Problem Description
 
@@ -198,6 +198,75 @@ const MAX_TCP_QUEUE_SIZE: usize = 100;
 - Graceful handling of overload situations
 - No blocking of main thread
 
+## Additional Fix: UDP Server Memory Leak
+
+During stress testing, we identified a memory leak in the UDP DNS server implementation similar to the TCP server issue.
+
+### UDP Server Problem
+
+The UDP server was using an **unbounded channel** (`spmc::channel`) with a **blocking `send()`** method, which could cause:
+- **Memory accumulation**: UDP packets (`(SocketAddr, DnsPacket)`) accumulating in channel queue
+- **Blocking behavior**: Main thread blocking when channel is full
+- **Unbounded growth**: No limit on queued packets under high load
+- **Memory growth**: Each packet tuple could consume significant memory during traffic spikes
+
+### UDP Server Solution
+
+1. **Replaced unbounded channel with bounded channel**:
+   - Changed from `spmc::channel()` to `crossbeam_channel::bounded(1000)`
+   - Limited queue to 1000 packets
+   - Prevents unbounded memory growth
+   - Uses `crossbeam-channel` for better performance
+
+2. **Replaced blocking send with non-blocking try_send**:
+   - Changed from `send()` to `try_send()`
+   - Prevents main thread blocking
+   - Allows immediate packet dropping when queue is full
+
+3. **Immediate packet dropping on queue full**:
+   - Packets are immediately dropped when queue is full
+   - Prevents memory leak from accumulated packet tuples
+   - Logs warning for monitoring
+
+### UDP Server Changes
+
+**`src/dns/server.rs`**:
+
+1. **Added queue size constant**:
+```rust
+const MAX_UDP_QUEUE_SIZE: usize = 1000;
+```
+
+2. **Changed channel type**:
+   - From: `spmc::channel()` → `Sender<(SocketAddr, DnsPacket)>`
+   - To: `crossbeam_channel::bounded(MAX_UDP_QUEUE_SIZE)` → `Sender<(SocketAddr, DnsPacket)>`
+
+3. **Changed send method**:
+   - From: `send((src, request))` (blocking)
+   - To: `try_send((src, request))` (non-blocking)
+
+4. **Added error handling**:
+   - Handles `TrySendError::Full` - drops packet and logs warning
+   - Handles `TrySendError::Disconnected` - drops packet and logs warning
+
+5. **Updated imports**:
+   - Replaced `spmc` with `crossbeam_channel`
+   - Added `bounded` import from `crossbeam_channel`
+
+### UDP Server Testing Results
+
+**Before Fix**:
+- Memory could accumulate UDP packets in unbounded queue
+- Potential blocking under high load
+- Memory growth during traffic spikes
+
+**After Fix**:
+- Memory stable under high UDP load
+- No packet accumulation beyond limit
+- Graceful handling of overload situations
+- No blocking of main thread
+- Packets dropped when queue full (prevents memory leak)
+
 ## Additional Fix: P2P Network Memory Leak
 
 During extended stress testing, we identified a third critical memory leak in the P2P network component.
@@ -334,6 +403,99 @@ const MAX_SEEN_BLOCKS: usize = 10000;
 - HashSet growth: Limited to 10000 entries
 - Memory impact: Minimal, automatic cleanup prevents accumulation
 
+## Additional Fix: P2P Network new_peers Memory Leak
+
+During memory monitoring, we identified a fifth memory leak in the P2P network component related to the `new_peers` queue.
+
+### new_peers Problem
+
+The `new_peers: Vec<SocketAddr>` in `src/p2p/peers.rs` was growing **unbounded**, causing:
+- **Memory accumulation**: Peer addresses accumulating in queue without size limit
+- **Slow connection rate**: Only one peer connected every 2 seconds
+- **Unbounded growth**: Queue could grow to thousands of entries during active peer exchange
+- **Memory growth**: Each `SocketAddr` (~28 bytes) plus Vec overhead could consume significant memory
+
+### Root Cause
+
+The `new_peers` queue is used to store peer addresses for later connection:
+- Addresses added from peer exchange (`add_peers_from_exchange`)
+- Addresses added from bootstrap resolution (`connect_peers`)
+- Only one peer removed per connection attempt (every 2 seconds)
+- No size limit meant queue could grow very large during active peer exchange
+
+### new_peers Solution
+
+1. **Added size limit**:
+   - `MAX_NEW_PEERS = 1000` constant
+   - Prevents unbounded growth of queue
+   - Reasonable limit: 1000 peers × 2 seconds = ~33 minutes of connection attempts
+
+2. **FIFO eviction when limit reached**:
+   - Removes oldest entry (FIFO) when queue reaches limit
+   - Makes room for new addresses
+   - Old addresses are often stale, so safe to remove
+
+3. **Limit checks in both add methods**:
+   - `add_peers_from_exchange()`: Checks limit before adding each address
+   - `connect_peers()`: Checks limit before appending resolved addresses
+   - Prevents growth beyond limit
+
+4. **Debug logging**:
+   - Logs warning when limit is reached and entries are removed
+   - Helps monitor queue behavior
+
+### new_peers Changes
+
+**`src/commons/constants.rs`**:
+1. **Added constant** (used as default value):
+```rust
+pub const MAX_NEW_PEERS: usize = 1000;
+```
+
+**`src/settings.rs`**:
+1. **Added configurable parameter**:
+   - `max_new_peers: usize` in `Net` struct
+   - Default value: 1000 (same as `MAX_NEW_PEERS` constant)
+   - Can be configured via `alfis.toml` in `[net]` section
+
+**`src/p2p/peers.rs`**:
+
+1. **Added field to Peers struct**:
+   - `max_new_peers: usize` field
+   - Initialized with `MAX_NEW_PEERS` constant in constructor
+   - Can be changed via `set_max_new_peers()` method
+
+2. **Enhanced `add_peers_from_exchange()` method**:
+   - Checks if `new_peers.len() >= self.max_new_peers` before adding
+   - Removes oldest entry (FIFO) if limit reached
+   - Logs debug message when limit is reached
+   - Uses configurable value from settings
+
+3. **Enhanced `connect_peers()` method**:
+   - Checks limit before appending resolved addresses
+   - Removes oldest entries (FIFO) to make room
+   - Logs debug message when entries are removed
+   - Uses configurable value from settings
+
+**`src/p2p/network.rs`**:
+1. **Reads value from configuration**:
+   - Gets `max_new_peers` from `settings.net.max_new_peers` in `Network::start()`
+   - Sets value via `self.peers.set_max_new_peers(max_new_peers)`
+   - Value from config overrides default constant
+
+### new_peers Testing Results
+
+**Before Fix**:
+- Memory: Could accumulate thousands of peer addresses
+- Queue growth: Unbounded during active peer exchange
+- Memory impact: Significant during high-load peer discovery
+
+**After Fix**:
+- Memory: Controlled growth of new_peers queue
+- Queue growth: Limited to configurable value (default: 1000 entries, ~28KB)
+- Memory impact: Minimal, automatic eviction prevents accumulation
+- Configurable: Users can adjust limit via `max_new_peers` in config file
+
 ## Additional Improvements: Memory-Based Cache Limits and Systemd Configuration
 
 ### Memory-Based DNS Cache Management
@@ -376,12 +538,16 @@ Added memory limits to systemd unit file to prevent OOM kills:
 ## Files Changed
 
 - `src/dns/cache.rs`: Added memory-based cache limits, improved cleanup logic, and logging
-- `src/dns/server.rs`: Fixed TCP server memory leak with bounded channel and non-blocking send
-- `src/p2p/network.rs`: Fixed P2P network memory leaks (future_blocks and seen_blocks) with size limits and cleanup
+- `src/dns/server.rs`: Fixed TCP server memory leak with bounded channel and non-blocking send; Fixed UDP server memory leak with bounded channel and non-blocking send
+- `src/dns/client.rs`: Improved DoH error logging with detailed status codes, response sizes, and error messages
+- `src/dns/buffer.rs`: Added bounds checking to prevent panics from out-of-bounds access
+- `src/p2p/network.rs`: Fixed P2P network memory leaks (future_blocks and seen_blocks) with size limits and cleanup; reads max_new_peers from config
+- `src/p2p/peers.rs`: Fixed P2P network memory leak (new_peers queue) with configurable size limit and FIFO eviction
+- `src/commons/constants.rs`: Added MAX_NEW_PEERS constant for peer queue limit (used as default)
 - `src/dns/context.rs`: Added cache configuration parameters
 - `src/dns_utils.rs`: Added independent cleanup thread with configurable interval
-- `src/settings.rs`: Added `cache_max_memory_mb` and `cache_cleanup_interval_sec` configuration options
-- `alfis.toml`: Added default cache configuration parameters
+- `src/settings.rs`: Added `cache_max_memory_mb`, `cache_cleanup_interval_sec`, and `max_new_peers` configuration options
+- `alfis.toml`: Added default cache and network configuration parameters
 - `contrib/systemd/alfis.service`: Added MemoryHigh/MemoryMax limits
 
 ## Testing Checklist
@@ -397,10 +563,16 @@ Added memory limits to systemd unit file to prevent OOM kills:
 - [x] Backward compatibility maintained
 - [x] TCP server handles high load without memory accumulation
 - [x] TCP connections are properly closed when queue is full
+- [x] UDP server handles high load without memory accumulation
+- [x] UDP packets are properly dropped when queue is full
 - [x] P2P network future_blocks limited to prevent OOM
 - [x] Smart cleanup preserves blocks needed for synchronization
 - [x] P2P network seen_blocks limited to prevent memory accumulation
 - [x] seen_blocks cleanup works during active synchronization
+- [x] P2P network new_peers queue limited to prevent memory accumulation
+- [x] new_peers FIFO eviction works correctly when limit reached
+- [x] max_new_peers configurable via config file (alfis.toml)
+- [x] max_new_peers value from config overrides default constant
 - [x] No OOM-killer terminations after all fixes
 - [x] Synchronization not interrupted by memory limits
 - [x] Memory-based cache limits work correctly

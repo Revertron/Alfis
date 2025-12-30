@@ -609,33 +609,69 @@ impl DnsClient for HttpsDnsClient {
 
         match response {
             Ok(response) => {
-                match response.status().as_u16() {
+                let status = response.status().as_u16();
+                match status {
                     200 => {
                         match response.headers().get("Content-Length") {
-                            None => warn!("No 'Content-Length' header in DoH response!"),
+                            None => {
+                                warn!("No 'Content-Length' header in DoH response for {} (status: {})", qname, status);
+                                // Try to read without Content-Length
+                                let mut bytes: Vec<u8> = Vec::new();
+                                if let Err(e) = response.into_body().into_reader().read_to_end(&mut bytes) {
+                                    warn!("Failed to read DoH response body for {}: {}", qname, e);
+                                } else {
+                                    debug!("Read {} bytes from DoH response for {} (no Content-Length)", bytes.len(), qname);
+                                    let mut buffer = VectorPacketBuffer::new();
+                                    buffer.buffer.extend_from_slice(bytes.as_slice());
+                                    if let Ok(packet) = DnsPacket::from_buffer(&mut buffer) {
+                                        return Ok(packet);
+                                    }
+                                    warn!("Error parsing DoH result for {}: invalid DNS packet format ({} bytes)", qname, bytes.len());
+                                }
+                            },
                             Some(str) => {
                                 match str.to_str().unwrap_or("0").parse::<usize>() {
                                     Ok(size) => {
-                                        let mut bytes: Vec<u8> = Vec::with_capacity(size);
-                                        response.into_body().into_reader()
-                                            .take(4096)
-                                            .read_to_end(&mut bytes)?;
-                                        let mut buffer = VectorPacketBuffer::new();
-                                        buffer.buffer.extend_from_slice(bytes.as_slice());
-                                        if let Ok(packet) = DnsPacket::from_buffer(&mut buffer) {
-                                            return Ok(packet);
+                                        if size > 65535 {
+                                            warn!("DoH response for {} has suspiciously large Content-Length: {} bytes", qname, size);
                                         }
-                                        warn!("Error parsing DoH result!");
+                                        let mut bytes: Vec<u8> = Vec::with_capacity(size.min(65535));
+                                        let mut reader = response.into_body().into_reader();
+                                        match reader.read_to_end(&mut bytes) {
+                                            Ok(read_size) => {
+                                                if read_size != size {
+                                                    debug!("DoH response for {}: Content-Length={}, but read {} bytes", qname, size, read_size);
+                                                }
+                                                let mut buffer = VectorPacketBuffer::new();
+                                                buffer.buffer.extend_from_slice(bytes.as_slice());
+                                                match DnsPacket::from_buffer(&mut buffer) {
+                                                    Ok(packet) => return Ok(packet),
+                                                    Err(e) => {
+                                                        warn!("Error parsing DoH result for {}: {} (response size: {} bytes)", qname, e, read_size);
+                                                    }
+                                                }
+                                            },
+                                            Err(e) => {
+                                                warn!("Failed to read DoH response body for {}: {} (expected {} bytes)", qname, e, size);
+                                            }
+                                        }
                                     }
-                                    Err(e) => warn!("Error parsing 'Content-Length' in DoH response! {}", e)
+                                    Err(e) => warn!("Error parsing 'Content-Length' in DoH response for {}: {}", qname, e)
                                 }
                             }
                         }
                     }
-                    _ => warn!("Error getting DoH response")
+                    _ => warn!("DoH request for {} failed with status code: {}", qname, status)
                 }
             }
-            Err(e) => warn!("DoH error: {}", &e.to_string())
+            Err(e) => {
+                let error_msg = e.to_string();
+                if error_msg.contains("timeout") {
+                    debug!("DoH timeout for {}: {}", qname, error_msg);
+                } else {
+                    warn!("DoH error for {}: {}", qname, error_msg);
+                }
+            }
         }
         warn!("Lookup of {} failed", qname);
         Err(ClientError::LookupFailed)

@@ -39,6 +39,7 @@ lru = "0.16.2"
 derive_more = { version = "2.0.1", features = ["display", "error", "from"] }
 lazy_static = "1.5.0"
 spmc = "0.3.0"
+crossbeam-channel = "0.5.12"
 thread-priority = "3.0.0"
 
 # Optional dependencies regulated by features

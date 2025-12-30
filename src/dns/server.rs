@@ -7,6 +7,7 @@ use std::sync::atomic::Ordering;
 use std::sync::mpsc::{sync_channel, SyncSender};
 use std::sync::Arc;
 use std::thread::Builder;
+use crossbeam_channel::bounded;
 
 use derive_more::{Display, Error, From};
 use log::{debug, error, warn};
@@ -178,7 +179,8 @@ impl DnsServer for DnsUdpServer {
         // Bind the socket
         let socket = UdpSocket::bind(self.context.dns_listen.as_str())?;
 
-        let (mut sender, receiver) = spmc::channel::<(SocketAddr, DnsPacket)>();
+        // Use bounded channel to prevent memory leak under high load
+        let (sender, receiver) = bounded::<(SocketAddr, DnsPacket)>(MAX_UDP_QUEUE_SIZE);
 
         // Spawn threads for handling requests
         for thread_id in 0..self.thread_count {
@@ -270,9 +272,23 @@ impl DnsServer for DnsUdpServer {
                     }
                     working_ids.put(key, cur_time);
 
-                    if let Err(e) = sender.send((src, request)) {
-                        warn!("Error sending work to DNS resolver threads! Error: {}", e);
-                        continue;
+                    // Use try_send to prevent blocking and memory accumulation
+                    match sender.try_send((src, request)) {
+                        Ok(_) => {
+                            // Successfully sent to worker thread
+                        }
+                        Err(e) => {
+                            // Channel is full or closed - drop packet to prevent memory leak
+                            match e {
+                                crossbeam_channel::TrySendError::Full(_) => {
+                                    warn!("UDP queue full, dropping packet to prevent memory leak");
+                                }
+                                crossbeam_channel::TrySendError::Disconnected(_) => {
+                                    warn!("UDP channel disconnected, dropping packet");
+                                }
+                            }
+                            continue;
+                        }
                     }
                 }
             })?;
@@ -290,6 +306,8 @@ pub struct DnsTcpServer {
 
 // Maximum queue size per TCP worker thread to prevent memory accumulation
 const MAX_TCP_QUEUE_SIZE: usize = 100;
+// Maximum queue size for UDP server to prevent memory accumulation
+const MAX_UDP_QUEUE_SIZE: usize = 1000;
 
 impl DnsTcpServer {
     pub fn new(context: Arc<ServerContext>, thread_count: usize) -> DnsTcpServer {

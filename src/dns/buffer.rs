@@ -173,11 +173,17 @@ impl PacketBuffer for VectorPacketBuffer {
     }
 
     fn get(&mut self, pos: usize) -> Result<u8> {
+        if pos >= self.buffer.len() {
+            return Err(BufferError::EndOfBuffer);
+        }
         Ok(self.buffer[pos])
     }
 
     fn get_range(&mut self, start: usize, len: usize) -> Result<&[u8]> {
-        Ok(&self.buffer[start..start + len as usize])
+        if start + len > self.buffer.len() {
+            return Err(BufferError::EndOfBuffer);
+        }
+        Ok(&self.buffer[start..start + len])
     }
 
     fn write(&mut self, val: u8) -> Result<()> {

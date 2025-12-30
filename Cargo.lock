@@ -52,6 +52,7 @@ dependencies = [
  "byteorder",
  "chacha20poly1305",
  "chrono",
+ "crossbeam-channel",
  "derive_more 2.0.1",
  "ecies-ed25519-ng",
  "ed25519-dalek",
