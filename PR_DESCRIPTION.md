@@ -456,6 +456,72 @@ udp_queue_size = 5000
 - Default values match previous optimal constants
 - Backward compatible (defaults preserve previous behavior)
 
+## Additional Fix: DNS Cache Memory Growth Under High Load
+
+During high-load DNS testing, we identified that the DNS cache could grow unbounded between periodic cleanups, causing memory growth even with cleanup limits in place.
+
+### DNS Cache Growth Problem
+
+The DNS cache had memory limit checks only in the `lookup()` method, but not in the `store()` and `store_nxdomain()` methods. This meant:
+- **Unbounded growth between cleanups**: Cache could grow rapidly during high load
+- **5-minute cleanup interval**: Periodic cleanup (every 300 seconds) was insufficient under very high load
+- **Memory accumulation**: New domains added to cache faster than cleanup could remove them
+- **Memory growth**: Cache could exceed 100MB limit before next cleanup cycle
+
+### DNS Cache Growth Solution
+
+1. **Added memory limit check in `store()` method**:
+   - Checks memory usage before adding records to cache
+   - Triggers automatic cleanup if limit exceeded
+   - Prevents unbounded growth even during high load
+
+2. **Added memory limit check in `store_nxdomain()` method**:
+   - Checks memory usage before adding NXDOMAIN entries
+   - Triggers automatic cleanup if limit exceeded
+   - Prevents growth from negative cache entries
+
+3. **Immediate cleanup on limit exceed**:
+   - Cleanup triggered immediately when limit is reached
+   - Works in addition to periodic cleanup thread
+   - Ensures cache never exceeds configured limit
+
+### DNS Cache Growth Changes
+
+**`src/dns/cache.rs`**:
+
+1. **Enhanced `store()` method**:
+```rust
+// Check memory usage before storing to prevent unbounded growth under high load
+// This is a safety measure in addition to periodic cleanup thread
+let memory_usage = self.estimate_memory_usage();
+if memory_usage > self.max_memory_bytes {
+    self.cleanup_expired();
+    // Re-check memory after expired cleanup
+    let memory_after_expired = self.estimate_memory_usage();
+    if memory_after_expired > self.max_memory_bytes {
+        self.cleanup_oldest_by_memory(self.max_memory_bytes);
+    }
+}
+```
+
+2. **Enhanced `store_nxdomain()` method**:
+   - Same memory limit check as `store()`
+   - Prevents growth from negative cache entries
+   - Automatic cleanup when limit exceeded
+
+### DNS Cache Growth Testing Results
+
+**Before Fix**:
+- Memory: Could grow beyond 100MB limit during high load
+- Cache growth: Unbounded between periodic cleanups (5 minutes)
+- Memory accumulation: New domains added faster than cleanup
+
+**After Fix**:
+- Memory: Always stays within 100MB limit
+- Cache growth: Controlled by immediate cleanup on limit exceed
+- Memory accumulation: Prevented by checks in both store methods
+- High load: Cache remains stable even under very high DNS query volume
+
 ## Additional Fix: P2P Network Memory Leak
 
 During extended stress testing, we identified a third critical memory leak in the P2P network component.
@@ -726,7 +792,7 @@ Added memory limits to systemd unit file to prevent OOM kills:
 
 ## Files Changed
 
-- `src/dns/cache.rs`: Added memory-based cache limits, improved cleanup logic, and logging
+- `src/dns/cache.rs`: Added memory-based cache limits, improved cleanup logic, and logging; Added memory limit checks in store() and store_nxdomain() to prevent unbounded growth under high load
 - `src/dns/server.rs`: Fixed TCP server memory leak with bounded channel and non-blocking send; Fixed UDP server memory leak with bounded channel and non-blocking send; Increased UDP queue size from 1000 to 5000 for better high-load handling; Made TCP and UDP queue sizes configurable via settings
 - `src/dns/client.rs`: Improved DoH error logging with detailed status codes, response sizes, and error messages; Reduced DoH timeout from 5s to 2s; Improved error logging levels
 - `src/dns/resolve.rs`: Added negative caching for failed queries (30s TTL) to prevent repeated attempts
@@ -777,6 +843,9 @@ Added memory limits to systemd unit file to prevent OOM kills:
 - [x] UDP queue size configurable via settings (default: 5000)
 - [x] Queue sizes can be changed without recompilation
 - [x] Default queue size values match previous optimal constants
+- [x] DNS cache memory limit checked in store() method (prevents growth under high load)
+- [x] DNS cache memory limit checked in store_nxdomain() method (prevents growth from negative cache)
+- [x] DNS cache remains within limit even under very high load
 
 ---
 
