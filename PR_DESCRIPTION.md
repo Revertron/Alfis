@@ -356,6 +356,106 @@ const MAX_UDP_QUEUE_SIZE: usize = 5000;
 - Improved throughput: Worker threads unblock faster
 - Reduced load: Less repeated queries to unavailable domains
 
+## Additional Improvement: Configurable TCP and UDP Queue Sizes
+
+To provide better flexibility and allow runtime tuning without recompilation, we've made TCP and UDP queue sizes configurable via settings.
+
+### Configurable Queue Sizes Problem
+
+The TCP and UDP queue sizes were hardcoded as constants:
+- TCP queue size: Fixed at 1000 per worker thread
+- UDP queue size: Fixed at 5000
+- Required recompilation to change values
+- No way to tune for different workloads or system resources
+
+### Configurable Queue Sizes Solution
+
+1. **Added configuration parameters**:
+   - `tcp_queue_size` in `[dns]` section (default: 1000)
+   - `udp_queue_size` in `[dns]` section (default: 5000)
+   - Values can be adjusted in `alfis.toml` without recompilation
+
+2. **Removed hardcoded constants**:
+   - Removed `MAX_TCP_QUEUE_SIZE` and `MAX_UDP_QUEUE_SIZE` constants
+   - Values now read from `ServerContext` (populated from settings)
+   - Default values match previous optimal constants
+
+3. **Runtime configuration**:
+   - Queue sizes can be changed by editing config file and restarting service
+   - No need to recompile for different environments
+   - Allows fine-tuning based on actual workload
+
+### Configurable Queue Sizes Changes
+
+**`src/settings.rs`**:
+1. **Added fields to `Dns` struct**:
+```rust
+#[serde(default = "default_tcp_queue_size")]
+pub tcp_queue_size: usize,
+#[serde(default = "default_udp_queue_size")]
+pub udp_queue_size: usize
+```
+
+2. **Added default functions**:
+```rust
+fn default_tcp_queue_size() -> usize { 1000 }
+fn default_udp_queue_size() -> usize { 5000 }
+```
+
+**`src/dns/context.rs`**:
+1. **Added fields to `ServerContext`**:
+```rust
+pub tcp_queue_size: usize,
+pub udp_queue_size: usize
+```
+
+2. **Updated default values**:
+   - TCP: 1000 (default)
+   - UDP: 5000 (default)
+
+**`src/dns/server.rs`**:
+1. **Removed hardcoded constants**:
+   - Removed `MAX_TCP_QUEUE_SIZE` and `MAX_UDP_QUEUE_SIZE`
+   - Values now read from `self.context.tcp_queue_size` and `self.context.udp_queue_size`
+
+2. **Updated channel creation**:
+   - TCP: `sync_channel(self.context.tcp_queue_size)`
+   - UDP: `bounded(self.context.udp_queue_size)`
+
+**`src/dns_utils.rs`**:
+1. **Populates queue sizes from settings**:
+```rust
+server_context.tcp_queue_size = settings.dns.tcp_queue_size;
+server_context.udp_queue_size = settings.dns.udp_queue_size;
+```
+
+**Configuration files**:
+1. **`alfis.toml`** and **`/etc/alfis.conf`**:
+```toml
+[dns]
+# Maximum queue size for TCP server per worker thread (default: 1000)
+# Prevents TCP queue overflow warnings under high load
+tcp_queue_size = 1000
+
+# Maximum queue size for UDP server (default: 5000)
+# Prevents UDP queue overflow and memory leaks under high load
+udp_queue_size = 5000
+```
+
+### Configurable Queue Sizes Benefits
+
+**Before**:
+- Queue sizes hardcoded in source code
+- Required recompilation to change values
+- No way to tune for different environments
+
+**After**:
+- Queue sizes configurable via settings
+- Runtime configuration without recompilation
+- Easy tuning for different workloads
+- Default values match previous optimal constants
+- Backward compatible (defaults preserve previous behavior)
+
 ## Additional Fix: P2P Network Memory Leak
 
 During extended stress testing, we identified a third critical memory leak in the P2P network component.
@@ -627,16 +727,16 @@ Added memory limits to systemd unit file to prevent OOM kills:
 ## Files Changed
 
 - `src/dns/cache.rs`: Added memory-based cache limits, improved cleanup logic, and logging
-- `src/dns/server.rs`: Fixed TCP server memory leak with bounded channel and non-blocking send; Fixed UDP server memory leak with bounded channel and non-blocking send; Increased UDP queue size from 1000 to 5000 for better high-load handling
+- `src/dns/server.rs`: Fixed TCP server memory leak with bounded channel and non-blocking send; Fixed UDP server memory leak with bounded channel and non-blocking send; Increased UDP queue size from 1000 to 5000 for better high-load handling; Made TCP and UDP queue sizes configurable via settings
 - `src/dns/client.rs`: Improved DoH error logging with detailed status codes, response sizes, and error messages; Reduced DoH timeout from 5s to 2s; Improved error logging levels
 - `src/dns/resolve.rs`: Added negative caching for failed queries (30s TTL) to prevent repeated attempts
 - `src/dns/buffer.rs`: Added bounds checking to prevent panics from out-of-bounds access
 - `src/p2p/network.rs`: Fixed P2P network memory leaks (future_blocks and seen_blocks) with size limits and cleanup; reads max_new_peers from config
 - `src/p2p/peers.rs`: Fixed P2P network memory leak (new_peers queue) with configurable size limit and FIFO eviction
 - `src/commons/constants.rs`: Added MAX_NEW_PEERS constant for peer queue limit (used as default)
-- `src/dns/context.rs`: Added cache configuration parameters
-- `src/dns_utils.rs`: Added independent cleanup thread with configurable interval
-- `src/settings.rs`: Added `cache_max_memory_mb`, `cache_cleanup_interval_sec`, and `max_new_peers` configuration options
+- `src/dns/context.rs`: Added cache configuration parameters and queue size fields
+- `src/dns_utils.rs`: Added independent cleanup thread with configurable interval; Populates queue sizes from settings
+- `src/settings.rs`: Added `cache_max_memory_mb`, `cache_cleanup_interval_sec`, `max_new_peers`, `tcp_queue_size`, and `udp_queue_size` configuration options
 - `alfis.toml`: Added default cache and network configuration parameters
 - `contrib/systemd/alfis.service`: Added MemoryHigh/MemoryMax limits
 
@@ -673,6 +773,10 @@ Added memory limits to systemd unit file to prevent OOM kills:
 - [x] Independent cleanup thread runs periodically
 - [x] Cache configuration parameters work in alfis.toml
 - [x] Systemd memory limits prevent OOM kills
+- [x] TCP queue size configurable via settings (default: 1000)
+- [x] UDP queue size configurable via settings (default: 5000)
+- [x] Queue sizes can be changed without recompilation
+- [x] Default queue size values match previous optimal constants
 
 ---
 
