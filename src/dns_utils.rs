@@ -93,6 +93,10 @@ fn create_server_context(context: Arc<Mutex<Context>>, settings: &Settings) -> A
     server_context.cache_max_memory_bytes = (settings.dns.cache_max_memory_mb as usize) * 1024 * 1024;
     server_context.cache_cleanup_interval_sec = settings.dns.cache_cleanup_interval_sec;
     
+    // Set queue sizes from settings
+    server_context.tcp_queue_size = settings.dns.tcp_queue_size;
+    server_context.udp_queue_size = settings.dns.udp_queue_size;
+    
     // Initialize cache with memory limit
     let max_memory_bytes = server_context.cache_max_memory_bytes;
     server_context.cache = crate::dns::cache::SynchronizedCache::with_memory_limit(max_memory_bytes);

@@ -180,7 +180,8 @@ impl DnsServer for DnsUdpServer {
         let socket = UdpSocket::bind(self.context.dns_listen.as_str())?;
 
         // Use bounded channel to prevent memory leak under high load
-        let (sender, receiver) = bounded::<(SocketAddr, DnsPacket)>(MAX_UDP_QUEUE_SIZE);
+        let queue_size = self.context.udp_queue_size;
+        let (sender, receiver) = bounded::<(SocketAddr, DnsPacket)>(queue_size);
 
         // Spawn threads for handling requests
         for thread_id in 0..self.thread_count {
@@ -304,12 +305,8 @@ pub struct DnsTcpServer {
     thread_count: usize
 }
 
-// Maximum queue size per TCP worker thread to prevent memory accumulation
-// Increased from 100 to 1000 to handle high load better
-const MAX_TCP_QUEUE_SIZE: usize = 1000;
-// Maximum queue size for UDP server to prevent memory accumulation
-// Increased from 1000 to 5000 to handle high load better
-const MAX_UDP_QUEUE_SIZE: usize = 5000;
+// Queue sizes are now configurable via settings (dns.tcp_queue_size and dns.udp_queue_size)
+// Default values: TCP=1000, UDP=5000
 
 impl DnsTcpServer {
     pub fn new(context: Arc<ServerContext>, thread_count: usize) -> DnsTcpServer {
@@ -322,8 +319,9 @@ impl DnsServer for DnsTcpServer {
         let socket = TcpListener::bind(self.context.dns_listen.as_str())?;
 
         // Spawn threads for handling requests, and create the channels
+        let queue_size = self.context.tcp_queue_size;
         for thread_id in 0..self.thread_count {
-            let (tx, rx) = sync_channel(MAX_TCP_QUEUE_SIZE);
+            let (tx, rx) = sync_channel(queue_size);
             self.senders.push(tx);
 
             let context = Arc::clone(&self.context);

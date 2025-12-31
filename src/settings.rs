@@ -103,7 +103,13 @@ pub struct Dns {
     pub cache_max_memory_mb: u64,
     /// Interval for periodic cache cleanup in seconds (default: 300 seconds)
     #[serde(default = "default_cache_cleanup_interval_sec")]
-    pub cache_cleanup_interval_sec: u64
+    pub cache_cleanup_interval_sec: u64,
+    /// Maximum queue size for TCP server per worker thread (default: 1000)
+    #[serde(default = "default_tcp_queue_size")]
+    pub tcp_queue_size: usize,
+    /// Maximum queue size for UDP server (default: 5000)
+    #[serde(default = "default_udp_queue_size")]
+    pub udp_queue_size: usize
 }
 
 impl Default for Dns {
@@ -116,7 +122,9 @@ impl Default for Dns {
             hosts: Vec::new(),
             enable_0x20: default_dns_0x20(),
             cache_max_memory_mb: default_cache_max_memory_mb(),
-            cache_cleanup_interval_sec: default_cache_cleanup_interval_sec()
+            cache_cleanup_interval_sec: default_cache_cleanup_interval_sec(),
+            tcp_queue_size: default_tcp_queue_size(),
+            udp_queue_size: default_udp_queue_size()
         }
     }
 }
@@ -200,6 +208,14 @@ fn default_cache_cleanup_interval_sec() -> u64 {
 
 fn default_max_new_peers() -> usize {
     1000
+}
+
+fn default_tcp_queue_size() -> usize {
+    1000
+}
+
+fn default_udp_queue_size() -> usize {
+    5000
 }
 
 #[cfg(test)]

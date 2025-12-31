@@ -48,6 +48,14 @@ cache_max_memory_mb = 100
 # Cache cleanup runs independently of DNS queries to prevent memory accumulation
 cache_cleanup_interval_sec = 300
 
+# Maximum queue size for TCP server per worker thread (default: 1000)
+# Prevents TCP queue overflow warnings under high load
+tcp_queue_size = 1000
+
+# Maximum queue size for UDP server (default: 5000)
+# Prevents UDP queue overflow and memory leaks under high load
+udp_queue_size = 5000
+
 # Hosts file support (resolve local names or block ads)
 #hosts = ["system", "adblock.txt"]
 
