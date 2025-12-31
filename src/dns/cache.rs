@@ -423,6 +423,17 @@ impl Cache {
         // #region agent log
         let cache_size_before = self.domain_entries.len();
         // #endregion
+        // Check memory usage before storing to prevent unbounded growth under high load
+        // This is a safety measure in addition to periodic cleanup thread
+        let memory_usage = self.estimate_memory_usage();
+        if memory_usage > self.max_memory_bytes {
+            self.cleanup_expired();
+            // Re-check memory after expired cleanup
+            let memory_after_expired = self.estimate_memory_usage();
+            if memory_after_expired > self.max_memory_bytes {
+                self.cleanup_oldest_by_memory(self.max_memory_bytes);
+            }
+        }
         for rec in records {
             let domain = match rec.get_domain() {
                 Some(x) => x,
@@ -454,6 +465,17 @@ impl Cache {
     }
 
     pub fn store_nxdomain(&mut self, qname: &str, qtype: QueryType, ttl: u32) {
+        // Check memory usage before storing to prevent unbounded growth under high load
+        // This is a safety measure in addition to periodic cleanup thread
+        let memory_usage = self.estimate_memory_usage();
+        if memory_usage > self.max_memory_bytes {
+            self.cleanup_expired();
+            // Re-check memory after expired cleanup
+            let memory_after_expired = self.estimate_memory_usage();
+            if memory_after_expired > self.max_memory_bytes {
+                self.cleanup_oldest_by_memory(self.max_memory_bytes);
+            }
+        }
         // Store with lowercase key for case-insensitive lookups
         let qname_lower = qname.to_lowercase();
         if let Some(ref mut rs) = self.domain_entries.get_mut(&qname_lower).and_then(Arc::get_mut) {
