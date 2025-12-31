@@ -287,7 +287,7 @@ impl DnsServer for DnsUdpServer {
                                     warn!("UDP channel disconnected, dropping packet");
                                 }
                             }
-                            continue;
+                        continue;
                         }
                     }
                 }
@@ -305,7 +305,8 @@ pub struct DnsTcpServer {
 }
 
 // Maximum queue size per TCP worker thread to prevent memory accumulation
-const MAX_TCP_QUEUE_SIZE: usize = 100;
+// Increased from 100 to 1000 to handle high load better
+const MAX_TCP_QUEUE_SIZE: usize = 1000;
 // Maximum queue size for UDP server to prevent memory accumulation
 // Increased from 1000 to 5000 to handle high load better
 const MAX_UDP_QUEUE_SIZE: usize = 5000;
@@ -405,7 +406,7 @@ impl DnsServer for DnsTcpServer {
                                 }
                                 std::sync::mpsc::TrySendError::Disconnected(stream) => {
                                     drop(stream); // Explicitly drop to free memory
-                                    warn!("Failed to send TCP request for processing on thread {}: channel closed. Stream dropped to prevent memory leak.", thread_no);
+                            warn!("Failed to send TCP request for processing on thread {}: channel closed. Stream dropped to prevent memory leak.", thread_no);
                                 }
                             }
                         }
