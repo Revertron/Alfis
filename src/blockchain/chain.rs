@@ -73,6 +73,58 @@ impl Chain {
         let origin = settings.get_origin();
 
         let db = sqlite::open(db_name).expect("Unable to open blockchain DB");
+        
+        // Limit SQLite page cache to prevent unbounded memory growth
+        // cache_size is in pages (default page size is 4096 bytes)
+        // Setting to -500 pages = -2MB cache limit (very strict)
+        // This prevents SQLite from using unlimited memory for page cache
+        // Use prepare() + execute() for PRAGMA statements
+        if let Ok(mut stmt) = db.prepare("PRAGMA cache_size = -500;") {
+            if let Err(e) = stmt.next() {
+                warn!("Failed to set SQLite cache_size: {:?}", e);
+            } else {
+                info!("SQLite cache_size set to -500 pages (~2MB)");
+            }
+        } else {
+            warn!("Failed to prepare SQLite cache_size PRAGMA");
+        }
+        
+        // Disable memory-mapped I/O to prevent additional memory usage
+        // mmap_size = 0 means no memory mapping
+        if let Ok(mut stmt) = db.prepare("PRAGMA mmap_size = 0;") {
+            if let Err(e) = stmt.next() {
+                warn!("Failed to set SQLite mmap_size: {:?}", e);
+            } else {
+                info!("SQLite mmap_size set to 0 (disabled)");
+            }
+        } else {
+            warn!("Failed to prepare SQLite mmap_size PRAGMA");
+        }
+        
+        // Set page size to reduce memory usage
+        // Smaller page size = less memory per page
+        if let Ok(mut stmt) = db.prepare("PRAGMA page_size = 1024;") {
+            if let Err(e) = stmt.next() {
+                warn!("Failed to set SQLite page_size: {:?}", e);
+            } else {
+                info!("SQLite page_size set to 1024 bytes");
+            }
+        } else {
+            warn!("Failed to prepare SQLite page_size PRAGMA");
+        }
+        
+        // Set journal mode to reduce memory usage
+        // WAL mode can use more memory, so we use DELETE mode
+        if let Ok(mut stmt) = db.prepare("PRAGMA journal_mode = DELETE;") {
+            if let Err(e) = stmt.next() {
+                warn!("Failed to set SQLite journal_mode: {:?}", e);
+            } else {
+                info!("SQLite journal_mode set to DELETE");
+            }
+        } else {
+            warn!("Failed to prepare SQLite journal_mode PRAGMA");
+        }
+        
         let zones = Self::load_zones();
         let domain_info_cache_max_memory_bytes = (settings.dns.domain_info_cache_max_memory_mb * 1024 * 1024) as usize;
         let mut chain = Chain { 
@@ -749,6 +801,14 @@ impl Chain {
             let current_size = estimate_cache_size(&cache);
             if current_size + entry_size <= self.domain_info_cache_max_memory_bytes {
                 cache.insert(domain.to_string(), (data.clone(), now));
+            } else {
+                // Log when cache is full to help diagnose memory growth
+                if cache.len() % 100 == 0 {
+                    let cache_size_mb = current_size as f64 / 1024.0 / 1024.0;
+                    let limit_mb = self.domain_info_cache_max_memory_bytes as f64 / 1024.0 / 1024.0;
+                    debug!("Domain info cache full: {} entries, {:.2}MB / {:.2}MB limit", 
+                           cache.len(), cache_size_mb, limit_mb);
+                }
             }
         }
         
