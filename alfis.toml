@@ -42,7 +42,9 @@ enable_0x20 = true
 
 # Maximum memory for DNS cache in megabytes (default: 100 MB)
 # Limits cache size to prevent memory leaks
-cache_max_memory_mb = 100
+# Higher values improve performance by caching more domains, reducing external queries
+# Recommended: 100MB for normal load, 200MB for high load, 300-500MB for very high load
+cache_max_memory_mb = 200
 
 # Interval for periodic cache cleanup in seconds (default: 300 seconds = 5 minutes)
 # Cache cleanup runs independently of DNS queries to prevent memory accumulation
@@ -50,21 +52,28 @@ cache_cleanup_interval_sec = 300
 
 # Maximum queue size for TCP server per worker thread (default: 1000)
 # Prevents TCP queue overflow warnings under high load
-tcp_queue_size = 1000
+# Higher values reduce connection rejections under high load, improving performance
+# Recommended: 1000 for normal load, 2000 for high load, 3000-5000 for very high load
+tcp_queue_size = 2000
 
 # Maximum queue size for UDP server (default: 5000)
 # Prevents UDP queue overflow and memory leaks under high load
-udp_queue_size = 5000
+# Higher values reduce packet drops under high load, improving performance
+# Recommended: 5000 for normal load, 10000 for high load, 15000-20000 for very high load
+udp_queue_size = 10000
 
 # Maximum number of CNAME resolution results to prevent memory growth under high load (default: 50)
 # Limits the number of temporary DnsPacket objects created during CNAME chain resolution
-# Lower values reduce memory usage but may truncate very long CNAME chains
-max_cname_results = 50
+# Higher values allow processing longer CNAME chains for better performance, but use more memory
+# Recommended: 50 for normal load, 100-200 for high load, 200-500 for very complex domains
+max_cname_results = 200
 
 # Maximum memory for domain info cache in megabytes to prevent memory growth under high DNS load (default: 5 MB)
 # This cache reduces SQLite query frequency by caching domain information for 5 seconds
-# Lower values reduce memory usage but may increase database load
-domain_info_cache_max_memory_mb = 5
+# Higher values improve performance by reducing database queries, but use more memory
+# Recommended: 10-20MB for medium load, 20-50MB for high load, 50-100MB for very high load
+# Optimal: 50MB provides good balance between performance and memory usage
+domain_info_cache_max_memory_mb = 50
 
 # Hosts file support (resolve local names or block ads)
 #hosts = ["system", "adblock.txt"]
