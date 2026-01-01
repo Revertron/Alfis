@@ -56,6 +56,11 @@ tcp_queue_size = 1000
 # Prevents UDP queue overflow and memory leaks under high load
 udp_queue_size = 5000
 
+# Maximum number of CNAME resolution results to prevent memory growth under high load (default: 50)
+# Limits the number of temporary DnsPacket objects created during CNAME chain resolution
+# Lower values reduce memory usage but may truncate very long CNAME chains
+max_cname_results = 50
+
 # Hosts file support (resolve local names or block ads)
 #hosts = ["system", "adblock.txt"]
 

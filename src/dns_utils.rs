@@ -97,6 +97,9 @@ fn create_server_context(context: Arc<Mutex<Context>>, settings: &Settings) -> A
     server_context.tcp_queue_size = settings.dns.tcp_queue_size;
     server_context.udp_queue_size = settings.dns.udp_queue_size;
     
+    // Set max CNAME results from settings
+    server_context.max_cname_results = settings.dns.max_cname_results;
+    
     // Initialize cache with memory limit
     let max_memory_bytes = server_context.cache_max_memory_bytes;
     server_context.cache = crate::dns::cache::SynchronizedCache::with_memory_limit(max_memory_bytes);

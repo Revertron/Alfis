@@ -60,7 +60,8 @@ pub struct ServerContext {
     pub cache_max_memory_bytes: usize,
     pub cache_cleanup_interval_sec: u64,
     pub tcp_queue_size: usize,
-    pub udp_queue_size: usize
+    pub udp_queue_size: usize,
+    pub max_cname_results: usize
 }
 
 impl Default for ServerContext {
@@ -95,7 +96,8 @@ impl ServerContext {
             cache_max_memory_bytes: 100 * 1024 * 1024, // Default: 100 MB
             cache_cleanup_interval_sec: 300, // Default: 300 seconds
             tcp_queue_size: 1000, // Default: 1000
-            udp_queue_size: 5000 // Default: 5000
+            udp_queue_size: 5000, // Default: 5000
+            max_cname_results: 50 // Default: 50
         }
     }
 
@@ -153,7 +155,8 @@ pub mod tests {
             cache_max_memory_bytes: 100 * 1024 * 1024,
             cache_cleanup_interval_sec: 300,
             tcp_queue_size: 1000,
-            udp_queue_size: 5000
+            udp_queue_size: 5000,
+            max_cname_results: 50
         })
     }
 }

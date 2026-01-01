@@ -109,7 +109,10 @@ pub struct Dns {
     pub tcp_queue_size: usize,
     /// Maximum queue size for UDP server (default: 5000)
     #[serde(default = "default_udp_queue_size")]
-    pub udp_queue_size: usize
+    pub udp_queue_size: usize,
+    /// Maximum number of CNAME resolution results to prevent memory growth (default: 50)
+    #[serde(default = "default_max_cname_results")]
+    pub max_cname_results: usize
 }
 
 impl Default for Dns {
@@ -124,7 +127,8 @@ impl Default for Dns {
             cache_max_memory_mb: default_cache_max_memory_mb(),
             cache_cleanup_interval_sec: default_cache_cleanup_interval_sec(),
             tcp_queue_size: default_tcp_queue_size(),
-            udp_queue_size: default_udp_queue_size()
+            udp_queue_size: default_udp_queue_size(),
+            max_cname_results: default_max_cname_results()
         }
     }
 }
@@ -216,6 +220,10 @@ fn default_tcp_queue_size() -> usize {
 
 fn default_udp_queue_size() -> usize {
     5000
+}
+
+fn default_max_cname_results() -> usize {
+    50
 }
 
 #[cfg(test)]

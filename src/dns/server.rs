@@ -63,19 +63,37 @@ pub trait DnsServer {
 
 /// Utility function for resolving domains referenced in for example CNAME or SRV
 /// records. This usually spares the client from having to perform additional lookups.
-fn resolve_cnames(lookup_list: &[DnsRecord], results: &mut Vec<DnsPacket>, resolver: &mut Box<dyn DnsResolver>, qtype: QueryType, depth: u16) {
-    if depth > 10 {
+/// Limits depth and results size to prevent memory growth under high load.
+fn resolve_cnames(lookup_list: &[DnsRecord], results: &mut Vec<DnsPacket>, resolver: &mut Box<dyn DnsResolver>, qtype: QueryType, depth: u16, max_results: usize) {
+    const MAX_DEPTH: u16 = 10;
+    
+    if depth > MAX_DEPTH {
+        return;
+    }
+    
+    // Prevent unbounded growth of results Vec
+    if results.len() >= max_results {
         return;
     }
 
     for rec in lookup_list {
+        // Check limit before adding new result
+        if results.len() >= max_results {
+            break;
+        }
+        
         match *rec {
             DnsRecord::CNAME { ref host, .. } | DnsRecord::SRV { ref host, .. } => {
                 if let Ok(result2) = resolver.resolve(host, qtype, true) {
                     let new_unmatched = result2.get_unresolved_cnames(qtype);
-                    results.push(result2);
-
-                    resolve_cnames(&new_unmatched, results, resolver, qtype, depth + 1);
+                    if results.len() < max_results {
+                        results.push(result2);
+                    }
+                    
+                    // Only continue recursion if we haven't hit the limit
+                    if results.len() < max_results {
+                        resolve_cnames(&new_unmatched, results, resolver, qtype, depth + 1, max_results);
+                    }
                 }
             }
             _ => {}
@@ -104,7 +122,10 @@ pub fn execute_query(context: Arc<ServerContext>, request: &DnsPacket) -> DnsPac
     } else if request.questions.is_empty() {
         packet.header.rescode = ResultCode::FORMERR;
     } else {
-        let mut results = Vec::new();
+        // Limit results Vec size to prevent memory growth under high load with complex CNAME chains
+        // Each DnsPacket can be large, so limit to reasonable number
+        let max_results = context.max_cname_results;
+        let mut results = Vec::with_capacity(max_results.min(10));
 
         let question = &request.questions[0];
         packet.questions.push(question.clone());
@@ -119,9 +140,16 @@ pub fn execute_query(context: Arc<ServerContext>, request: &DnsPacket) -> DnsPac
                 }
 
                 let unmatched = result.get_unresolved_cnames(question.qtype);
-                results.push(result);
+                if results.len() < max_results {
+                    results.push(result);
+                } else {
+                    // Limit reached, skip CNAME resolution to prevent memory growth
+                    debug!("CNAME resolution limit reached for {}, skipping additional CNAME lookups", &question.name);
+                }
 
-                resolve_cnames(&unmatched, &mut results, &mut resolver, question.qtype, 0);
+                if results.len() < max_results {
+                    resolve_cnames(&unmatched, &mut results, &mut resolver, question.qtype, 0, max_results);
+                }
 
                 res_code
             }
