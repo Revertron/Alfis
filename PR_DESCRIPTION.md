@@ -522,6 +522,97 @@ if memory_usage > self.max_memory_bytes {
 - Memory accumulation: Prevented by checks in both store methods
 - High load: Cache remains stable even under very high DNS query volume
 
+## Additional Fix: CNAME Resolution Memory Growth Under High Load
+
+During high-load DNS testing, we identified that complex CNAME chains could cause memory growth due to unbounded creation of temporary `DnsPacket` objects.
+
+### CNAME Resolution Problem
+
+The `resolve_cnames()` function recursively resolves CNAME chains, creating new `DnsPacket` objects for each resolution:
+- **Unbounded Vec growth**: `results` Vec could grow without limit
+- **Complex CNAME chains**: Some domains have very long CNAME chains (10+ levels)
+- **Memory accumulation**: Each `DnsPacket` can be large, accumulating under high load
+- **No limits**: No restrictions on number of results or recursion depth (except max depth of 10)
+
+### CNAME Resolution Solution
+
+1. **Added configurable limit on results**:
+   - `max_cname_results` parameter in `[dns]` section (default: 50)
+   - Limits number of `DnsPacket` objects in `results` Vec
+   - Prevents unbounded growth even with very complex CNAME chains
+
+2. **Enhanced `resolve_cnames()` function**:
+   - Checks limit before adding each result
+   - Stops recursion when limit reached
+   - Prevents memory growth from complex chains
+
+3. **Enhanced `execute_query()` function**:
+   - Uses `with_capacity` for optimization
+   - Checks limit before calling `resolve_cnames()`
+   - Skips CNAME resolution if limit already reached
+
+### CNAME Resolution Changes
+
+**`src/settings.rs`**:
+
+1. **Added parameter to `Dns` struct**:
+```rust
+/// Maximum number of CNAME resolution results to prevent memory growth (default: 50)
+#[serde(default = "default_max_cname_results")]
+pub max_cname_results: usize
+```
+
+2. **Added default function**:
+```rust
+fn default_max_cname_results() -> usize {
+    50
+}
+```
+
+**`src/dns/context.rs`**:
+
+1. **Added field to `ServerContext`**:
+```rust
+pub max_cname_results: usize
+```
+
+**`src/dns/server.rs`**:
+
+1. **Enhanced `execute_query()` method**:
+   - Uses `context.max_cname_results` instead of hardcoded constant
+   - Uses `Vec::with_capacity()` for optimization
+   - Checks limit before calling `resolve_cnames()`
+
+2. **Enhanced `resolve_cnames()` function**:
+   - Accepts `max_results` parameter
+   - Checks limit before adding each result
+   - Stops recursion when limit reached
+   - Prevents unbounded growth
+
+**Configuration files**:
+
+1. **`alfis.toml`** and **`/etc/alfis.conf`**:
+```toml
+[dns]
+# Maximum number of CNAME resolution results to prevent memory growth under high load (default: 50)
+# Limits the number of temporary DnsPacket objects created during CNAME chain resolution
+# Lower values reduce memory usage but may truncate very long CNAME chains
+max_cname_results = 50
+```
+
+### CNAME Resolution Testing Results
+
+**Before Fix**:
+- Memory: Could grow with complex CNAME chains
+- Results Vec: Unbounded growth possible
+- Complex chains: Could create 100+ temporary objects
+
+**After Fix**:
+- Memory: Controlled by configurable limit (default: 50)
+- Results Vec: Limited to `max_cname_results`
+- Complex chains: Truncated at limit, preventing memory growth
+- Configurable: Users can adjust limit via `max_cname_results` in config file
+
 ## Additional Fix: P2P Network Memory Leak
 
 During extended stress testing, we identified a third critical memory leak in the P2P network component.
@@ -793,6 +884,7 @@ Added memory limits to systemd unit file to prevent OOM kills:
 ## Files Changed
 
 - `src/dns/cache.rs`: Added memory-based cache limits, improved cleanup logic, and logging; Added memory limit checks in store() and store_nxdomain() to prevent unbounded growth under high load
+- `src/dns/server.rs`: Limited CNAME resolution results to prevent memory growth; Made limit configurable via max_cname_results parameter
 - `src/dns/server.rs`: Fixed TCP server memory leak with bounded channel and non-blocking send; Fixed UDP server memory leak with bounded channel and non-blocking send; Increased UDP queue size from 1000 to 5000 for better high-load handling; Made TCP and UDP queue sizes configurable via settings
 - `src/dns/client.rs`: Improved DoH error logging with detailed status codes, response sizes, and error messages; Reduced DoH timeout from 5s to 2s; Improved error logging levels
 - `src/dns/resolve.rs`: Added negative caching for failed queries (30s TTL) to prevent repeated attempts
@@ -800,9 +892,9 @@ Added memory limits to systemd unit file to prevent OOM kills:
 - `src/p2p/network.rs`: Fixed P2P network memory leaks (future_blocks and seen_blocks) with size limits and cleanup; reads max_new_peers from config
 - `src/p2p/peers.rs`: Fixed P2P network memory leak (new_peers queue) with configurable size limit and FIFO eviction
 - `src/commons/constants.rs`: Added MAX_NEW_PEERS constant for peer queue limit (used as default)
-- `src/dns/context.rs`: Added cache configuration parameters and queue size fields
+- `src/dns/context.rs`: Added cache configuration parameters, queue size fields, and max_cname_results field
 - `src/dns_utils.rs`: Added independent cleanup thread with configurable interval; Populates queue sizes from settings
-- `src/settings.rs`: Added `cache_max_memory_mb`, `cache_cleanup_interval_sec`, `max_new_peers`, `tcp_queue_size`, and `udp_queue_size` configuration options
+- `src/settings.rs`: Added `cache_max_memory_mb`, `cache_cleanup_interval_sec`, `max_new_peers`, `tcp_queue_size`, `udp_queue_size`, and `max_cname_results` configuration options
 - `alfis.toml`: Added default cache and network configuration parameters
 - `contrib/systemd/alfis.service`: Added MemoryHigh/MemoryMax limits
 
@@ -846,6 +938,9 @@ Added memory limits to systemd unit file to prevent OOM kills:
 - [x] DNS cache memory limit checked in store() method (prevents growth under high load)
 - [x] DNS cache memory limit checked in store_nxdomain() method (prevents growth from negative cache)
 - [x] DNS cache remains within limit even under very high load
+- [x] CNAME resolution results limited to prevent memory growth (default: 50, configurable)
+- [x] max_cname_results configurable via settings (alfis.toml)
+- [x] Complex CNAME chains truncated at limit to prevent unbounded growth
 
 ---
 
