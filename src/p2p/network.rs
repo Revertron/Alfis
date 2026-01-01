@@ -729,7 +729,8 @@ impl Network {
                 // This preserves blocks that might be needed soon
                 if self.future_blocks.len() >= MAX_FUTURE_BLOCKS {
                     let my_height = context.chain.get_height();
-                    let mut to_remove = Vec::new();
+                    // Use with_capacity to avoid reallocations during cleanup
+                    let mut to_remove = Vec::with_capacity(MAX_FUTURE_BLOCKS / 4);
                     
                     // Remove blocks that are too far ahead (more than 2000 blocks ahead)
                     // or too far behind (more than 100 blocks behind current height)
@@ -741,10 +742,14 @@ impl Network {
                     
                     // If still need to remove more, remove oldest blocks (lowest index)
                     if to_remove.len() < (MAX_FUTURE_BLOCKS / 4) {
-                        let mut indices: Vec<u64> = self.future_blocks.keys()
-                            .filter(|idx| !to_remove.contains(idx))
-                            .cloned()
-                            .collect();
+                        // Use with_capacity to avoid reallocations
+                        let remaining_count = self.future_blocks.len().saturating_sub(to_remove.len());
+                        let mut indices: Vec<u64> = Vec::with_capacity(remaining_count.min(MAX_FUTURE_BLOCKS));
+                        indices.extend(
+                            self.future_blocks.keys()
+                                .filter(|idx| !to_remove.contains(idx))
+                                .cloned()
+                        );
                         indices.sort();
                         let additional = (MAX_FUTURE_BLOCKS / 4) - to_remove.len();
                         for i in 0..additional.min(indices.len()) {

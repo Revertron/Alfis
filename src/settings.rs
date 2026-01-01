@@ -112,7 +112,11 @@ pub struct Dns {
     pub udp_queue_size: usize,
     /// Maximum number of CNAME resolution results to prevent memory growth (default: 50)
     #[serde(default = "default_max_cname_results")]
-    pub max_cname_results: usize
+    pub max_cname_results: usize,
+    /// Maximum memory for domain info cache in megabytes to prevent memory growth under high DNS load (default: 5 MB)
+    /// This cache reduces SQLite query frequency by caching domain information for 5 seconds
+    #[serde(default = "default_domain_info_cache_max_memory_mb")]
+    pub domain_info_cache_max_memory_mb: u64
 }
 
 impl Default for Dns {
@@ -128,7 +132,8 @@ impl Default for Dns {
             cache_cleanup_interval_sec: default_cache_cleanup_interval_sec(),
             tcp_queue_size: default_tcp_queue_size(),
             udp_queue_size: default_udp_queue_size(),
-            max_cname_results: default_max_cname_results()
+            max_cname_results: default_max_cname_results(),
+            domain_info_cache_max_memory_mb: default_domain_info_cache_max_memory_mb()
         }
     }
 }
@@ -224,6 +229,10 @@ fn default_udp_queue_size() -> usize {
 
 fn default_max_cname_results() -> usize {
     50
+}
+
+fn default_domain_info_cache_max_memory_mb() -> u64 {
+    5
 }
 
 #[cfg(test)]

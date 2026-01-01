@@ -61,6 +61,11 @@ udp_queue_size = 5000
 # Lower values reduce memory usage but may truncate very long CNAME chains
 max_cname_results = 50
 
+# Maximum memory for domain info cache in megabytes to prevent memory growth under high DNS load (default: 5 MB)
+# This cache reduces SQLite query frequency by caching domain information for 5 seconds
+# Lower values reduce memory usage but may increase database load
+domain_info_cache_max_memory_mb = 5
+
 # Hosts file support (resolve local names or block ads)
 #hosts = ["system", "adblock.txt"]
 

@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::ops::Deref;
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use chrono::Utc;
 #[allow(unused_imports)]
@@ -62,7 +63,9 @@ pub struct Chain {
     max_height: u64,
     db: Connection,
     zones: Vec<ZoneData>,
-    signers: RefCell<SignersCache>
+    signers: RefCell<SignersCache>,
+    domain_info_cache: RefCell<HashMap<String, (String, Instant)>>,
+    domain_info_cache_max_memory_bytes: usize,
 }
 
 impl Chain {
@@ -71,7 +74,18 @@ impl Chain {
 
         let db = sqlite::open(db_name).expect("Unable to open blockchain DB");
         let zones = Self::load_zones();
-        let mut chain = Chain { origin, last_block: None, last_full_block: None, max_height: 0, db, zones, signers: SignersCache::new() };
+        let domain_info_cache_max_memory_bytes = (settings.dns.domain_info_cache_max_memory_mb * 1024 * 1024) as usize;
+        let mut chain = Chain { 
+            origin, 
+            last_block: None, 
+            last_full_block: None, 
+            max_height: 0, 
+            db, 
+            zones, 
+            signers: SignersCache::new(),
+            domain_info_cache: RefCell::new(HashMap::new()),
+            domain_info_cache_max_memory_bytes,
+        };
         chain.init_db();
         chain
     }
@@ -660,7 +674,64 @@ impl Chain {
     }
 
     pub fn get_domain_info(&self, domain: &str) -> Option<String> {
-        match self.get_domain_transaction_and_state(domain) {
+        // Cache domain info for 5 seconds to reduce SQLite queries under high DNS load
+        const CACHE_TTL: Duration = Duration::from_secs(5);
+        
+        let now = Instant::now();
+        
+        // Estimate cache memory usage: domain name + data string + overhead
+        // Rough estimate: domain.len() + data.len() + 50 bytes overhead per entry
+        let estimate_cache_size = |cache: &HashMap<String, (String, Instant)>| -> usize {
+            cache.iter().map(|(key, (data, _))| key.len() + data.len() + 50).sum()
+        };
+        
+        // Cleanup and check cache
+        let cached_result = {
+            let mut cache = self.domain_info_cache.borrow_mut();
+            
+            // Cleanup expired entries first (do this more frequently to prevent growth)
+            let current_size = estimate_cache_size(&cache);
+            if current_size > self.domain_info_cache_max_memory_bytes / 4 {
+                cache.retain(|_, (_, time)| now.duration_since(*time) < CACHE_TTL);
+            }
+            
+            // If cache is still too large after cleanup, remove oldest entries
+            let size_after_cleanup = estimate_cache_size(&cache);
+            if size_after_cleanup > self.domain_info_cache_max_memory_bytes {
+                // Remove oldest entries until we're under 75% of limit
+                let target_size = self.domain_info_cache_max_memory_bytes * 3 / 4;
+                let mut entries: Vec<(String, (String, Instant))> = cache.drain().collect();
+                entries.sort_by(|a, b| a.1.1.cmp(&b.1.1)); // Sort by time (oldest first)
+                
+                // Keep entries until we reach target size
+                let mut current_size = 0;
+                for (key, value) in entries.into_iter().rev() {
+                    let entry_size = key.len() + value.0.len() + 50;
+                    if current_size + entry_size <= target_size {
+                        cache.insert(key, value);
+                        current_size += entry_size;
+                    }
+                }
+            }
+            
+            // Check cache first
+            if let Some((cached_data, cached_time)) = cache.get(domain) {
+                if now.duration_since(*cached_time) < CACHE_TTL {
+                    return Some(cached_data.clone());
+                } else {
+                    // Expired, remove from cache
+                    cache.remove(domain);
+                }
+            }
+            None
+        };
+        
+        if cached_result.is_some() {
+            return cached_result;
+        }
+        
+        // Cache miss or expired, query database
+        let result = match self.get_domain_transaction_and_state(domain) {
             (None, _) => None,
             (Some(transaction), state) => {
                 if matches!(state, DomainState::Alive {..}) {
@@ -669,7 +740,19 @@ impl Chain {
                     None
                 }
             }
+        };
+        
+        // Store in cache if found (only if cache has space)
+        if let Some(ref data) = result {
+            let mut cache = self.domain_info_cache.borrow_mut();
+            let entry_size = domain.len() + data.len() + 50;
+            let current_size = estimate_cache_size(&cache);
+            if current_size + entry_size <= self.domain_info_cache_max_memory_bytes {
+                cache.insert(domain.to_string(), (data.clone(), now));
+            }
         }
+        
+        result
     }
 
     pub fn get_domains_count(&self) -> i64 {
