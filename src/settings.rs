@@ -97,7 +97,10 @@ pub struct Dns {
     pub hosts: Vec<String>,
     /// Enable DNS 0x20 encoding (random case) for additional security against cache poisoning
     #[serde(default = "default_dns_0x20")]
-    pub enable_0x20: bool
+    pub enable_0x20: bool,
+    /// DNS cache memory limit in megabytes (default: 100MB, 0 = unlimited)
+    #[serde(default = "default_cache_memory_limit_mb")]
+    pub cache_memory_limit_mb: usize
 }
 
 impl Default for Dns {
@@ -108,7 +111,8 @@ impl Default for Dns {
             forwarders: vec![String::from("94.140.14.14:53"), String::from("94.140.15.15:53")],
             bootstraps: default_dns_bootstraps(),
             hosts: Vec::new(),
-            enable_0x20: default_dns_0x20()
+            enable_0x20: default_dns_0x20(),
+            cache_memory_limit_mb: default_cache_memory_limit_mb()
         }
     }
 }
@@ -176,6 +180,10 @@ fn default_dns_bootstraps() -> Vec<String> {
 
 fn default_dns_0x20() -> bool {
     true
+}
+
+fn default_cache_memory_limit_mb() -> usize {
+    100  // 100 MB default
 }
 
 #[cfg(test)]

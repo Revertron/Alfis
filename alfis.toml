@@ -22,6 +22,12 @@ yggdrasil_only = false
 listen = "127.0.0.3:53"
 # How many threads to spawn by DNS server
 threads = 10
+
+# DNS cache memory limit in megabytes (default: 100)
+# Prevents unbounded cache growth in high-load environments
+# Set to 0 for unlimited cache (not recommended for production)
+cache_memory_limit_mb = 100
+
 # AdGuard DNS servers to filter ads and trackers
 forwarders = ["https://dns.adguard.com/dns-query"]
 #forwarders = ["94.140.14.14:53", "94.140.15.15:53"]

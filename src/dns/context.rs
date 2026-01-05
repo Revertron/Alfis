@@ -61,13 +61,13 @@ pub struct ServerContext {
 
 impl Default for ServerContext {
     fn default() -> Self {
-        ServerContext::new(String::from("0.0.0.0:53"), Vec::new(), true)
+        ServerContext::new(String::from("0.0.0.0:53"), Vec::new(), true, 100)
     }
 }
 
 impl ServerContext {
     #[allow(unused_variables)]
-    pub fn new(dns_listen: String, bootstraps: Vec<String>, enable_0x20: bool) -> ServerContext {
+    pub fn new(dns_listen: String, bootstraps: Vec<String>, enable_0x20: bool, cache_limit_mb: usize) -> ServerContext {
         #[cfg(not(feature = "doh"))]
         let doh_client = None;
         #[cfg(feature = "doh")]
@@ -75,7 +75,7 @@ impl ServerContext {
 
         ServerContext {
             authority: Authority::new(),
-            cache: SynchronizedCache::new(),
+            cache: SynchronizedCache::with_memory_limit(cache_limit_mb),
             filters: Vec::new(),
             old_client: Box::new(DnsNetworkClient::new_with_0x20(enable_0x20)),
             doh_client,
@@ -129,7 +129,7 @@ pub mod tests {
     pub fn create_test_context(callback: Box<StubCallback>) -> Arc<ServerContext> {
         Arc::new(ServerContext {
             authority: Authority::new(),
-            cache: SynchronizedCache::new(),
+            cache: SynchronizedCache::with_memory_limit(0),  // Unlimited for tests
             filters: Vec::new(),
             old_client: Box::new(DnsStubClient::new(callback)),
             doh_client: Some(Box::new(HttpsDnsClient::new(Vec::new()))),
