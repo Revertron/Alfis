@@ -592,19 +592,23 @@ mod tests {
 
             assert_eq!(3, list.len());
 
-            // Check statistics for google entry
-            assert_eq!("google.com", list[1].domain);
+            // Find entries by domain name (LRU order may vary)
+            let google_entry = list.iter().find(|e| e.domain == "google.com").expect("google.com entry");
+            let ns1_entry = list.iter().find(|e| e.domain == "ns1.google.com").expect("ns1.google.com entry");
+            let foobar_entry = list.iter().find(|e| e.domain == "foobar.google.com").expect("foobar.google.com NXDOMAIN entry");
 
-            // Should have a NS record and an A record for a total of 2 record types
-            assert_eq!(2, list[1].record_types.len());
+            // google.com should have a NS record and an A record for a total of 2 record types
+            assert_eq!(2, google_entry.record_types.len());
 
             // Should have been hit two times for NS google.com and once for
             // A google.com
-            assert_eq!(3, list[1].hits);
+            assert_eq!(3, google_entry.hits);
 
-            assert_eq!("ns1.google.com", list[2].domain);
-            assert_eq!(1, list[2].record_types.len());
-            assert_eq!(2, list[2].hits);
+            assert_eq!(1, ns1_entry.record_types.len());
+            assert_eq!(2, ns1_entry.hits);
+
+            // foobar.google.com should be a cached NXDOMAIN with 0 hits
+            assert_eq!(0, foobar_entry.hits);
         };
     }
 }
