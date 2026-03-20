@@ -312,11 +312,17 @@ impl DnsRecord {
             }
             QueryType::TXT => {
                 let mut txt = String::new();
+                let end_pos = buffer.pos() + data_len as usize;
 
-                let cur_pos = buffer.pos();
-                txt.push_str(&String::from_utf8_lossy(buffer.get_range(cur_pos, data_len as usize)?));
-
-                buffer.step(data_len as usize)?;
+                // TXT RDATA consists of one or more <length><text> segments (RFC 1035 3.3.14)
+                while buffer.pos() < end_pos {
+                    let seg_len = buffer.read()? as usize;
+                    if seg_len > 0 {
+                        let cur_pos = buffer.pos();
+                        txt.push_str(&String::from_utf8_lossy(buffer.get_range(cur_pos, seg_len)?));
+                        buffer.step(seg_len)?;
+                    }
+                }
 
                 Ok(DnsRecord::TXT { domain, data: txt, ttl: TransientTtl(ttl) })
             }

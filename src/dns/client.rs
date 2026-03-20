@@ -510,7 +510,6 @@ impl BootstrapResolver {
 
 #[cfg(feature = "doh")]
 impl Resolver for BootstrapResolver {
-    // TODO use timeout parameter
     fn resolve(&self, uri: &Uri, _config: &Config, timeout: NextTimeout) -> std::result::Result<ResolvedSocketAddrs, ureq::Error> {
         let domain = uri.host().unwrap_or("localhost");
         let port = uri.port_u16().unwrap_or(443);

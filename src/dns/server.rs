@@ -107,7 +107,7 @@ pub fn execute_query(context: Arc<ServerContext>, request: &DnsPacket) -> DnsPac
 
         let question = &request.questions[0];
         packet.questions.push(question.clone());
-        log::trace!("Resolving: {}, type {:?}", &question.name, &question.qtype);
+        debug!("Resolving: {}, type {:?}", &question.name, &question.qtype);
 
         let mut resolver = context.create_resolver(Arc::clone(&context));
         let res_code = match resolver.resolve(&question.name, question.qtype, request.header.recursion_desired) {
@@ -245,6 +245,10 @@ impl DnsServer for DnsUdpServer {
                                 if code == 10004 || code == 10093 {
                                     debug!("UDP service loop has finished");
                                     break;
+                                }
+                                if code == 10054 {
+                                    // Ignore
+                                    continue;
                                 }
                             }
                             debug!("Failed to read from UDP socket: {:?}", err);
