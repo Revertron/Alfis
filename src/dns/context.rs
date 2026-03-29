@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use derive_more::{Display, Error, From};
 
+use crate::commons::rtt_tracker::RttTracker;
 use crate::dns::authority::Authority;
 use crate::dns::cache::SynchronizedCache;
 use crate::dns::client::{DnsClient, DnsNetworkClient};
@@ -56,7 +57,8 @@ pub struct ServerContext {
     pub enable_tcp: bool,
     pub enable_api: bool,
     pub statistics: ServerStatistics,
-    pub zones_dir: &'static str
+    pub zones_dir: &'static str,
+    pub forwarder_tracker: Arc<RttTracker<String>>,
 }
 
 impl Default for ServerContext {
@@ -87,7 +89,8 @@ impl ServerContext {
             enable_tcp: true,
             enable_api: false,
             statistics: ServerStatistics { tcp_query_count: AtomicUsize::new(0), udp_query_count: AtomicUsize::new(0) },
-            zones_dir: "zones"
+            zones_dir: "zones",
+            forwarder_tracker: Arc::new(RttTracker::new()),
         }
     }
 
@@ -141,7 +144,8 @@ pub mod tests {
             enable_tcp: true,
             enable_api: false,
             statistics: ServerStatistics { tcp_query_count: AtomicUsize::new(0), udp_query_count: AtomicUsize::new(0) },
-            zones_dir: "zones"
+            zones_dir: "zones",
+            forwarder_tracker: Arc::new(RttTracker::new()),
         })
     }
 }

@@ -2,10 +2,10 @@
 //! incoming queries
 
 use std::sync::Arc;
+use std::time::Instant;
 use std::vec::Vec;
 
 use derive_more::{Display, Error, From};
-use rand::seq::IteratorRandom;
 
 use crate::dns::context::ServerContext;
 use crate::dns::protocol::{DnsPacket, QueryType, ResultCode};
@@ -85,38 +85,51 @@ impl DnsResolver for ForwardingDnsResolver {
     }
 
     fn perform(&mut self, qname: &str, qtype: QueryType) -> Result<DnsPacket> {
-        let mut random = rand::thread_rng();
-        let upstream = self.upstreams.iter().choose(&mut random).unwrap();
-        let mut result = match self.context.cache.lookup(qname, qtype) {
-            None => {
-                if is_url(upstream) {
-                    if let Some(client) = &self.context.doh_client {
-                        client.send_query(qname, qtype, upstream, true)?
-                    } else {
-                        log::error!("This build doesn't support DoH");
-                        return Err(ResolveError::NoServerFound);
-                    }
+        if let Some(packet) = self.context.cache.lookup(qname, qtype) {
+            return Ok(packet);
+        }
+
+        let ordered = self.context.forwarder_tracker.select_ordered(&self.upstreams);
+        let mut last_err = ResolveError::NoServerFound;
+
+        for upstream in &ordered {
+            let start = Instant::now();
+            let query_result = if is_url(upstream) {
+                if let Some(client) = &self.context.doh_client {
+                    client.send_query(qname, qtype, upstream, true)
                 } else {
-                    self.context.old_client.send_query(qname, qtype, upstream, true)?
+                    log::error!("This build doesn't support DoH");
+                    continue;
                 }
-            },
-            Some(packet) => packet
-        };
+            } else {
+                self.context.old_client.send_query(qname, qtype, upstream, true)
+            };
 
-        self.context.cache.store(&result.answers)?;
+            match query_result {
+                Ok(mut result) => {
+                    let elapsed = start.elapsed().as_secs_f64() * 1000.0;
+                    self.context.forwarder_tracker.record_success(upstream, elapsed);
+                    self.context.cache.store(&result.answers)?;
 
-        // Fix domain names in answers to match original query case (DNS 0x20 may have randomized them)
-        let qname_lower = qname.to_lowercase();
-        for answer in &mut result.answers {
-            if let Some(domain) = answer.get_domain() {
-                // Only fix if it matches the query (case-insensitive)
-                if domain.to_lowercase() == qname_lower {
-                    answer.set_domain(qname.to_string());
+                    // Fix domain names in answers to match original query case
+                    let qname_lower = qname.to_lowercase();
+                    for answer in &mut result.answers {
+                        if let Some(domain) = answer.get_domain() {
+                            if domain.to_lowercase() == qname_lower {
+                                answer.set_domain(qname.to_string());
+                            }
+                        }
+                    }
+                    return Ok(result);
+                }
+                Err(e) => {
+                    self.context.forwarder_tracker.record_failure(upstream);
+                    last_err = e.into();
                 }
             }
         }
 
-        Ok(result)
+        Err(last_err)
     }
 }
 

@@ -10,6 +10,7 @@ use crate::dns::protocol::DnsRecord;
 
 pub mod constants;
 pub mod eventbus;
+pub mod rtt_tracker;
 pub mod simplebus;
 
 /// Convert bytes array to HEX format
