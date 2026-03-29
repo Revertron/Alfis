@@ -1,8 +1,11 @@
+use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
+use rand::seq::SliceRandom;
 
 use crate::blockchain::transaction::DomainData;
 use crate::dns::filter::DnsFilter;
@@ -13,13 +16,32 @@ use crate::dns::client::{DnsClient, DnsNetworkClient};
 const NAME_SERVER: &str = "ns.alfis.name";
 const SERVER_ADMIN: &str = "admin.alfis.name";
 
+/// Unbound-style RTT band width in milliseconds.
+/// Servers within min_rtt + BAND are considered equally good.
+const RTT_BAND_MS: f64 = 100.0;
+/// EWMA smoothing factor: 87.5% history, 12.5% new measurement.
+const EWMA_WEIGHT: f64 = 7.0 / 8.0;
+/// Penalty RTT assigned on timeout/failure (ms).
+const TIMEOUT_PENALTY_MS: f64 = 5000.0;
+/// Stats older than this are expired so the server gets re-probed.
+const STATS_EXPIRE_SECS: u64 = 900;
+
+struct NsStats {
+    rtt: f64,
+    last_update: Instant,
+}
+
 pub struct BlockchainFilter {
-    context: Arc<Mutex<Context>>
+    context: Arc<Mutex<Context>>,
+    ns_stats: Arc<Mutex<HashMap<IpAddr, NsStats>>>,
 }
 
 impl BlockchainFilter {
     pub fn new(context: Arc<Mutex<Context>>) -> Self {
-        BlockchainFilter { context }
+        BlockchainFilter {
+            context,
+            ns_stats: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     fn add_soa_record(zone: String, serial: u32, packet: &mut DnsPacket) {
@@ -44,20 +66,93 @@ impl BlockchainFilter {
         have_zone
     }
 
-    fn lookup_from_ns(qname: &str, qtype: QueryType, servers: &Vec<IpAddr>) -> Option<DnsPacket> {
+    fn lookup_from_ns(qname: &str, qtype: QueryType, servers: &[IpAddr], ns_stats: &Arc<Mutex<HashMap<IpAddr, NsStats>>>) -> Option<DnsPacket> {
         let mut dns_client = DnsNetworkClient::new();
         dns_client.run().unwrap();
-        let timeout = std::time::Duration::from_secs(5);
+        let timeout = std::time::Duration::from_secs(2);
 
-        for server in servers {
-            let addr = SocketAddr::new(server.to_owned(), 53);
-            if let Ok(res) = dns_client.send_udp_query(qname, qtype, addr, false, timeout) {
-                dns_client.stop();
-                return Some(res);
+        // Build ordered server list using RTT banding
+        let ordered = Self::select_servers(servers, ns_stats);
+
+        for server in &ordered {
+            let addr = SocketAddr::new(*server, 53);
+            let start = Instant::now();
+            match dns_client.send_udp_query(qname, qtype, addr, false, timeout) {
+                Ok(res) => {
+                    let elapsed = start.elapsed().as_secs_f64() * 1000.0;
+                    Self::update_ns_stats(ns_stats, *server, elapsed);
+                    dns_client.stop();
+                    return Some(res);
+                }
+                Err(_) => {
+                    Self::update_ns_stats(ns_stats, *server, TIMEOUT_PENALTY_MS);
+                }
             }
         }
         dns_client.stop();
         None
+    }
+
+    /// Select servers using Unbound-style RTT banding.
+    /// Servers with no stats or expired stats are treated as preferred (to be probed).
+    /// Among known servers, those within min_rtt + RTT_BAND_MS are preferred.
+    /// Each group is shuffled, then preferred servers come first.
+    fn select_servers(servers: &[IpAddr], ns_stats: &Arc<Mutex<HashMap<IpAddr, NsStats>>>) -> Vec<IpAddr> {
+        let now = Instant::now();
+        let stats = ns_stats.lock().unwrap();
+
+        // Separate into known (with valid stats) and unknown
+        let mut known: Vec<(IpAddr, f64)> = Vec::new();
+        let mut unknown: Vec<IpAddr> = Vec::new();
+        for &ip in servers {
+            match stats.get(&ip) {
+                Some(s) if now.duration_since(s.last_update).as_secs() < STATS_EXPIRE_SECS => {
+                    known.push((ip, s.rtt));
+                }
+                _ => {
+                    unknown.push(ip);
+                }
+            }
+        }
+        drop(stats);
+
+        let mut rng = rand::thread_rng();
+
+        if known.is_empty() {
+            // No stats yet — shuffle all and probe
+            unknown.shuffle(&mut rng);
+            return unknown;
+        }
+
+        let min_rtt = known.iter().map(|(_, rtt)| *rtt).fold(f64::INFINITY, f64::min);
+        let band_threshold = min_rtt + RTT_BAND_MS;
+
+        let mut preferred: Vec<IpAddr> = Vec::new();
+        let mut fallback: Vec<IpAddr> = Vec::new();
+        for (ip, rtt) in &known {
+            if *rtt <= band_threshold {
+                preferred.push(*ip);
+            } else {
+                fallback.push(*ip);
+            }
+        }
+
+        // Unknown servers join the preferred group to get probed
+        preferred.extend(unknown);
+        preferred.shuffle(&mut rng);
+        fallback.shuffle(&mut rng);
+        preferred.extend(fallback);
+        preferred
+    }
+
+    fn update_ns_stats(ns_stats: &Arc<Mutex<HashMap<IpAddr, NsStats>>>, ip: IpAddr, rtt_ms: f64) {
+        let mut stats = ns_stats.lock().unwrap();
+        let entry = stats.entry(ip).or_insert(NsStats {
+            rtt: rtt_ms,
+            last_update: Instant::now(),
+        });
+        entry.rtt = entry.rtt * EWMA_WEIGHT + rtt_ms * (1.0 - EWMA_WEIGHT);
+        entry.last_update = Instant::now();
     }
 
     fn create_packet(&self, qname: &str, qtype: QueryType, zone: String, answers: Vec<DnsRecord>, ns_records: Vec<DnsRecord>, glue_records: Vec<DnsRecord>) -> Option<DnsPacket> {
@@ -92,7 +187,7 @@ impl BlockchainFilter {
         }
     }
 
-    fn resolve_by_ns(qname: &str, qtype: QueryType, top_domain: &String, data: &DomainData, recursive: bool) -> (bool, Option<DnsPacket>) {
+    fn resolve_by_ns(qname: &str, qtype: QueryType, top_domain: &String, data: &DomainData, recursive: bool, ns_stats: &Arc<Mutex<HashMap<IpAddr, NsStats>>>) -> (bool, Option<DnsPacket>) {
         // First we search for NS records, collecting nameserver domains
         let mut hosts = Vec::new();
         for record in data.records.iter() {
@@ -156,7 +251,7 @@ impl BlockchainFilter {
 
         if !servers.is_empty() {
             trace!("Found NS servers for domain {}: {:?}", &qname, &servers);
-            let answer = BlockchainFilter::lookup_from_ns(qname, qtype, &servers);
+            let answer = BlockchainFilter::lookup_from_ns(qname, qtype, &servers, ns_stats);
             if let Some(packet) = &answer {
                 trace!("Resolved {:?} from NS: {:?}", (qname, qtype), &packet.answers);
             }
@@ -284,7 +379,7 @@ impl DnsFilter for BlockchainFilter {
                 // Check if this domain has NS records and needs to resolve all records through them
                 // But skip this if we're querying for NS records themselves - return them directly
                 if qtype != QueryType::NS {
-                    let (has_ns, result) = Self::resolve_by_ns(qname, qtype, &top_domain, &data, recursive);
+                    let (has_ns, result) = Self::resolve_by_ns(qname, qtype, &top_domain, &data, recursive, &self.ns_stats);
                     if has_ns {
                         return result;
                     }
