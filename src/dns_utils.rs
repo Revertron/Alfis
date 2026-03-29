@@ -44,7 +44,19 @@ fn create_server_context(context: Arc<Mutex<Context>>, settings: &Settings) -> A
     server_context.allow_recursive = true;
     server_context.resolve_strategy = match settings.dns.forwarders.is_empty() {
         true => ResolveStrategy::Recursive,
-        false => ResolveStrategy::Forward { upstreams: settings.dns.forwarders.clone() }
+        false => {
+            let upstreams = settings.dns.forwarders.iter().map(|s| {
+                if s.starts_with("https://") || s.parse::<std::net::SocketAddr>().is_ok() {
+                    s.clone()
+                } else if let Ok(ip) = s.parse::<std::net::IpAddr>() {
+                    std::net::SocketAddr::new(ip, 53).to_string()
+                } else {
+                    warn!("Cannot parse forwarder address: {}", s);
+                    s.clone()
+                }
+            }).collect();
+            ResolveStrategy::Forward { upstreams }
+        }
     };
     // Add host filters
     for host in &settings.dns.hosts {
