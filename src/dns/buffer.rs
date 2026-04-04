@@ -166,6 +166,9 @@ impl VectorPacketBuffer {
 
 impl PacketBuffer for VectorPacketBuffer {
     fn read(&mut self) -> Result<u8> {
+        if self.pos >= self.buffer.len() {
+            return Err(BufferError::EndOfBuffer);
+        }
         let res = self.buffer[self.pos];
         self.pos += 1;
 
@@ -173,10 +176,16 @@ impl PacketBuffer for VectorPacketBuffer {
     }
 
     fn get(&mut self, pos: usize) -> Result<u8> {
+        if pos >= self.buffer.len() {
+            return Err(BufferError::EndOfBuffer);
+        }
         Ok(self.buffer[pos])
     }
 
     fn get_range(&mut self, start: usize, len: usize) -> Result<&[u8]> {
+        if start + len > self.buffer.len() {
+            return Err(BufferError::EndOfBuffer);
+        }
         Ok(&self.buffer[start..start + len as usize])
     }
 

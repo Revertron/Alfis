@@ -617,7 +617,7 @@ impl DnsClient for HttpsDnsClient {
                                     Ok(size) => {
                                         let mut bytes: Vec<u8> = Vec::with_capacity(size);
                                         response.into_body().into_reader()
-                                            .take(4096)
+                                            .take(65535)
                                             .read_to_end(&mut bytes)?;
                                         let mut buffer = VectorPacketBuffer::new();
                                         buffer.buffer.extend_from_slice(bytes.as_slice());
