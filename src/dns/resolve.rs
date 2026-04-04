@@ -109,17 +109,21 @@ impl DnsResolver for ForwardingDnsResolver {
                 Ok(mut result) => {
                     let elapsed = start.elapsed().as_secs_f64() * 1000.0;
                     self.context.forwarder_tracker.record_success(upstream, elapsed);
-                    self.context.cache.store(&result.answers)?;
 
-                    // Fix domain names in answers to match original query case
+                    // Fix domain names to match original query case before caching
                     let qname_lower = qname.to_lowercase();
-                    for answer in &mut result.answers {
-                        if let Some(domain) = answer.get_domain() {
+                    for rec in result.answers.iter_mut()
+                        .chain(result.authorities.iter_mut())
+                        .chain(result.resources.iter_mut())
+                    {
+                        if let Some(domain) = rec.get_domain() {
                             if domain.to_lowercase() == qname_lower {
-                                answer.set_domain(qname.to_string());
+                                rec.set_domain(qname.to_string());
                             }
                         }
                     }
+
+                    self.context.cache.store(&result.answers)?;
                     return Ok(result);
                 }
                 Err(e) => {
