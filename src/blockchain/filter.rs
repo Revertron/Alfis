@@ -51,7 +51,8 @@ impl BlockchainFilter {
     }
 
     fn lookup_from_ns(qname: &str, qtype: QueryType, servers: &[IpAddr], tracker: &RttTracker<IpAddr>) -> Option<DnsPacket> {
-        let mut dns_client = DnsNetworkClient::new();
+        // Disable 0x20 encoding for NS queries - external NS servers may not preserve case
+        let mut dns_client = DnsNetworkClient::new_with_0x20(false);
         dns_client.run().unwrap();
         let timeout = std::time::Duration::from_secs(2);
 
