@@ -15,7 +15,7 @@ getopts = "0.2.24"
 log = "0.4.28"
 simplelog = "0.12.2"
 toml = "1.0.7"
-sha2 = "0.10.9"
+sha2 = "0.11.0"
 ed25519-dalek = "2.2.0"
 x25519-dalek = { version = "2.0.1", features = ["reusable_secrets"] }
 ecies-ed25519-ng = { git = "https://github.com/Revertron/ecies-ed25519-ng", rev = "554ca29", version = "0.5.3" }
@@ -43,9 +43,9 @@ thread-priority = "3.0.0"
 crossbeam-channel = "0.5.13"
 
 # Optional dependencies regulated by features
-wry = { version = "0.53", optional = true }
-tao = { version = "0.34", optional = true }
-tray-icon = { version = "0.21.2", optional = true }
+wry = { version = "0.55.0", optional = true }
+tao = { version = "0.35.0", optional = true }
+tray-icon = { version = "0.22.0", optional = true }
 tinyfiledialogs = { version = "3.9.1", optional = true }
 open = { version = "5.3.0", optional = true }
 
