@@ -65,7 +65,7 @@ lto = true
 strip = true  # Automatically strip symbols from the binary.
 
 [profile.dev]
-opt-level = 2
+opt-level = 1
 
 [profile.test]
 opt-level = 2

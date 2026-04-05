@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::fmt::Display;
 use std::net::SocketAddr;
 use std::time::Instant;
@@ -5,13 +6,16 @@ use std::time::Instant;
 use mio::net::TcpStream;
 
 use crate::crypto::Chacha;
+use crate::p2p::message::Message;
 use crate::p2p::State;
+use crate::p2p::version::Version;
 
 #[derive(Debug)]
 pub struct Peer {
     addr: SocketAddr,
     stream: TcpStream,
     state: State,
+    outgoing: VecDeque<Vec<u8>>,
     id: String,
     height: u64,
     inbound: bool,
@@ -21,7 +25,8 @@ pub struct Peer {
     reconnects: u32,
     received_block: u64,
     sent_height: u64,
-    cipher: Option<Chacha>
+    cipher: Option<Chacha>,
+    version: Version,
 }
 
 impl Peer {
@@ -30,6 +35,7 @@ impl Peer {
             addr,
             stream,
             state,
+            outgoing: VecDeque::new(),
             id: String::new(),
             height: 0,
             inbound,
@@ -39,7 +45,8 @@ impl Peer {
             reconnects: 0,
             received_block: 0,
             sent_height: 0,
-            cipher: None
+            cipher: None,
+            version: Version::default(),
         }
     }
 
@@ -76,6 +83,52 @@ impl Peer {
 
     pub fn set_state(&mut self, state: State) {
         self.state = state;
+    }
+
+    /// Queue a message for sending. Does not change peer state.
+    pub fn queue_message(&mut self, msg: Message) {
+        let data = serde_cbor::to_vec(&msg).unwrap();
+        self.outgoing.push_back(data);
+    }
+
+    /// Queue a high-priority message at the front (e.g. gap block requests)
+    pub fn queue_priority_message(&mut self, msg: Message) {
+        let data = serde_cbor::to_vec(&msg).unwrap();
+        self.outgoing.push_front(data);
+    }
+
+    pub fn has_queued_messages(&self) -> bool {
+        !self.outgoing.is_empty()
+    }
+
+    pub fn queued_count(&self) -> usize {
+        self.outgoing.len()
+    }
+
+    pub fn pop_message(&mut self) -> Option<Vec<u8>> {
+        self.outgoing.pop_front()
+    }
+
+    pub fn set_version(&mut self, version: Version) {
+        self.version = version;
+    }
+
+    pub fn get_version(&self) -> &Version {
+        &self.version
+    }
+
+    /// Old nodes (< 0.8.9) overwrite outgoing messages, can only have 1 in flight
+    pub fn supports_queue(&self) -> bool {
+        self.version >= Version { major: 0, minor: 8, patch: 9 }
+    }
+
+    /// Check if we can send another message to this peer
+    pub fn can_send(&self) -> bool {
+        if self.supports_queue() {
+            true
+        } else {
+            self.outgoing.is_empty()
+        }
     }
 
     pub fn get_id(&self) -> &str {

@@ -3,6 +3,7 @@ pub mod network;
 pub mod peer;
 pub mod peers;
 pub mod state;
+pub mod version;
 
 pub use message::Message;
 pub use network::Network;

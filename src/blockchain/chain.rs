@@ -975,13 +975,23 @@ impl Chain {
             return false;
         }
         // If this signers' public key has already locked/signed that block we return error
+        // Use signing_keys cache to avoid repeated DB loads for the same blocks
+        let mut cache = self.signers.borrow_mut();
         for i in (full_block.index + 1)..block.index {
-            let signer = self.get_block(i).expect("Error in DB!");
-            if signer.pub_key == block.pub_key {
+            let pub_key = if let Some(cached) = cache.signing_keys.get(&i) {
+                cached.clone()
+            } else {
+                let signer = self.get_block(i).expect("Error in DB!");
+                cache.signing_keys.insert(i, signer.pub_key.clone());
+                signer.pub_key
+            };
+            if pub_key == block.pub_key {
                 warn!("Ignoring block {} from '{:?}', already signed by this key", block.index, &block.pub_key);
                 return false;
             }
         }
+        // Cache this block's pub_key too for future checks
+        cache.signing_keys.insert(block.index, block.pub_key.clone());
         true
     }
 
@@ -1066,6 +1076,7 @@ impl Chain {
         let mut signers = self.signers.borrow_mut();
         signers.index = block.index;
         signers.signers = result.clone();
+        signers.signing_keys.clear();
         result
     }
 
@@ -1087,12 +1098,15 @@ impl Chain {
 
 struct SignersCache {
     index: u64,
-    signers: Vec<Bytes>
+    signers: Vec<Bytes>,
+    /// Cache of block_index → pub_key for signing blocks since last full_block.
+    /// Avoids repeated DB loads in is_good_signer_for_block duplicate check.
+    signing_keys: HashMap<u64, Bytes>,
 }
 
 impl SignersCache {
     pub fn new() -> RefCell<SignersCache> {
-        let cache = SignersCache { index: 0, signers: Vec::new() };
+        let cache = SignersCache { index: 0, signers: Vec::new(), signing_keys: HashMap::new() };
         RefCell::new(cache)
     }
 
@@ -1103,6 +1117,7 @@ impl SignersCache {
     pub fn clear(&mut self) {
         self.index = 0;
         self.signers.clear();
+        self.signing_keys.clear();
     }
 }
 
