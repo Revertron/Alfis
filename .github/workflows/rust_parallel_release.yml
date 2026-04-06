@@ -94,9 +94,10 @@ jobs:
             name: darwin-arm64
             bin_path: ./target/release/alfis
             archive_cmd: zip
-          - os: macos-13
+          - os: macos-latest
             name: darwin-amd64
-            bin_path: ./target/release/alfis
+            target: x86_64-apple-darwin
+            bin_path: ./target/x86_64-apple-darwin/release/alfis
             archive_cmd: zip
 
     defaults:
@@ -108,6 +109,8 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target || '' }}
 
       - name: Install Linux dependencies
         if: contains(matrix.os, 'ubuntu')
@@ -121,7 +124,7 @@ jobs:
             libayatana-appindicator3-dev
 
       - name: Build release binaries
-        run: cargo build --release
+        run: cargo build --release ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
 
       - name: Package zip
         env:
