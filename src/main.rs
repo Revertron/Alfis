@@ -148,6 +148,20 @@ fn main() {
         no_gui = true;
     }
 
+    #[cfg(all(feature = "webgui", target_os = "linux"))]
+    if !no_gui {
+        let running_via_sudo = env::var_os("SUDO_UID").is_some();
+        let has_graphical_session = env::var_os("DISPLAY").is_some() || env::var_os("WAYLAND_DISPLAY").is_some();
+
+        if running_via_sudo {
+            warn!(target: LOG_TARGET_MAIN, "Running GUI via sudo is not supported on Linux, starting without GUI");
+            no_gui = true;
+        } else if !has_graphical_session {
+            warn!(target: LOG_TARGET_MAIN, "No graphical session detected, starting without GUI");
+            no_gui = true;
+        }
+    }
+
     #[cfg(windows)]
     if opt_matches.opt_present("service") {
         let appdata = env::var("PROGRAMDATA").expect("Failed to get APPDATA directory");
