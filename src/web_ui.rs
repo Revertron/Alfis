@@ -3,6 +3,7 @@ extern crate serde;
 extern crate serde_json;
 extern crate tinyfiledialogs as tfd;
 
+use std::panic::{self, AssertUnwindSafe};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
@@ -61,13 +62,8 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, hid
     #[cfg(not(target_os = "windows"))]
     let icon = load_icon_from_png();
 
-    let tray_icon = TrayIconBuilder::new()
-        .with_menu(Box::new(tray_menu))
-        .with_tooltip(&title)
-        .with_icon(icon)
-        .with_menu_on_left_click(false)
-        .build()
-        .unwrap();
+    let tray_icon = build_tray_icon(&title, tray_menu, icon);
+    let tray_available = tray_icon.is_some();
 
     let window_size = tao::dpi::LogicalSize::new(1024, 720);
     // Get primary monitor and calculate center position
@@ -90,7 +86,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, hid
         .with_inner_size(window_size)
         .with_min_inner_size(tao::dpi::LogicalSize::new(773, 350))
         .with_resizable(true)
-        .with_visible(!hide);
+        .with_visible(!hide || !tray_available);
 
     if let Some(position) = position {
         builder = builder.with_position(position);
@@ -319,15 +315,17 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, hid
         true
     });
 
-    let proxy = event_loop.create_proxy();
-    TrayIconEvent::set_event_handler(Some(move |event| {
-        let _ = proxy.send_event(UserEvent::TrayIconEvent(event));
-    }));
+    if tray_available {
+        let proxy = event_loop.create_proxy();
+        TrayIconEvent::set_event_handler(Some(move |event| {
+            let _ = proxy.send_event(UserEvent::TrayIconEvent(event));
+        }));
 
-    let proxy = event_loop.create_proxy();
-    MenuEvent::set_event_handler(Some(move |event| {
-        let _ = proxy.send_event(UserEvent::MenuEvent(event));
-    }));
+        let proxy = event_loop.create_proxy();
+        MenuEvent::set_event_handler(Some(move |event| {
+            let _ = proxy.send_event(UserEvent::MenuEvent(event));
+        }));
+    }
 
     let proxy = event_loop.create_proxy();
 
@@ -340,7 +338,14 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, hid
                 event: WindowEvent::CloseRequested,
                 ..
             } => {
-                window.set_visible(false);
+                if tray_available {
+                    window.set_visible(false);
+                } else {
+                    info!("Interface closed, exiting");
+                    post(Event::ActionQuit);
+                    thread::sleep(Duration::from_millis(100));
+                    *control_flow = ControlFlow::Exit;
+                }
             }
             TaoEvent::UserEvent(user_event) => {
                 let wv = webview_clone.lock().unwrap();
@@ -364,19 +369,21 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, hid
                         show_warning(&wv, &text);
                     }
                     UserEvent::TrayIconEvent(event) => {
-                        match event {
-                            TrayIconEvent::DoubleClick { button, .. } => {
-                                if button == tray_icon::MouseButton::Left {
-                                    window.set_visible(true);
-                                    window.set_focus();
+                        if let Some(tray_icon) = tray_icon.as_ref() {
+                            match event {
+                                TrayIconEvent::DoubleClick { button, .. } => {
+                                    if button == tray_icon::MouseButton::Left {
+                                        window.set_visible(true);
+                                        window.set_focus();
+                                    }
                                 }
+                                TrayIconEvent::Enter { .. } => {
+                                    let nodes = connected_nodes.load(Ordering::SeqCst);
+                                    let title = format!("ALFIS {}\nConnected: {nodes}", env!("CARGO_PKG_VERSION"));
+                                    let _ = tray_icon.set_tooltip(Some(title));
+                                }
+                                _ => {}
                             }
-                            TrayIconEvent::Enter { .. } => {
-                                let nodes = connected_nodes.load(Ordering::SeqCst);
-                                let title = format!("ALFIS {}\nConnected: {nodes}", env!("CARGO_PKG_VERSION"));
-                                let _ = tray_icon.set_tooltip(Some(title));
-                            }
-                            _ => {}
                         }
                     }
                     UserEvent::MenuEvent(event) => {
@@ -394,6 +401,34 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, hid
             _ => {}
         }
     });
+}
+
+fn build_tray_icon(title: &str, tray_menu: Menu, icon: tray_icon::Icon) -> Option<tray_icon::TrayIcon> {
+    let previous_hook = panic::take_hook();
+    panic::set_hook(Box::new(|_| {}));
+
+    let result = panic::catch_unwind(AssertUnwindSafe(|| {
+        TrayIconBuilder::new()
+            .with_menu(Box::new(tray_menu))
+            .with_tooltip(title)
+            .with_icon(icon)
+            .with_menu_on_left_click(false)
+            .build()
+    }));
+
+    panic::set_hook(previous_hook);
+
+    match result {
+        Ok(Ok(tray_icon)) => Some(tray_icon),
+        Ok(Err(error)) => {
+            warn!("Tray icon is unavailable: {error}");
+            None
+        }
+        Err(_) => {
+            warn!("Tray icon is unavailable: failed to load appindicator library, continuing without tray support");
+            None
+        }
+    }
 }
 
 #[derive(Debug)]
