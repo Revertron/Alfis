@@ -18,13 +18,17 @@ use crate::p2p::{Message, Peer, State};
 use crate::Bytes;
 
 const PING_PERIOD: u64 = 30;
+const PENDING_BLOCK_TTL: Duration = Duration::from_secs(15);
 
 pub struct Peers {
     peers: HashMap<Token, Peer>,
     new_peers: Vec<SocketAddr>,
     ignored: HashMap<IpAddr, Instant>,
     my_id: String,
-    behind_ping_sent_time: i64
+    behind_ping_sent_time: i64,
+    /// block_index -> time we sent GetBlock for it; used to avoid
+    /// re-requesting the same block from many peers while a reply is in flight
+    pending_blocks: HashMap<u64, Instant>,
 }
 
 impl Peers {
@@ -34,8 +38,17 @@ impl Peers {
             new_peers: Vec::new(),
             ignored: HashMap::new(),
             my_id: random_string(6),
-            behind_ping_sent_time: 0
+            behind_ping_sent_time: 0,
+            pending_blocks: HashMap::new(),
         }
+    }
+
+    pub fn mark_block_received(&mut self, index: u64) {
+        self.pending_blocks.remove(&index);
+    }
+
+    pub fn clear_pending_blocks(&mut self) {
+        self.pending_blocks.clear();
     }
 
     pub fn add_peer(&mut self, token: Token, peer: Peer) {
@@ -361,22 +374,41 @@ impl Peers {
     }
 
     fn ask_blocks_from_peers(&mut self, registry: &Registry, height: u64, max_height: u64, have_blocks: HashSet<u64>) {
+        // Drop in-flight entries that have aged out so genuinely lost
+        // requests get retried instead of being skipped forever.
+        self.pending_blocks.retain(|_, t| t.elapsed() < PENDING_BLOCK_TTL);
+        // Also drop in-flight entries we've already accepted/buffered.
+        self.pending_blocks.retain(|i, _| !have_blocks.contains(i) && *i > height);
+
         let mut rng = rand::thread_rng();
         let mut peers = self.peers
             .iter_mut()
-            .filter_map(|(token, peer)| if peer.has_more_blocks(height) { Some((token, peer)) } else { None })
+            .filter_map(|(token, peer)| {
+                if peer.has_more_blocks(height) && peer.get_state().is_idle() {
+                    Some((token, peer))
+                } else {
+                    None
+                }
+            })
             .choose_multiple(&mut rng, (max_height - height) as usize);
         peers.shuffle(&mut rng);
         let mut index = height + 1;
+        let now = Instant::now();
         for (token, peer) in peers {
             if have_blocks.contains(&index) {
                 debug!("We have block {} in map, skipping request", index);
                 index += 1;
                 continue;
             }
+            if self.pending_blocks.contains_key(&index) {
+                debug!("Block {} already requested from another peer, skipping", index);
+                index += 1;
+                continue;
+            }
             debug!("Peer {} is higher than we are, requesting block {}", &peer.get_addr().ip(), index);
             registry.reregister(peer.get_stream(), *token, Interest::WRITABLE).unwrap();
             peer.set_state(State::message(Message::GetBlock { index }));
+            self.pending_blocks.insert(index, now);
             index += 1;
             if index > max_height {
                 break;

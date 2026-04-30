@@ -624,6 +624,7 @@ impl Network {
                 }
             }
             Message::Block { index, block } => {
+                self.peers.mark_block_received(index);
                 let peer = self.peers.get_mut_peer(token).unwrap();
                 peer.set_active(true);
                 let block: Block = match Block::from_bytes(block.as_slice()) {
@@ -679,6 +680,7 @@ impl Network {
                 if my_height == max_height {
                     post(crate::event::Event::SyncFinished);
                     self.future_blocks.clear();
+                    self.peers.clear_pending_blocks();
                 } else {
                     let event = crate::event::Event::Syncing { have: my_height, height: max(max_height, my_height) };
                     post(event);
@@ -708,8 +710,14 @@ impl Network {
             }
             BlockQuality::Fork => {
                 debug!("Got forked block {} with hash {:?}", block.index, block.hash);
+                let height = context.chain.get_height();
+                // Never replace blocks deeper than LIMITED_CONFIDENCE_DEPTH below our tip.
+                if block.index + LIMITED_CONFIDENCE_DEPTH < height {
+                    warn!("Refusing to replace deep fork block {} (our height: {})", block.index, height);
+                    return State::Banned;
+                }
                 // If we are very much behind of blockchain
-                let lagged = block.index == context.chain.get_height() && block.index + LIMITED_CONFIDENCE_DEPTH <= max_height;
+                let lagged = block.index == height && block.index + LIMITED_CONFIDENCE_DEPTH <= max_height;
                 let our_block = context.chain.get_block(block.index).unwrap();
                 if block.is_better_than(&our_block) || lagged {
                     context.chain.replace_block(block).expect("Error replacing block with fork");

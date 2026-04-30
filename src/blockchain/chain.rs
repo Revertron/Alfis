@@ -925,6 +925,12 @@ impl Chain {
                     }
                     if let Some(my_block) = self.get_block(block.index) {
                         return if my_block.hash.ne(&block.hash) {
+                            // Refuse forks deeper than LIMITED_CONFIDENCE_DEPTH below our tip:
+                            // we never want to rewrite history beyond a few blocks back.
+                            if block.index + LIMITED_CONFIDENCE_DEPTH < last_block.index {
+                                warn!("Ignoring deep fork block {} (our tip: {}):\n{:?}", block.index, last_block.index, &block);
+                                return Bad;
+                            }
                             warn!("Got forked block {} with hash {:?} instead of {:?}", block.index, block.hash, last_block.hash);
                             Fork
                         } else {
