@@ -130,10 +130,12 @@ jobs:
         env:
           ZIP_NAME: alfis-${{ matrix.name }}-${{ needs.get_version.outputs.project_version }}.zip
         run: |
+          cp "${{ matrix.bin_path }}" .
+          BIN_NAME=$(basename "${{ matrix.bin_path }}")
           if [ "${{ matrix.archive_cmd }}" = "7z" ]; then
-            7z a "$ZIP_NAME" "${{ matrix.bin_path }}" alfis.toml README.md LICENSE adblock.txt
+            7z a "$ZIP_NAME" "$BIN_NAME" alfis.toml README.md LICENSE adblock.txt
           else
-            zip "$ZIP_NAME" "${{ matrix.bin_path }}" alfis.toml README.md LICENSE adblock.txt
+            zip "$ZIP_NAME" "$BIN_NAME" alfis.toml README.md LICENSE adblock.txt
           fi
 
       - name: Upload zip

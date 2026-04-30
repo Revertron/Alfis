@@ -202,13 +202,6 @@ impl Peers {
         count
     }
 
-    pub fn get_active_peer_tokens(&self) -> Vec<Token> {
-        self.peers.iter()
-            .filter(|(_, peer)| peer.active())
-            .map(|(token, _)| *token)
-            .collect()
-    }
-
     pub fn is_tween_connect(&self, id: &str) -> bool {
         for (_, peer) in self.peers.iter() {
             if peer.active() && peer.get_id() == id {
@@ -262,10 +255,7 @@ impl Peers {
         let mut stale_tokens = Vec::new();
         for (token, peer) in self.peers.iter_mut() {
             if let State::Idle { from } = peer.get_state() {
-                if peer.has_queued_messages() {
-                    let stream = peer.get_stream();
-                    registry.reregister(stream, *token, Interest::WRITABLE).unwrap();
-                } else if from.elapsed().as_secs() >= PING_PERIOD + random_time {
+                if from.elapsed().as_secs() >= PING_PERIOD + random_time {
                     // Sometimes we check for new peers instead of pinging
                     let message = if nodes < MAX_NODES && random::<bool>() {
                         Message::GetPeers
@@ -283,7 +273,7 @@ impl Peers {
                     stale_tokens.push((token.clone(), peer.get_addr()));
                     continue;
                 }
-                if matches!(peer.get_state(), State::Message {..}) || peer.has_queued_messages() {
+                if matches!(peer.get_state(), State::Message {..}) {
                     let stream = peer.get_stream();
                     registry.reregister(stream, *token, Interest::WRITABLE).unwrap();
                 }
@@ -298,7 +288,7 @@ impl Peers {
         self.ignored.retain(|_addr, time| { time.elapsed().as_secs() < 600 });
 
         // If someone has more blocks we sync
-        if nodes >= MIN_CONNECTED_NODES_START_SYNC && height < max_height && have_blocks.is_empty() {
+        if nodes >= MIN_CONNECTED_NODES_START_SYNC && height < max_height {
             // Give some opportunity to get more peers instead of requests for blocks only
             let request_blocks = nodes >= 10 || random::<bool>();
             if request_blocks {
