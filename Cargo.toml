@@ -1,12 +1,13 @@
 [package]
 name = "alfis"
-version = "0.8.10"
+version = "0.8.11"
 authors = ["Revertron <alfis@revertron.com>"]
 edition = "2021"
 build = "build.rs"
 readme = "README.md"
 homepage = "https://alfis.name"
 repository = "https://github.com/Revertron/Alfis"
+keywords = ["p2p", "mesh", "dns", "blockchain", "yggdrasil"]
 exclude = ["blockchain.db", "alfis.toml"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -30,22 +31,21 @@ serde_cbor = "0.11.2"
 num-bigint = "0.4.6"
 chrono = { version = "0.4.42", features = ["serde"] }
 time = "0.3.44"
-rand = { package = "rand", version = "0.8.5" }
+rand = { version = "0.8.5" }
 sqlite = "0.37.0"
 uuid = { version = "1.18.1", features = ["serde", "v4"] }
 mio = { version = "1.0.0", features = ["os-poll", "net"] }
 ureq = { version = "3.1.4", optional = true }
-lru = "0.16.2"
+lru = "0.18"
 derive_more = { version = "2.0.1", features = ["display", "error", "from"] }
 lazy_static = "1.5.0"
 spmc = "0.3.0"
 thread-priority = "3.0.0"
-crossbeam-channel = "0.5.13"
 
 # Optional dependencies regulated by features
 wry = { version = "0.55.0", optional = true }
 tao = { version = "0.35.0", optional = true }
-tray-icon = { version = "0.22.0", optional = true }
+tray-icon = { version = "0.23", optional = true }
 tinyfiledialogs = { version = "3.9.1", optional = true }
 open = { version = "5.3.0", optional = true }
 
