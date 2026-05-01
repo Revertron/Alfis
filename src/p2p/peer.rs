@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::net::SocketAddr;
 use std::time::Instant;
@@ -6,6 +7,9 @@ use mio::net::TcpStream;
 
 use crate::crypto::Chacha;
 use crate::p2p::State;
+
+/// Cap per-peer requested-blocks set so a misbehaving peer can't bloat memory.
+const MAX_REQUESTED_PER_PEER: usize = 256;
 
 #[derive(Debug)]
 pub struct Peer {
@@ -21,7 +25,12 @@ pub struct Peer {
     reconnects: u32,
     received_block: u64,
     sent_height: u64,
-    cipher: Option<Chacha>
+    cipher: Option<Chacha>,
+    /// Block indices we have asked this peer for.
+    requested_blocks: HashSet<u64>,
+    /// Number of blocks this peer has served us that we accepted as Good.
+    /// Used to weight which peers' height claims drive `max_height`.
+    served_good_blocks: u64,
 }
 
 impl Peer {
@@ -39,8 +48,36 @@ impl Peer {
             reconnects: 0,
             received_block: 0,
             sent_height: 0,
-            cipher: None
+            cipher: None,
+            requested_blocks: HashSet::new(),
+            served_good_blocks: 0,
         }
+    }
+
+    /// Bump count of Good blocks this peer has served us.
+    pub fn inc_served_good_blocks(&mut self) {
+        self.served_good_blocks = self.served_good_blocks.saturating_add(1);
+    }
+
+    pub fn served_good_blocks(&self) -> u64 {
+        self.served_good_blocks
+    }
+
+    /// Record that we sent `GetBlock { index }` to this peer.
+    pub fn add_requested_block(&mut self, index: u64) {
+        if self.requested_blocks.len() >= MAX_REQUESTED_PER_PEER {
+            // Drop an arbitrary old entry to keep memory bounded.
+            if let Some(&victim) = self.requested_blocks.iter().next() {
+                self.requested_blocks.remove(&victim);
+            }
+        }
+        self.requested_blocks.insert(index);
+    }
+
+    /// Consume the entry for `index`. Returns `true` if we actually asked for it.
+    /// A `false` return means the reply was unsolicited.
+    pub fn take_requested_block(&mut self, index: u64) -> bool {
+        self.requested_blocks.remove(&index)
     }
 
     pub fn set_cipher(&mut self, cipher: Chacha) {

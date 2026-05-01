@@ -48,7 +48,8 @@ const SQL_GET_OPTIONS: &str = "SELECT * FROM options;";
 lazy_static! {
     static ref WRONG_HASHES: Vec<Bytes> = vec![
         Bytes::from_bytes(&from_hex("5B2D63CD8BD854B23A34A49AD850BF520BDD8D4514F9B20A3DF01430A59F0000").unwrap()),
-        Bytes::from_bytes(&from_hex("4448E0582878FCB982C0DDAFEB441A03A30FB62FA6ECD1EA4D51C29A30980000").unwrap())
+        Bytes::from_bytes(&from_hex("4448E0582878FCB982C0DDAFEB441A03A30FB62FA6ECD1EA4D51C29A30980000").unwrap()),
+        Bytes::from_bytes(&from_hex("0000010771885DE68AEF3CE0A590E4C2E087CE00723B927342A3C23E5A23A8C8").unwrap())
     ];
 }
 
@@ -798,6 +799,11 @@ impl Chain {
             warn!("Ignoring block from unsupported version:\n{:?}", &block);
             return Bad;
         }
+        // Genesis is at index 1; index 0 is malformed and would underflow `block.index - 1` below.
+        if block.index == 0 {
+            warn!("Ignoring block with index 0:\n{:?}", &block);
+            return Bad;
+        }
         if WRONG_HASHES.contains(&block.hash) {
             warn!("Got block with hash from wrong hashes.");
             return Bad;
@@ -842,13 +848,19 @@ impl Chain {
         if let Some(prev_block) = self.get_block(block.index - 1) {
             // https://en.bitcoinwiki.org/wiki/Limited_Confidence_Proof-of-Activity
             if block.prev_block_hash.ne(&prev_block.hash) {
-                if block.index < self.get_height() - LIMITED_CONFIDENCE_DEPTH {
+                // saturating_sub avoids u64 underflow when get_height() < LIMITED_CONFIDENCE_DEPTH (early sync)
+                if block.index < self.get_height().saturating_sub(LIMITED_CONFIDENCE_DEPTH) {
                     warn!("Ignoring block from shorter chain:\n{:?}", &block);
                     return Bad;
                 } else {
                     warn!("Rewinding chain of block with wrong previous hash:\n{:?}", &block);
                     return Rewind;
                 }
+            }
+            // timestamp must not go backwards relative to its predecessor
+            if block.timestamp < prev_block.timestamp {
+                warn!("Ignoring block with timestamp earlier than its predecessor:\n{:?}", &block);
+                return Bad;
             }
         }
 
@@ -897,7 +909,12 @@ impl Chain {
                     warn!("Block is from the future, how is this possible?");
                     return Future;
                 }
-                if !self.origin.is_zero() && block.hash.ne(&self.origin) {
+                // refuse to accept any first block when no origin is configured
+                if self.origin.is_zero() {
+                    warn!("Cannot accept first block: origin hash is not configured");
+                    return Bad;
+                }
+                if block.hash.ne(&self.origin) {
                     warn!("Mining gave us a bad block:\n{:?}", &block);
                     return Bad;
                 }
@@ -998,7 +1015,7 @@ impl Chain {
                 let discount = self.get_identity_discount(&transaction.identity, false, height, time);
                 // TODO move this check somewhere appropriate
                 return match serde_json::from_str::<DomainData>(&transaction.data) {
-                    Ok(_) => DOMAIN_DIFFICULTY - discount,
+                    Ok(_) => DOMAIN_DIFFICULTY.saturating_sub(discount),
                     Err(_) => {
                         warn!("Error parsing DomainData from {:?}", transaction);
                         u32::MAX
@@ -1019,7 +1036,9 @@ impl Chain {
                 }
                 // Weeks since this domain was changed + 1, but not more than 7 weeks.
                 // So max discount will be 8 bits of difficulty.
-                (min((time - timestamp) / ONE_WEEK, 7i64) + 1) as u32
+                let weeks = min((time - timestamp) / ONE_WEEK, 7i64);
+                if weeks < 0 { return 0; }
+                (weeks + 1) as u32
             }
         }
     }

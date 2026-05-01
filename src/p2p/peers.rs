@@ -18,7 +18,7 @@ use crate::p2p::{Message, Peer, State};
 use crate::Bytes;
 
 const PING_PERIOD: u64 = 30;
-const PENDING_BLOCK_TTL: Duration = Duration::from_secs(15);
+const PENDING_BLOCK_TTL: Duration = Duration::from_secs(5);
 
 pub struct Peers {
     peers: HashMap<Token, Peer>,
@@ -29,6 +29,10 @@ pub struct Peers {
     /// block_index -> time we sent GetBlock for it; used to avoid
     /// re-requesting the same block from many peers while a reply is in flight
     pending_blocks: HashMap<u64, Instant>,
+    /// True until any peer has served us a Good block. While true, `corroborated_max_height`
+    /// falls back to the highest claim from active peers so initial sync can begin.
+    /// Flipped to false permanently once the first peer earns trust.
+    bootstrap_phase: bool,
 }
 
 impl Peers {
@@ -40,15 +44,40 @@ impl Peers {
             my_id: random_string(6),
             behind_ping_sent_time: 0,
             pending_blocks: HashMap::new(),
+            bootstrap_phase: true,
         }
     }
 
-    pub fn mark_block_received(&mut self, index: u64) {
-        self.pending_blocks.remove(&index);
+    /// Tell `Peers` that some peer just served a Good block; exit bootstrap if still in it.
+    pub fn note_good_block_served(&mut self) {
+        if self.bootstrap_phase {
+            self.bootstrap_phase = false;
+        }
     }
 
-    pub fn clear_pending_blocks(&mut self) {
-        self.pending_blocks.clear();
+    /// Trusted network height.
+    /// - Post-bootstrap: among active peers with at least one served-Good block,
+    ///   return the height of the one that served the most. Sybils that never
+    ///   produced a valid block for us are excluded entirely.
+    /// - During bootstrap (no peer has earned trust yet): fall back to the highest
+    ///   claim among active peers so initial sync can start. Once the first Good
+    ///   block lands, we exit bootstrap and Sybils stop influencing the value.
+    pub fn corroborated_max_height(&self) -> Option<u64> {
+        let trusted = self.peers.values()
+            .filter(|p| p.active() && p.served_good_blocks() > 0)
+            .max_by_key(|p| p.served_good_blocks())
+            .map(|p| p.get_height());
+        if let Some(h) = trusted {
+            return Some(h);
+        }
+        if self.bootstrap_phase {
+            self.peers.values()
+                .filter(|p| p.active())
+                .map(|p| p.get_height())
+                .max()
+        } else {
+            None
+        }
     }
 
     pub fn add_peer(&mut self, token: Token, peer: Peer) {
@@ -118,12 +147,22 @@ impl Peers {
     }
 
     pub fn add_peers_from_exchange(&mut self, peers: Vec<String>) {
+        // refuse oversized peer lists
+        if peers.len() > MAX_PEERS_FROM_EXCHANGE {
+            warn!("Peer exchange list too large ({}), ignoring", peers.len());
+            return;
+        }
         let peers: HashSet<String> = peers
             .iter()
             .fold(HashSet::new(), |mut peers, peer| {
                 peers.insert(peer.to_owned());
                 peers
             });
+        // Cap our pending new_peers queue too — don't let a bursty exchange flood it
+        if self.new_peers.len() >= MAX_PEERS_FROM_EXCHANGE * 4 {
+            debug!("new_peers buffer full, dropping incoming exchange");
+            return;
+        }
         let mut count = 0;
         // TODO make it return error if these peers are wrong and seem like an attack
         for peer in peers.iter() {
@@ -357,20 +396,8 @@ impl Peers {
         }
     }
 
-    #[allow(dead_code)]
-    fn ask_block_from_peer(&mut self, registry: &Registry, height: u64) {
-        let mut rng = rand::thread_rng();
-        match self.peers
-            .iter_mut()
-            .filter_map(|(token, peer)| if peer.has_more_blocks(height) { Some((token, peer)) } else { None })
-            .choose(&mut rng) {
-            None => {}
-            Some((token, peer)) => {
-                debug!("Peer {} is higher than we are, requesting block {}", &peer.get_addr().ip(), height + 1);
-                registry.reregister(peer.get_stream(), *token, Interest::WRITABLE | Interest::READABLE).unwrap();
-                peer.set_state(State::message(Message::GetBlock { index: height + 1 }));
-            }
-        }
+    pub fn clear_pending_blocks(&mut self) {
+        self.pending_blocks.clear();
     }
 
     fn ask_blocks_from_peers(&mut self, registry: &Registry, height: u64, max_height: u64, have_blocks: HashSet<u64>) {
@@ -409,6 +436,7 @@ impl Peers {
             registry.reregister(peer.get_stream(), *token, Interest::WRITABLE).unwrap();
             peer.set_state(State::message(Message::GetBlock { index }));
             self.pending_blocks.insert(index, now);
+            peer.add_requested_block(index);
             index += 1;
             if index > max_height {
                 break;

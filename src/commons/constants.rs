@@ -51,4 +51,8 @@ pub const MIN_CONNECTED_NODES_START_SYNC: usize = 4;
 pub const MAX_READ_BLOCK_TIME: u128 = 100;
 pub const MAX_RECONNECTS: u32 = 5;
 pub const MAX_IDLE_SECONDS: u64 = 180;
-pub const MAX_NODES: usize = 50;
+pub const MAX_NODES: usize = 15;
+/// Maximum number of out-of-order blocks held in memory waiting to be applied
+pub const MAX_FUTURE_BLOCKS: usize = 1024;
+/// Maximum number of peer addresses we accept in one Peers exchange message
+pub const MAX_PEERS_FROM_EXCHANGE: usize = 15;

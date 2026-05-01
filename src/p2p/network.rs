@@ -29,6 +29,11 @@ use crate::{Block, Bytes, Context};
 
 const SERVER: Token = Token(0);
 
+/// Max number of block hashes we remember as known-bad in this session.
+const MAX_BAD_BLOCKS_CACHE: usize = 50;
+/// Max number of peers we track Rewind walks for at once.
+const MAX_REWIND_WALKS: usize = 16;
+
 pub struct Network {
     context: Arc<Mutex<Context>>,
     secret_key: ReusableSecret,
@@ -37,7 +42,14 @@ pub struct Network {
     // States of peer connections, and some data to send when sockets become writable
     peers: Peers,
     // Orphan blocks from future
-    future_blocks: HashMap<u64, Block>
+    future_blocks: HashMap<u64, Block>,
+    /// Hashes of blocks we've conclusively rejected (Bad or part of a Rewind walk
+    /// that bottomed at Bad, or deep Fork). Any peer sending one of these is banned
+    /// on sight without re-running validation or walking the parent chain again.
+    bad_blocks: HashSet<Bytes>,
+    /// Per-peer Vec of block hashes the peer has served us as Rewind, in order.
+    /// On Bad we promote the whole Vec to `bad_blocks`; on Good we drop it.
+    rewind_walks: HashMap<Token, Vec<Bytes>>,
 }
 
 impl Network {
@@ -47,7 +59,35 @@ impl Network {
         let secret_key = ReusableSecret::random_from_rng(&mut thread_rng);
         let public_key = PublicKey::from(&secret_key);
         let peers = Peers::new();
-        Network { context, secret_key, public_key, token: Token(1), peers, future_blocks: HashMap::new() }
+        Network {
+            context,
+            secret_key,
+            public_key,
+            token: Token(1),
+            peers,
+            future_blocks: HashMap::new(),
+            bad_blocks: HashSet::new(),
+            rewind_walks: HashMap::new(),
+        }
+    }
+
+    /// Insert `hash` into the bad-blocks cache, evicting an arbitrary old entry if at cap.
+    fn remember_bad(&mut self, hash: Bytes) {
+        if self.bad_blocks.len() >= MAX_BAD_BLOCKS_CACHE {
+            if let Some(victim) = self.bad_blocks.iter().next().cloned() {
+                self.bad_blocks.remove(&victim);
+            }
+        }
+        self.bad_blocks.insert(hash);
+    }
+
+    /// Promote every hash a peer served us during a Rewind walk into `bad_blocks`.
+    fn promote_rewind_walk_to_bad(&mut self, token: &Token) {
+        if let Some(hashes) = self.rewind_walks.remove(token) {
+            for h in hashes {
+                self.remember_bad(h);
+            }
+        }
     }
 
     pub fn start(&mut self) {
@@ -175,6 +215,7 @@ impl Network {
                         };
                         let _ = debug_send.send(format!("Handle connection event: {:?} for peer {}", &event, &peer));
                         if !self.handle_connection_event(poll.registry(), event, &mut seen_blocks, &mut buffer) {
+                            self.rewind_walks.remove(&token);
                             let _ = self.peers.close_peer(poll.registry(), &token);
                             let blocks = self.context.lock().unwrap().chain.get_height();
                             let keys = self.context.lock().unwrap().chain.get_users_count();
@@ -199,6 +240,31 @@ impl Network {
 
             let _ = debug_send.send(String::from("UI Timer"));
             if ui_timer.elapsed().as_millis() > UI_REFRESH_DELAY_MS {
+                // Apply the corroborated max_height. Also, re-emit the right Sync UI event
+                // so the UI flips out of "Synchronizing" once we are at the trusted tip,
+                // even when no Good block has arrived to trigger the event from handle_block.
+                if let Some(corroborated) = self.peers.corroborated_max_height() {
+                    let (our_height, new_max) = {
+                        let mut c = self.context.lock().unwrap();
+                        let cur_max = c.chain.get_max_height();
+                        let our_height = c.chain.get_height();
+                        let new_max = max(corroborated, our_height);
+                        if new_max != cur_max {
+                            c.chain.update_max_height(new_max);
+                            info!("Changed to corroborated height: {corroborated}");
+                        }
+                        (our_height, new_max)
+                    };
+                    if our_height >= new_max {
+                        post(crate::event::Event::SyncFinished);
+                    } else {
+                        post(crate::event::Event::Syncing { have: our_height, height: new_max });
+                    }
+                } else {
+                    trace!("No corroborated height");
+                    // No trusted height source → treat ourselves as at the tip, exit syncing.
+                    post(crate::event::Event::SyncFinished);
+                }
                 // Send pings to idle peers
                 let (height, max_height, hash) = {
                     let context = self.context.lock().unwrap();
@@ -374,6 +440,7 @@ impl Network {
                         }
                         State::Error => {}
                         State::Banned => {
+                            self.rewind_walks.remove(&event.token());
                             self.peers.ignore_peer(registry, &event.token());
                         }
                         State::Offline { .. } => {
@@ -381,6 +448,7 @@ impl Network {
                         }
                         State::Loop => {
                             peer.set_state(State::Loop);
+                            self.rewind_walks.remove(&event.token());
                             self.peers.ignore_peer(registry, &event.token());
                         }
                         State::SendLoop => {
@@ -485,6 +553,12 @@ impl Network {
     }
 
     fn handle_message(&mut self, message: Message, token: &Token, seen_blocks: &mut HashSet<Bytes>) -> State {
+        // bail early if the peer disappeared; we run single-threaded under &mut self
+        // so once this check passes, inner peer lookups in this function cannot fail.
+        if self.peers.get_peer(token).is_none() {
+            debug!("handle_message: peer {:?} no longer exists", token);
+            return State::Error;
+        }
         let (my_height, my_hash, my_origin, my_version, me_public) = {
             let context = self.context.lock().unwrap();
             // TODO cache it somewhere
@@ -542,9 +616,9 @@ impl Network {
                 peer.set_active(true);
                 peer.set_public(public);
                 peer.reset_reconnects();
-                let mut context = self.context.lock().unwrap();
+                // don't trust a single peer's reported height — max_height is derived from
+                // corroborated peer heights in the periodic update loop. Just emit a UI event.
                 if peer.is_higher(my_height) {
-                    context.chain.update_max_height(height);
                     let event = crate::event::Event::Syncing { have: my_height, height: max(height, my_height) };
                     post(event);
                 }
@@ -564,13 +638,13 @@ impl Network {
                     return State::message(Message::pong(my_height, my_hash));
                 }
                 if peer.is_higher(my_height) {
-                    let mut context = self.context.lock().unwrap();
-                    context.chain.update_max_height(height);
                     info!("Peer is higher, requesting block {} from {}", my_height + 1, peer.get_addr().ip());
+                    peer.add_requested_block(my_height + 1);
                     State::message(Message::GetBlock { index: my_height + 1 })
                 } else if my_height == height && hash.ne(&my_hash) {
                     info!("Hashes are different, requesting block {} from {}", my_height, peer.get_addr().ip());
                     info!("My hash: {:?}, their hash: {:?}", &my_hash, &hash);
+                    peer.add_requested_block(my_height);
                     State::message(Message::GetBlock { index: my_height })
                 } else {
                     State::message(Message::pong(my_height, my_hash))
@@ -585,13 +659,13 @@ impl Network {
                     return State::idle();
                 }
                 if peer.is_higher(my_height) {
-                    let mut context = self.context.lock().unwrap();
-                    context.chain.update_max_height(height);
                     info!("Peer is higher, requesting block {} from {}", my_height + 1, peer.get_addr().ip());
+                    peer.add_requested_block(my_height + 1);
                     State::message(Message::GetBlock { index: my_height + 1 })
                 } else if my_height == height && hash.ne(&my_hash) {
                     info!("Hashes are different, requesting block {} from {}", my_height, peer.get_addr().ip());
                     info!("My hash: {:?}, their hash: {:?}", &my_hash, &hash);
+                    peer.add_requested_block(my_height);
                     State::message(Message::GetBlock { index: my_height })
                 } else if active_count < MAX_NODES && random::<u8>() < 50 {
                     debug!("Requesting more peers from {}", peer.get_addr().ip());
@@ -624,8 +698,12 @@ impl Network {
                 }
             }
             Message::Block { index, block } => {
-                self.peers.mark_block_received(index);
                 let peer = self.peers.get_mut_peer(token).unwrap();
+                // only accept blocks we asked *this* peer for
+                if !peer.take_requested_block(index) {
+                    warn!("Unsolicited Block {} from {}, dropping", index, peer.get_addr().ip());
+                    return State::Banned;
+                }
                 peer.set_active(true);
                 let block: Block = match Block::from_bytes(block.as_slice()) {
                     Ok(block) => block,
@@ -651,9 +729,23 @@ impl Network {
     }
 
     fn handle_block(&mut self, token: &Token, block: Block, seen_blocks: &mut HashSet<Bytes>) -> State {
+        // Short-circuit any block whose hash we've already conclusively rejected this session.
+        // No validation, no walk-back, no banning loop — straight to ban.
+        if self.bad_blocks.contains(&block.hash) {
+            let addr = self.peers.get_peer(token).map(|p| p.get_addr().to_string())
+                .unwrap_or_else(|| "?".to_string());
+            warn!("Block {} with known-bad hash {:?} from {}, banning", block.index, &block.hash, addr);
+            return State::Banned;
+        }
         seen_blocks.insert(block.hash.clone());
         let peers_count = self.peers.get_peers_active_count();
-        let peer = self.peers.get_mut_peer(token).unwrap();
+        let peer = match self.peers.get_mut_peer(token) {
+            Some(p) => p,
+            None => {
+                debug!("handle_block: peer {:?} no longer exists", token);
+                return State::Error;
+            }
+        };
         peer.set_received_block(block.index);
         trace!("New block from {}", &peer.get_addr());
 
@@ -663,6 +755,14 @@ impl Network {
             BlockQuality::Good => {
                 let mut next_index = block.index + 1;
                 context.chain.add_block(block);
+                // Credit the peer that served this Good block; only the initially-arriving
+                // block counts (future_blocks drain has no peer attribution).
+                if let Some(p) = self.peers.get_mut_peer(token) {
+                    p.inc_served_good_blocks();
+                }
+                self.peers.note_good_block_served();
+                // Their walk (if any) led to a successful chain extension — drop, don't cache.
+                self.rewind_walks.remove(token);
                 // If we have some consequent blocks in a bucket of 'future blocks', we add them
                 while let Some(block) = self.future_blocks.remove(&next_index) {
                     if context.chain.check_new_block(&block) == BlockQuality::Good {
@@ -692,7 +792,25 @@ impl Network {
             BlockQuality::Twin => { debug!("Ignoring duplicate block {}", block.index); }
             BlockQuality::Future => {
                 debug!("Got future block {}", block.index);
-                self.future_blocks.insert(block.index, block);
+                // keep future_blocks bounded — evict the entry farthest from current height
+                if self.future_blocks.len() >= MAX_FUTURE_BLOCKS {
+                    let cur_height = context.chain.get_height();
+                    let farthest = self.future_blocks.keys()
+                        .max_by_key(|i| (**i).abs_diff(cur_height))
+                        .copied();
+                    let new_dist = block.index.abs_diff(cur_height);
+                    match farthest {
+                        Some(f) if f.abs_diff(cur_height) > new_dist => {
+                            self.future_blocks.remove(&f);
+                            self.future_blocks.insert(block.index, block);
+                        }
+                        _ => {
+                            debug!("future_blocks at cap, dropping incoming block {}", block.index);
+                        }
+                    }
+                } else {
+                    self.future_blocks.insert(block.index, block);
+                }
             }
             BlockQuality::Bad => {
                 // TODO save bad public keys to banned table
@@ -702,11 +820,27 @@ impl Network {
                     context.chain.update_max_height(height);
                     post(crate::event::Event::SyncFinished);
                 }
+                // Drop chain lock before mutating self.bad_blocks / self.rewind_walks.
+                let bad_hash = block.hash.clone();
+                drop(context);
+                self.promote_rewind_walk_to_bad(token);
+                self.remember_bad(bad_hash);
                 return State::Banned;
             }
             BlockQuality::Rewind => {
                 debug!("Got some orphan block, requesting its parent");
-                return State::message(Message::GetBlock { index: block.index - 1 });
+                let parent = block.index - 1;
+                let block_hash = block.hash.clone();
+                if let Some(peer) = self.peers.get_mut_peer(token) {
+                    peer.add_requested_block(parent);
+                }
+                // Track this block in the peer's Rewind walk. If the walk eventually
+                // bottoms at Bad, the whole walk is promoted to bad_blocks so future
+                // peers serving the same fork-chain are banned on first contact.
+                if self.rewind_walks.len() < MAX_REWIND_WALKS || self.rewind_walks.contains_key(token) {
+                    self.rewind_walks.entry(*token).or_default().push(block_hash);
+                }
+                return State::message(Message::GetBlock { index: parent });
             }
             BlockQuality::Fork => {
                 debug!("Got forked block {} with hash {:?}", block.index, block.hash);
@@ -714,6 +848,9 @@ impl Network {
                 // Never replace blocks deeper than LIMITED_CONFIDENCE_DEPTH below our tip.
                 if block.index + LIMITED_CONFIDENCE_DEPTH < height {
                     warn!("Refusing to replace deep fork block {} (our height: {})", block.index, height);
+                    let bad_hash = block.hash.clone();
+                    drop(context);
+                    self.remember_bad(bad_hash);
                     return State::Banned;
                 }
                 // If we are very much behind of blockchain
