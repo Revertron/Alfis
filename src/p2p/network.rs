@@ -244,21 +244,25 @@ impl Network {
                 // so the UI flips out of "Synchronizing" once we are at the trusted tip,
                 // even when no Good block has arrived to trigger the event from handle_block.
                 if let Some(corroborated) = self.peers.corroborated_max_height() {
-                    let (our_height, new_max) = {
+                    let (our_height, new_max, changed) = {
                         let mut c = self.context.lock().unwrap();
                         let cur_max = c.chain.get_max_height();
                         let our_height = c.chain.get_height();
                         let new_max = max(corroborated, our_height);
+                        let mut changed = false;
                         if new_max != cur_max {
                             c.chain.update_max_height(new_max);
                             info!("Changed to corroborated height: {corroborated}");
+                            changed = true;
                         }
-                        (our_height, new_max)
+                        (our_height, new_max, changed)
                     };
-                    if our_height >= new_max {
-                        post(crate::event::Event::SyncFinished);
-                    } else {
-                        post(crate::event::Event::Syncing { have: our_height, height: new_max });
+                    if changed {
+                        if our_height >= new_max {
+                            post(crate::event::Event::SyncFinished);
+                        } else {
+                            post(crate::event::Event::Syncing { have: our_height, height: new_max });
+                        }
                     }
                 } else {
                     trace!("No corroborated height");
