@@ -282,13 +282,19 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, hid
                     }
                 }
                 Event::SyncFinished => {
-                    let _ = proxy.send_event(UserEvent::LoadDomains);
-                    let _ = proxy.send_event(UserEvent::EvalJs(format!("addEvent('info', '{}', 'Syncing finished.');", Local::now().format("%d.%m.%y %X"))));
-                    status.syncing = false;
+                    let mut changed = false;
+                    if status.syncing {
+                        let _ = proxy.send_event(UserEvent::LoadDomains);
+                        let _ = proxy.send_event(UserEvent::EvalJs(format!("addEvent('info', '{}', 'Syncing finished.');", Local::now().format("%d.%m.%y %X"))));
+                        status.syncing = false;
+                        changed = true;
+                    }
                     if status.mining {
                         String::from("setLeftStatusBarText('Mining...'); showMiningIndicator(true, false);")
-                    } else {
+                    } else if changed {
                         String::from("setLeftStatusBarText('Idle'); showMiningIndicator(false, false);")
+                    } else {
+                        String::new()
                     }
                 }
                 Event::NetworkStatus { blocks, domains, keys, nodes } => {

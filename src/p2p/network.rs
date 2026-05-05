@@ -244,25 +244,21 @@ impl Network {
                 // so the UI flips out of "Synchronizing" once we are at the trusted tip,
                 // even when no Good block has arrived to trigger the event from handle_block.
                 if let Some(corroborated) = self.peers.corroborated_max_height() {
-                    let (our_height, new_max, changed) = {
+                    let (our_height, new_max) = {
                         let mut c = self.context.lock().unwrap();
                         let cur_max = c.chain.get_max_height();
                         let our_height = c.chain.get_height();
                         let new_max = max(corroborated, our_height);
-                        let mut changed = false;
                         if new_max != cur_max {
                             c.chain.update_max_height(new_max);
                             info!("Changed to corroborated height: {corroborated}");
-                            changed = true;
                         }
-                        (our_height, new_max, changed)
+                        (our_height, new_max)
                     };
-                    if changed {
-                        if our_height >= new_max {
-                            post(crate::event::Event::SyncFinished);
-                        } else {
-                            post(crate::event::Event::Syncing { have: our_height, height: new_max });
-                        }
+                    if our_height >= new_max {
+                        post(crate::event::Event::SyncFinished);
+                    } else {
+                        post(crate::event::Event::Syncing { have: our_height, height: new_max });
                     }
                 } else {
                     trace!("No corroborated height");
@@ -1115,8 +1111,39 @@ fn write_all(connection: &mut TcpStream, mut buf: &[u8]) -> io::Result<()> {
 }
 
 fn version_compatible(version: &str) -> bool {
-    let my_version = env!("CARGO_PKG_VERSION");
-    let parts = my_version.split('.').collect::<Vec<&str>>();
-    let major = format!("{}.{}", parts[0], parts[1]);
-    version.starts_with(&major)
+    // Require >= 0.8.10 — 0.8.9 and earlier are vulnerable and must upgrade.
+    const MIN_PATCH: u32 = 10;
+    let mut parts = version.split('.');
+    let (Some(major), Some(minor), Some(patch)) = (parts.next(), parts.next(), parts.next()) else {
+        return false;
+    };
+    if major != "0" || minor != "8" {
+        return false;
+    }
+    let patch_num = patch.split(|c: char| !c.is_ascii_digit()).next().unwrap_or("");
+    patch_num.parse::<u32>().map_or(false, |p| p >= MIN_PATCH)
+}
+
+#[cfg(test)]
+mod version_tests {
+    use super::version_compatible;
+
+    #[test]
+    fn accepts_supported_versions() {
+        assert!(version_compatible("0.8.10"));
+        assert!(version_compatible("0.8.11"));
+        assert!(version_compatible("0.8.99"));
+        assert!(version_compatible("0.8.10-rc1"));
+    }
+
+    #[test]
+    fn rejects_old_or_foreign_versions() {
+        assert!(!version_compatible("0.8.9"));
+        assert!(!version_compatible("0.8.0"));
+        assert!(!version_compatible("0.7.20"));
+        assert!(!version_compatible("1.0.0"));
+        assert!(!version_compatible("0.8"));
+        assert!(!version_compatible(""));
+        assert!(!version_compatible("garbage"));
+    }
 }
