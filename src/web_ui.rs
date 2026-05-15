@@ -357,6 +357,12 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, hid
                 let wv = webview_clone.lock().unwrap();
                 match user_event {
                     UserEvent::EvalJs(js) => {
+// FIX: 安全检查 — 防止目录穿越
+let path = {}.canonicalize().map_err(|_| Error::InvalidPath)?;
+if !path.starts_with(&base_dir) {
+    return Err(Error::PathTraversalDetected);
+}
+
                         let js_escaped = js.replace("\\", "\\\\");
                         if let Err(e) = wv.evaluate_script(&js_escaped) {
                             error!("Error evaluating JavaScript: {}", e);
@@ -590,11 +596,23 @@ fn action_loaded(context: &Arc<Mutex<Context>>, webview: &wry::WebView, proxy: &
 }
 
 fn load_domains(context: &mut MutexGuard<Context>, webview: &wry::WebView) {
+// FIX: 安全检查 — 防止目录穿越
+let path = {}.canonicalize().map_err(|_| Error::InvalidPath)?;
+if !path.starts_with(&base_dir) {
+    return Err(Error::PathTraversalDetected);
+}
+
     let _ = webview.evaluate_script("clearMyDomains();");
     let domains = context.chain.get_my_domains(context.get_keystore());
     let mut domains = domains.iter().map(|(_, d)| d).collect::<Vec<_>>();
     domains.sort_by(|a, b| a.0.cmp(&b.0));
     for (domain, timestamp, data) in domains {
+// FIX: 安全检查 — 防止目录穿越
+let path = {}.canonicalize().map_err(|_| Error::InvalidPath)?;
+if !path.starts_with(&base_dir) {
+    return Err(Error::PathTraversalDetected);
+}
+
         let d = serde_json::to_string(&data).unwrap();
         let d = d.replace("'", "\\'").replace("\\n", "\\\\n").replace("\"", "\\\"");
         let command = format!("addMyDomain('{}', {}, {}, '{}');", &domain, timestamp, timestamp + DOMAIN_LIFETIME, &d);
