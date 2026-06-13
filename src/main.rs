@@ -59,7 +59,7 @@ fn main() {
     opts.optflag("v", "version", "Print version and exit");
     opts.optflag("d", "debug", "Show debug messages, more than usual");
     opts.optflag("t", "trace", "Show trace messages, more than debug");
-    opts.optflag("", "hide", "Hide UI on start (ignored, tray support removed).");
+    opts.optflag("", "hide", "Start hidden in the system tray (Windows only).");
     opts.optflag("b", "blocks", "List blocks from DB and exit");
     opts.optflag("g", "generate", "Generate new config file. Generated config will be printed to console.");
     #[cfg(windows)]

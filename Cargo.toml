@@ -43,13 +43,17 @@ spmc = "0.3.0"
 thread-priority = "3.0.0"
 
 # Optional dependencies regulated by features
-lumio = { path = "../Rust/Lumio", optional = true }
+lumio = { git="https://github.com/Revertron/Lumio", optional = true }
 tinyfiledialogs = { version = "3.9.1", optional = true }
 open = { version = "5.3.0", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = ["impl-default", "wincon", "shellscalingapi"] }
 windows-service = "0.8.0"
+# System tray icon (Windows only; gated in code by cfg(all(windows, webgui))).
+# Not listed in the `webgui` feature: a target-scoped optional dep referenced by
+# an all-targets feature would break non-Windows builds.
+tray-icon = "0.24"
 
 [build-dependencies]
 winres = "0.1.12"

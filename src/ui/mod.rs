@@ -1,16 +1,10 @@
 //! Lumio-based GUI for ALFIS. Replaces the former wry/tao webview UI.
 //!
-//! NOTE — system tray support was dropped in the webview-to-Lumio migration.
-//! The old behavior, recorded here for future restoration:
-//!   - tray icon with tooltip "ALFIS {version}\nConnected: {nodes}"
-//!     (node count refreshed on tray-icon mouse Enter)
-//!   - left double-click on the icon: show + focus the window
-//!   - menu: "Show Window", "Quit" (Quit posted Event::ActionQuit, slept
-//!     100 ms, then exited the event loop)
-//!   - closing the window hid it instead of quitting when a tray was
-//!     available; `--hide` started with the window hidden
-//! Currently: closing the window quits the app (posts Event::ActionQuit),
-//! and `--hide` is ignored.
+//! System tray (Windows only): the app shows a tray icon; closing the window
+//! (X or Esc) hides it to the tray, double-clicking the icon — or the "Show
+//! Window" menu item — restores it, and the tray "Quit" item exits. `--hide`
+//! boots straight into the tray with the window hidden. On other platforms
+//! there is no tray and closing the window quits the app.
 
 extern crate open;
 extern crate tinyfiledialogs as tfd;
@@ -61,8 +55,9 @@ impl AssetsProvider for Assets {
 }
 
 pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, hide: bool) {
+    #[cfg(not(target_os = "windows"))]
     if hide {
-        warn!("The --hide option is not supported anymore (tray support removed), showing the window");
+        warn!("--hide is only supported on Windows (system tray); showing the window");
     }
     // Must be set before the first paint (on the window thread): Lumio's asset
     // provider is thread-local and `run_loop` paints on this thread.
@@ -103,7 +98,20 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, hid
 
     // Scaled (logical) pixels: matches the old webview sizing on HiDPI displays.
     let window_size = WindowSize::ScaledPixels(Vector2::new(WIDTH as f32, HEIGHT as f32));
-    let options = WindowCreationOptions::new_windowed(window_size, Some(WindowPosition::Center));
+    #[allow(unused_mut)]
+    let mut options = WindowCreationOptions::new_windowed(window_size, Some(WindowPosition::Center));
+    // On Windows the app lives in the system tray: the close button hides the
+    // window (and `--hide` starts it hidden) instead of quitting the app.
+    #[cfg(target_os = "windows")]
+    {
+        options = options.with_hide_on_close(true).with_visible(!hide);
+    }
+
+    // Handle for marshaling tray actions onto the UI thread — taken before
+    // `ui` is moved into the window handler below.
+    #[cfg(target_os = "windows")]
+    let handle = ui.handle();
+
     let window: Window<WinEvent> = Window::new_with_user_events(&title, options)
         .expect("Failed to create the window");
     let sender = window.create_user_event_sender();
@@ -111,7 +119,72 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, hid
     if dark_theme {
         win.set_palette(Palette::dark());
     }
+    // Esc on the main window hides to the tray (X is handled by hide_on_close).
+    #[cfg(target_os = "windows")]
+    win.set_close_hides(true);
+
+    // Build the tray icon on this (the run_loop) thread and keep it alive for
+    // the whole process — `run_loop` never returns.
+    #[cfg(target_os = "windows")]
+    let _tray = build_tray(handle, &title);
+
     window.run_loop(win);
+}
+
+/// Builds the system-tray icon and menu, forwarding tray events onto the UI
+/// thread via `handle`. The returned `TrayIcon` must be kept alive for the
+/// whole process (dropping it removes the icon).
+#[cfg(target_os = "windows")]
+fn build_tray(handle: UiHandle, title: &str) -> tray_icon::TrayIcon {
+    use tray_icon::menu::{Menu, MenuEvent, MenuItem};
+    use tray_icon::{Icon, TrayIconBuilder, TrayIconEvent};
+
+    let menu = Menu::new();
+    let show_item = MenuItem::new("Show Window", true, None);
+    let quit_item = MenuItem::new("Quit", true, None);
+    menu.append(&show_item).expect("Failed to build tray menu");
+    menu.append(&quit_item).expect("Failed to build tray menu");
+    let show_id = show_item.id().clone();
+    let quit_id = quit_item.id().clone();
+
+    // Menu clicks: marshal onto the UI thread, which applies them via the
+    // window handler. Quit goes through `request_quit` → `terminate_loop` →
+    // `Drop for UI` → the `set_on_close` closure posts `ActionQuit` exactly
+    // once, so we must NOT post it here.
+    {
+        let handle = handle.clone();
+        MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
+            if event.id == show_id {
+                handle.run_on_ui_thread(|ui| ui.request_show());
+            } else if event.id == quit_id {
+                handle.run_on_ui_thread(|ui| ui.request_quit());
+            }
+        }));
+    }
+
+    // Left double-click (Windows-only event) shows the window. `with_menu_on_
+    // left_click(false)` keeps the menu off left-click so the double-click
+    // reliably arrives here; the menu stays available on right-click.
+    {
+        let handle = handle.clone();
+        TrayIconEvent::set_event_handler(Some(move |event: TrayIconEvent| {
+            if let TrayIconEvent::DoubleClick { .. } = event {
+                handle.run_on_ui_thread(|ui| ui.request_show());
+            }
+        }));
+    }
+
+    // Reuse the EXE icon embedded by build.rs: winres `set_icon` registers it
+    // as integer resource ID 1 (equivalent to `set_icon_with_id(path, "1")`).
+    let icon = Icon::from_resource(1, None).expect("Failed to load tray icon");
+
+    TrayIconBuilder::new()
+        .with_menu(Box::new(menu))
+        .with_menu_on_left_click(false)
+        .with_tooltip(title)
+        .with_icon(icon)
+        .build()
+        .expect("Failed to build tray icon")
 }
 
 fn wire_main_window(ui: &mut UI, context: &Arc<Mutex<Context>>, miner: &Arc<Mutex<Miner>>, status: &Arc<Mutex<UiStatus>>) {
