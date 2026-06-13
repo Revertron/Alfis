@@ -357,6 +357,7 @@ fn setup_logger(opt_matches: &Matches, console_attached: bool) {
         .add_filter_ignore_str("rustls::")
         .add_filter_ignore_str("ureq::")
         .add_filter_ignore_str("ureq_proto::")
+        .add_filter_ignore_str("speedy2d::")
         .set_thread_level(LevelFilter::Error)
         .set_location_level(LevelFilter::Off)
         .set_target_level(LevelFilter::Error)
