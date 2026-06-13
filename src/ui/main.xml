@@ -1,0 +1,77 @@
+<Frame id="root" direction="vertical" width="max" height="max">
+    <TabView id="tabs" width="max" height="max">
+        <Frame id="Credentials" direction="vertical" width="max" height="max" padding="8">
+            <Frame direction="horizontal" width="max" height="min">
+                <Edit id="public_key" width="max" height="28" readonly="true" margin_right="4"
+                      placeholder="No key loaded"
+                      tooltip="If you load or mine a keypair the public key will be displayed here"/>
+                <ComboBox id="keys_combo" width="120" height="28" text="No keys" margin_right="4"/>
+                <Button id="btn_load_key" text="Load key" height="28" padding_left="8" padding_right="8" tooltip="Load keypair from file"/>
+                <Button id="btn_save_key" text="Save key" height="28" padding_left="8" padding_right="8" tooltip="Save current keypair to file"/>
+                <Button id="btn_create_key" text="Mine new key" height="28" padding_left="8" padding_right="8" tooltip="Generate new keypair, suitable to mine domains"/>
+            </Frame>
+            <Label width="max" height="min" margin_top="6"
+                   text="To mine domains you need to mine a strong pair of signing keys and a pair of encryption keys."/>
+            <Frame width="max" height="max"/>
+            <Frame direction="horizontal" width="max" height="min" margin_bottom="24">
+                <Frame direction="vertical" width="max" height="min" gravity="center">
+                    <Label text="Blocks in chain" height="min" gravity="center"/>
+                    <Label id="stat_blocks" text="?" font_size="28" font_style="Bold" height="min" gravity="center"/>
+                </Frame>
+                <Frame direction="vertical" width="max" height="min" gravity="center">
+                    <Label text="Domains" height="min" gravity="center"/>
+                    <Label id="stat_domains" text="?" font_size="28" font_style="Bold" height="min" gravity="center"/>
+                </Frame>
+                <Frame direction="vertical" width="max" height="min" gravity="center">
+                    <Label text="Users/Keys" height="min" gravity="center"/>
+                    <Label id="stat_keys" text="?" font_size="28" font_style="Bold" height="min" gravity="center"/>
+                </Frame>
+                <Frame direction="vertical" width="max" height="min" gravity="center">
+                    <Label text="Connected nodes" height="min" gravity="center"/>
+                    <Label id="stat_nodes" text="0" font_size="28" font_style="Bold" height="min" gravity="center"/>
+                </Frame>
+            </Frame>
+        </Frame>
+        <Frame id="Domains" direction="vertical" width="max" height="max" padding="8">
+            <Frame direction="horizontal" width="max" height="min" margin_bottom="4">
+                <Frame width="max" height="min"/>
+                <Button id="btn_new_domain" text="New domain" height="28" padding_left="8" padding_right="8"/>
+            </Frame>
+            <TableView id="domains_table" width="max" height="max"
+                       headers="Domain,Records,Last mined,Expires"
+                       widths="220,*,110,110" sortable="true" resizable="true"/>
+        </Frame>
+        <Frame id="Events" direction="vertical" width="max" height="max" padding="8">
+            <TableView id="events_table" width="max" height="max"
+                       headers="Time,Message" widths="130,*" resizable="true"/>
+        </Frame>
+        <Frame id="Help" direction="vertical" width="max" height="max" padding="12">
+            <Label text="Welcome to ALFIS!" font_size="22" font_style="Bold" height="min" margin_bottom="6"/>
+            <Label width="max" height="min" margin_bottom="10"
+                   text="ALFIS stands for Alternative Free Identity System. It gives you an opportunity to create your own domains and use them in decentralized networks, store security certificates for browsers to trust without any centralized CA."/>
+            <Label text="How this system works?" font_size="16" font_style="Bold" height="min" margin_bottom="6"/>
+            <Label text="If you just want to be able to resolve our domains" font_style="Bold" height="min" margin_bottom="2"/>
+            <Label width="max" height="min" margin_bottom="8"
+                   text="Carefully configure DNS section in alfis.toml and start ALFIS with -n command line switch. It will start without GUI, but will work as local DNS-resolver."/>
+            <Label text="If you want to get your own domain" font_style="Bold" height="min" margin_bottom="2"/>
+            <Label width="max" height="min" margin_bottom="2"
+                   text="- Generate a keypair in &quot;Credentials&quot; tab (you need just one for any number of domains)"/>
+            <Label width="max" height="min" margin_bottom="2"
+                   text="- Go to &quot;Domains&quot; tab and enter desired domain in first field, choose appropriate zone from dropdown, if it is not red - you can create it"/>
+            <Label width="max" height="min" margin_bottom="2"
+                   text="- Carefully add needed DNS-records (you can add them later, but you will need to mine it again)"/>
+            <Label width="max" height="min" margin_bottom="10"
+                   text="- Just click on &quot;Mine domain&quot; and wait for it, your domain (when properly cooked) will propagate to all blockchain nodes automatically"/>
+            <Label id="help_link" text="https://github.com/Revertron/Alfis" link="true" height="min"
+                   tooltip="Get source code and contribute!"/>
+        </Frame>
+    </TabView>
+    <Frame id="status_row" direction="horizontal" width="max" height="26" padding="4">
+        <Frame id="busy_box" width="90" height="max" visibility="gone" margin_right="6">
+            <ProgressBar id="busy" width="max" height="14" indeterminate="true"
+                         tooltip="Mining in progress. Click to stop mining."/>
+        </Frame>
+        <Label id="status_text" text="Idle" width="max" height="max"/>
+        <Label id="status_stats" text="" height="max"/>
+    </Frame>
+</Frame>

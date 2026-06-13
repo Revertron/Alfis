@@ -30,7 +30,7 @@ use alfis::{dns_utils, Block, Bytes, Chain, Context, Keystore, Miner, Network, S
 use crate::win_service::start_service;
 
 #[cfg(feature = "webgui")]
-mod web_ui;
+mod ui;
 #[cfg(windows)]
 mod win_service;
 
@@ -59,7 +59,7 @@ fn main() {
     opts.optflag("v", "version", "Print version and exit");
     opts.optflag("d", "debug", "Show debug messages, more than usual");
     opts.optflag("t", "trace", "Show trace messages, more than debug");
-    opts.optflag("", "hide", "Hide UI, show only tray icon.");
+    opts.optflag("", "hide", "Hide UI on start (ignored, tray support removed).");
     opts.optflag("b", "blocks", "List blocks from DB and exit");
     opts.optflag("g", "generate", "Generate new config file. Generated config will be printed to console.");
     #[cfg(windows)]
@@ -262,11 +262,11 @@ fn main() {
         if !dns_server_ok {
             thread::spawn(|| {
                 thread::sleep(Duration::from_millis(500));
-                post(Event::Error { text: String::from("Error starting DNS-server. Please, check that it&rsquo;s port is not busy.") });
+                post(Event::Error { text: String::from("Error starting DNS-server. Please, check that its port is not busy.") });
             });
         }
         #[cfg(feature = "webgui")]
-        web_ui::run_interface(Arc::clone(&context), miner, opt_matches.opt_present("hide"));
+        ui::run_interface(Arc::clone(&context), miner, opt_matches.opt_present("hide"));
     }
 
     // Without explicitly detaching the console cmd won't redraw it's prompt.

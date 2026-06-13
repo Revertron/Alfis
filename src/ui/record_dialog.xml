@@ -1,0 +1,38 @@
+<Frame id="rec_root" direction="vertical" width="max" height="max" padding="10">
+    <Frame direction="horizontal" width="max" height="min" margin_bottom="6">
+        <Frame direction="vertical" width="max" height="min" margin_right="6">
+            <Label text="Name" font_style="Bold" height="min" margin_bottom="2"/>
+            <Edit id="record_name" width="max" height="28" placeholder="www"/>
+        </Frame>
+        <Frame direction="vertical" width="130" height="min">
+            <Label text="Type" font_style="Bold" height="min" margin_bottom="2"/>
+            <ComboBox id="record_type" width="max" height="28" text="A"/>
+        </Frame>
+    </Frame>
+    <Frame direction="horizontal" width="max" height="min" margin_bottom="6">
+        <Frame direction="vertical" width="max" height="min" margin_right="6">
+            <Label text="TTL" font_style="Bold" height="min" margin_bottom="2"/>
+            <Edit id="record_ttl" width="max" height="28" filter="numeric" text="3600"/>
+        </Frame>
+        <Frame direction="vertical" width="max" height="min" margin_right="6">
+            <Label text="Priority" font_style="Bold" height="min" margin_bottom="2"/>
+            <Edit id="record_priority" width="max" height="28" filter="numeric" placeholder="10"/>
+        </Frame>
+        <Frame direction="vertical" width="max" height="min" margin_right="6">
+            <Label text="Weight" font_style="Bold" height="min" margin_bottom="2"/>
+            <Edit id="record_weight" width="max" height="28" filter="numeric" placeholder="10"/>
+        </Frame>
+        <Frame direction="vertical" width="max" height="min">
+            <Label text="Port" font_style="Bold" height="min" margin_bottom="2"/>
+            <Edit id="record_port" width="max" height="28" filter="numeric" placeholder="5222"/>
+        </Frame>
+    </Frame>
+    <Label text="Data/host" font_style="Bold" height="min" margin_bottom="2"/>
+    <Edit id="record_data" width="max" height="28" placeholder="1.2.3.4" margin_bottom="10"/>
+    <Frame width="max" height="max"/>
+    <Frame direction="horizontal" width="max" height="min">
+        <Frame width="max" height="min"/>
+        <Button id="btn_add" text="Add" height="28" margin_right="4"/>
+        <Button id="btn_cancel" text="Cancel" height="28"/>
+    </Frame>
+</Frame>
