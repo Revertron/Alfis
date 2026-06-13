@@ -63,16 +63,11 @@ pub fn load_domains(ui: &mut UI, context: &Arc<Mutex<Context>>) {
         let mut domains = domains.values().collect::<Vec<_>>();
         domains.sort_by(|a, b| a.0.cmp(&b.0));
         domains.iter().map(|(domain, timestamp, data)| {
-            let mut records = data.records.iter()
+            let records = data.records.iter()
                 .filter_map(|r| r.get_domain())
                 .map(|d| if d.is_empty() { String::from("@") } else { d })
                 .collect::<Vec<_>>()
                 .join(", ");
-            // TableView cells don't clip text yet; keep long record lists from
-            // spilling into the next column.
-            if records.chars().count() > 30 {
-                records = records.chars().take(29).collect::<String>() + "…";
-            }
             vec![domain.clone(), records, format_date(*timestamp), format_date(*timestamp + DOMAIN_LIFETIME)]
         }).collect::<Vec<_>>()
     };

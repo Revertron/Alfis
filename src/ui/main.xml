@@ -12,7 +12,10 @@
             </Frame>
             <Label width="max" height="min" margin_top="6"
                    text="To mine domains you need to mine a strong pair of signing keys and a pair of encryption keys."/>
-            <Frame width="max" height="max"/>
+            <Frame id="logo" width="max" height="max"
+                   background_image="alfis_logo.svg"
+                   background_size="50%"
+                   background_position="center"/>
             <Frame direction="horizontal" width="max" height="min" margin_bottom="24">
                 <Frame direction="vertical" width="max" height="min" gravity="center">
                     <Label text="Blocks in chain" height="min" gravity="center"/>

@@ -45,10 +45,28 @@ use toasts::{add_event_row, Severity};
 const WIDTH: u32 = 1024;
 const HEIGHT: u32 = 720;
 
+/// Files embedded in the binary and served to Lumio by path. Lumio resolves
+/// every `background_image`/`image` reference through the registered
+/// `AssetsProvider`, so anything used from XML must be listed here.
+struct Assets;
+
+impl AssetsProvider for Assets {
+    fn get_file(&self, path: &str) -> Option<&[u8]> {
+        match path {
+            "alfis_logo.svg" => Some(include_bytes!("../../img/logo/alfis_logo.svg")),
+            "alfis_logo_white.svg" => Some(include_bytes!("../../img/logo/alfis_logo_white.svg")),
+            _ => None
+        }
+    }
+}
+
 pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, hide: bool) {
     if hide {
         warn!("The --hide option is not supported anymore (tray support removed), showing the window");
     }
+    // Must be set before the first paint (on the window thread): Lumio's asset
+    // provider is thread-local and `run_loop` paints on this thread.
+    set_provider(Box::new(Assets));
     let title = format!("ALFIS {}", env!("CARGO_PKG_VERSION"));
 
     let mut ui = UI::from_xml(include_str!("main.xml"), WIDTH, HEIGHT, Classic::typeface(), 1.0)
@@ -72,6 +90,16 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, hid
     });
 
     let dark_theme = context.lock().unwrap().settings.dark_theme;
+
+    // The XML defaults the logo to the navy wordmark (for the light theme);
+    // the dark palette needs the white-lettering copy to stay legible.
+    if dark_theme {
+        if let Some(view) = ui.get_view("logo") {
+            if let Some(frame) = view.borrow_mut().downcast_mut::<Frame>() {
+                frame.set_background_image(Some("alfis_logo_white.svg"));
+            }
+        }
+    }
 
     // Scaled (logical) pixels: matches the old webview sizing on HiDPI displays.
     let window_size = WindowSize::ScaledPixels(Vector2::new(WIDTH as f32, HEIGHT as f32));
