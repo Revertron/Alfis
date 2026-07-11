@@ -29,7 +29,7 @@ use alfis::{dns_utils, Block, Bytes, Chain, Context, Keystore, Miner, Network, S
 #[cfg(windows)]
 use crate::win_service::start_service;
 
-#[cfg(feature = "webgui")]
+#[cfg(feature = "gui")]
 mod ui;
 #[cfg(windows)]
 mod win_service;
@@ -46,7 +46,7 @@ fn main() {
     #[cfg(windows)]
     unsafe {
         console_attached = AttachConsole(ATTACH_PARENT_PROCESS) != 0;
-        #[cfg(feature = "webgui")]
+        #[cfg(feature = "gui")]
         winapi::um::shellscalingapi::SetProcessDpiAwareness(2);
     }
 
@@ -143,12 +143,12 @@ fn main() {
     };
 
     let mut no_gui = opt_matches.opt_present("n");
-    if !cfg!(feature = "webgui")
+    if !cfg!(feature = "gui")
     {
         no_gui = true;
     }
 
-    #[cfg(all(feature = "webgui", target_os = "linux"))]
+    #[cfg(all(feature = "gui", target_os = "linux"))]
     if !no_gui {
         let running_via_sudo = env::var_os("SUDO_UID").is_some();
         let has_graphical_session = env::var_os("DISPLAY").is_some() || env::var_os("WAYLAND_DISPLAY").is_some();
@@ -265,7 +265,7 @@ fn main() {
                 post(Event::Error { text: String::from("Error starting DNS-server. Please, check that its port is not busy.") });
             });
         }
-        #[cfg(feature = "webgui")]
+        #[cfg(feature = "gui")]
         ui::run_interface(Arc::clone(&context), miner, opt_matches.opt_present("hide"));
     }
 
