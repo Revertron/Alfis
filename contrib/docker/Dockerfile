@@ -23,8 +23,9 @@ RUN curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${Z
 RUN cargo install cargo-zigbuild --locked \
  && rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
 
-# Cargo features to build with. Default: DoH on, GUI off (a server image).
+# Alfis cargo features to build with. Default: DoH on, GUI off (a server image).
 # Set FEATURES="" for a plain-DNS build with no bundled TLS stack.
+# (SQLite is always statically bundled below, independent of this.)
 ARG FEATURES=doh
 
 # Target glibc, pinned at/below the distroless runtime's glibc (2.36) so the
@@ -44,8 +45,13 @@ RUN --mount=type=cache,target=/root/.cargo/registry,sharing=locked \
       arm64) RUST_TARGET=aarch64-unknown-linux-gnu ;; \
       *) echo "unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
     esac; \
+    # Force sqlite/bundled so SQLite is compiled from source and statically
+    # linked - otherwise sqlite3-src dynamically links the builder's
+    # libsqlite3, which distroless has no libsqlite3.so.0 to satisfy at runtime.
+    FEATS="sqlite/bundled"; \
+    if [ -n "${FEATURES}" ]; then FEATS="${FEATURES},${FEATS}"; fi; \
     cargo zigbuild --release --locked \
-      --no-default-features --features "${FEATURES}" \
+      --no-default-features --features "${FEATS}" \
       --target "${RUST_TARGET}.${GLIBC}"; \
     # cargo-zigbuild writes artifacts under the plain triple dir; copy the
     # binary out of the cache-mounted target dir so it survives the layer.
