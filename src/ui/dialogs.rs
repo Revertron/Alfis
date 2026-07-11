@@ -104,7 +104,7 @@ type SharedState = Rc<RefCell<DomainState>>;
 pub fn show_domain_dialog(ui: &mut UI, context: &Arc<Mutex<Context>>, miner: &Arc<Mutex<Miner>>,
                           main_handle: UiHandle, prefill: Option<(String, DomainData)>) {
     let zones = context.lock().unwrap().chain.get_zones().clone();
-    let mut dlg = UI::from_xml(include_str!("domain_dialog.xml"), 640, 540, Classic::typeface(), 1.0)
+    let mut dlg = UI::from_xml(include_str!("domain_dialog.xml"), 540, 440, default_typeface(), 1.0)
         .expect("Failed to parse domain dialog layout");
 
     let mut initial_name = String::new();
@@ -219,7 +219,10 @@ pub fn show_domain_dialog(ui: &mut UI, context: &Arc<Mutex<Context>>, miner: &Ar
         width: 640,
         height: 540,
         ui: dlg,
-        modal: true
+        modal: true,
+        resizable: true,
+        minimizable: false,
+        maximizable: false,
     });
 }
 
@@ -347,7 +350,7 @@ fn show_advanced_menu(dlg_ui: &mut UI, state: SharedState) {
 
 /// DNS record editor, opened as a nested modal window over the domain dialog.
 fn show_record_dialog(dlg_ui: &mut UI, state: SharedState) {
-    let rec = UI::from_xml(include_str!("record_dialog.xml"), 540, 280, Classic::typeface(), 1.0)
+    let rec = UI::from_xml(include_str!("record_dialog.xml"), 540, 280, default_typeface(), 1.0)
         .expect("Failed to parse record dialog layout");
 
     if let Some(view) = rec.get_view("record_type") {
@@ -394,7 +397,10 @@ fn show_record_dialog(dlg_ui: &mut UI, state: SharedState) {
         width: 540,
         height: 280,
         ui: rec,
-        modal: true
+        modal: true,
+        resizable: true,
+        minimizable: false,
+        maximizable: false,
     });
 }
 
@@ -436,7 +442,7 @@ fn build_record(rec_ui: &UI) -> Option<DnsRecord> {
 }
 
 fn show_owner_dialog(dlg_ui: &mut UI, state: SharedState) {
-    let mut ui = UI::from_xml(OWNER_XML, 480, 280, Classic::typeface(), 1.0).unwrap();
+    let mut ui = UI::from_xml(OWNER_XML, 480, 280, default_typeface(), 1.0).unwrap();
     for (id, value) in [("owner_signing", &state.borrow().signing), ("owner_encryption", &state.borrow().encryption)] {
         if let Some(view) = ui.get_view(id) {
             if let Some(edit) = view.borrow().downcast_ref::<Edit>() {
@@ -469,11 +475,11 @@ fn show_owner_dialog(dlg_ui: &mut UI, state: SharedState) {
         }));
     }
     wire_cancel(&mut ui);
-    dlg_ui.open_window(WindowRequest { title: String::from("Change domain owner"), width: 480, height: 280, ui, modal: true });
+    dlg_ui.open_window(WindowRequest { title: String::from("Change domain owner"), width: 480, height: 280, ui, modal: true, resizable: true, minimizable: false, maximizable: false });
 }
 
 fn show_contacts_dialog(dlg_ui: &mut UI, state: SharedState) {
-    let mut ui = UI::from_xml(CONTACTS_XML, 480, 320, Classic::typeface(), 1.0).unwrap();
+    let mut ui = UI::from_xml(CONTACTS_XML, 480, 320, default_typeface(), 1.0).unwrap();
     for (index, contact) in state.borrow().contacts.iter().take(3).enumerate() {
         set_edit_text(&ui, &format!("contact{}_name", index + 1), &decode_uri_component(&contact.name));
         set_edit_text(&ui, &format!("contact{}_value", index + 1), &decode_uri_component(&contact.value));
@@ -499,11 +505,11 @@ fn show_contacts_dialog(dlg_ui: &mut UI, state: SharedState) {
         }));
     }
     wire_cancel(&mut ui);
-    dlg_ui.open_window(WindowRequest { title: String::from("Owner contacts"), width: 480, height: 320, ui, modal: true });
+    dlg_ui.open_window(WindowRequest { title: String::from("Owner contacts"), width: 480, height: 320, ui, modal: true, resizable: false, minimizable: false, maximizable: false });
 }
 
 fn show_info_dialog(dlg_ui: &mut UI, state: SharedState) {
-    let mut ui = UI::from_xml(INFO_XML, 480, 300, Classic::typeface(), 1.0).unwrap();
+    let mut ui = UI::from_xml(INFO_XML, 480, 300, default_typeface(), 1.0).unwrap();
     if let Some(view) = ui.get_view("info_text") {
         if let Some(memo) = view.borrow().downcast_ref::<Memo>() {
             memo.set_max_length(Some(250));
@@ -523,7 +529,7 @@ fn show_info_dialog(dlg_ui: &mut UI, state: SharedState) {
         }));
     }
     wire_cancel(&mut ui);
-    dlg_ui.open_window(WindowRequest { title: String::from("Domain info"), width: 480, height: 300, ui, modal: true });
+    dlg_ui.open_window(WindowRequest { title: String::from("Domain info"), width: 480, height: 300, ui, modal: true, resizable: false, minimizable: false, maximizable: false });
 }
 
 fn wire_cancel(ui: &mut UI) {

@@ -28,16 +28,13 @@ use alfis::Context;
 use log::{debug, error, info, trace, warn};
 
 use lumio::prelude::*;
-use lumio::speedy2d::dimen::Vector2;
-use lumio::speedy2d::window::{WindowCreationOptions, WindowPosition, WindowSize};
-use lumio::speedy2d::Window;
 
 use actions::{action_load_key, action_save_key, action_select_key};
 use state::UiStatus;
 use toasts::{add_event_row, Severity};
 
-const WIDTH: u32 = 1024;
-const HEIGHT: u32 = 720;
+const WIDTH: u32 = 800;
+const HEIGHT: u32 = 520;
 
 /// Files embedded in the binary and served to Lumio by path. Lumio resolves
 /// every `background_image`/`image` reference through the registered
@@ -64,7 +61,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, hid
     set_provider(Box::new(Assets));
     let title = format!("ALFIS {}", env!("CARGO_PKG_VERSION"));
 
-    let mut ui = UI::from_xml(include_str!("main.xml"), WIDTH, HEIGHT, Classic::typeface(), 1.0)
+    let mut ui = UI::from_xml(include_str!("main.xml"), WIDTH, HEIGHT, default_typeface(), 1.0)
         .expect("Failed to parse main UI layout");
 
     let threads = match context.lock().unwrap().settings.mining.threads {
@@ -77,7 +74,7 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, hid
     events::register_bus_listener(ui.handle(), Arc::clone(&context), Arc::clone(&status), threads);
     populate_initial_state(&mut ui, &context);
 
-    ui.set_on_close(|| {
+    ui.set_on_close(|_| {
         info!("Interface closed, exiting");
         post(Event::ActionQuit);
         // Give the network and miner threads a moment to wind down.
@@ -96,39 +93,31 @@ pub fn run_interface(context: Arc<Mutex<Context>>, miner: Arc<Mutex<Miner>>, hid
         }
     }
 
-    // Scaled (logical) pixels: matches the old webview sizing on HiDPI displays.
-    let window_size = WindowSize::ScaledPixels(Vector2::new(WIDTH as f32, HEIGHT as f32));
-    #[allow(unused_mut)]
-    let mut options = WindowCreationOptions::new_windowed(window_size, Some(WindowPosition::Center));
-    // On Windows the app lives in the system tray: the close button hides the
-    // window (and `--hide` starts it hidden) instead of quitting the app.
-    #[cfg(target_os = "windows")]
-    {
-        options = options.with_hide_on_close(true).with_visible(!hide);
-    }
-
     // Handle for marshaling tray actions onto the UI thread — taken before
-    // `ui` is moved into the window handler below.
+    // `ui` is moved into the launcher below.
     #[cfg(target_os = "windows")]
     let handle = ui.handle();
 
-    let window: Window<WinEvent> = Window::new_with_user_events(&title, options)
-        .expect("Failed to create the window");
-    let sender = window.create_user_event_sender();
-    let mut win = Win::new(ui, sender);
+    // Logical (scaled) pixels match the old webview sizing on HiDPI displays.
+    let mut config = WindowConfig::new(title.as_str(), WIDTH, HEIGHT)
+        .logical_size()
+        .center();
     if dark_theme {
-        win.set_palette(Palette::dark());
+        config = config.palette(Palette::dark());
     }
-    // Esc on the main window hides to the tray (X is handled by hide_on_close).
+    // On Windows the app lives in the system tray: the close button hides the
+    // window (and `--hide` starts it hidden) instead of quitting.
     #[cfg(target_os = "windows")]
-    win.set_close_hides(true);
+    {
+        config = config.hide_on_close(true).visible(!hide);
+    }
 
-    // Build the tray icon on this (the run_loop) thread and keep it alive for
-    // the whole process — `run_loop` never returns.
+    // Build the tray icon on this thread and keep it alive for the whole
+    // process — `lumio::run` blocks until the app exits.
     #[cfg(target_os = "windows")]
     let _tray = build_tray(handle, &title);
 
-    window.run_loop(win);
+    lumio::run(ui, config);
 }
 
 /// Builds the system-tray icon and menu, forwarding tray events onto the UI

@@ -15,7 +15,7 @@
     </Frame>
     <TableView id="records_table" width="max" height="max" margin_bottom="6"
                headers="Name,Type,TTL,Data" widths="130,70,70,*"/>
-    <CheckBox id="renewal" text="Renew domain by using higher difficulty while mining." height="min" margin_bottom="2"/>
+    <CheckBox id="renewal" text="Renew domain by using higher difficulty while mining." height="min" margin_bottom="4"/>
     <Frame direction="horizontal" width="max" height="min">
         <Frame width="max" height="min"/>
         <Button id="btn_mine" text="Mine domain" height="28" margin_right="4" padding_left="8" padding_right="8"/>
