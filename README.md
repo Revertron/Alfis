@@ -128,7 +128,7 @@ systemctl enable --now alfis
 ### Docker
 If you want to run ALFIS in docker container, you can do this by running:
 ```shell
-docker run --rm --name alfis -p 53:53/tcp -p 53:53/udp cofob/alfis
+docker run -d --name alfis -p 53:53/udp -p 53:53/tcp -p 4244:4244 -v $(pwd)/cache:/var/lib/alfis ghcr.io/revertron/alfis:latest
 ```
 
 ### GUI version Windows/Linux/macOS (if you want to create and change domains)
