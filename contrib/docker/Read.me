@@ -1,1 +1,19 @@
-docker run -d --name alfis --net=host -v $(pwd)/cache:/var/lib/alfis alfis
+# Alfis in a container
+
+Prebuilt multi-arch images (amd64 + arm64) are published to GHCR:
+
+    docker pull ghcr.io/revertron/alfis:latest
+
+Run a resolver node (DNS on 53, P2P on 4244), persisting data in ./cache:
+
+    docker run -d --name alfis --net=host -v $(pwd)/cache:/var/lib/alfis ghcr.io/revertron/alfis:latest
+
+Or publish only the ports you need instead of --net=host:
+
+    docker run -d --name alfis \
+      -p 53:53/udp -p 53:53/tcp -p 4244:4244 \
+      -v $(pwd)/cache:/var/lib/alfis \
+      ghcr.io/revertron/alfis:latest
+
+Provide your own config by mounting it over /etc/alfis.conf. To build the image
+locally from source instead of pulling, run `make build` in this directory.

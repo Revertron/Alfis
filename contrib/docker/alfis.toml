@@ -1,0 +1,43 @@
+# Default configuration for the Alfis container image.
+# Override it by mounting your own file over /etc/alfis.conf.
+
+# The hash of the first block in a chain - identifies the network to join.
+origin = "0000001D2A77D63477172678502E51DE7F346061FF7EB188A2445ECA3FC0780E"
+# Resolver node by default: no signing keys. To create/sign domains, mount your
+# key files into /var/lib/alfis and list them here, e.g. key_files = ["my.key"].
+key_files = []
+# How many last blocks to check on start
+check_blocks = 8
+
+# Network settings
+[net]
+# Bootstrap nodes
+peers = ["peer-v4.alfis.name:4244", "peer-v6.alfis.name:4244", "peer-ygg.alfis.name:4244"]
+# Listen for other nodes on all interfaces
+listen = "[::]:4244"
+# Participate in peer-exchange
+public = true
+# Allow connections to/from Yggdrasil only (https://yggdrasil-network.github.io)
+yggdrasil_only = false
+
+# DNS resolver options
+[dns]
+# Listen on all interfaces so the published port (-p 53:53) is reachable
+listen = "0.0.0.0:53"
+# How many threads to spawn by DNS server
+threads = 10
+# DNS cache memory limit in megabytes (0 = unlimited)
+cache_memory_limit_mb = 100
+# AdGuard DNS-over-HTTPS to filter ads and trackers
+forwarders = ["https://dns.adguard.com/dns-query"]
+# Bootstrap DNS servers to resolve the DoH providers themselves
+bootstraps = ["9.9.9.9:53", "94.140.14.14:53"]
+# DNS 0x20 encoding for cache-poisoning protection
+enable_0x20 = true
+
+# Mining options (only used when signing keys are configured)
+[mining]
+# CPU threads for mining, zero = number of CPU cores
+threads = 0
+# Lower priority for mining threads
+lower = true
