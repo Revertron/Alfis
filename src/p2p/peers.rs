@@ -351,7 +351,7 @@ impl Peers {
 
         // If someone has fewer blocks (we mined a new block) we send a ping with our height
         if self.need_behind_ping() {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             match self.peers
                 .iter_mut()
                 .filter_map(|(token, peer)| if peer.is_lower(height) && peer.get_state().is_idle() && !peer.active_recently() && peer.get_sent_height() < height { Some((token, peer)) } else { None })
@@ -407,7 +407,7 @@ impl Peers {
         // Also drop in-flight entries we've already accepted/buffered.
         self.pending_blocks.retain(|i, _| !have_blocks.contains(i) && *i > height);
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut peers = self.peers
             .iter_mut()
             .filter_map(|(token, peer)| {
@@ -417,7 +417,7 @@ impl Peers {
                     None
                 }
             })
-            .choose_multiple(&mut rng, (max_height - height) as usize);
+            .sample(&mut rng, (max_height - height) as usize);
         peers.shuffle(&mut rng);
         let mut index = height + 1;
         let now = Instant::now();

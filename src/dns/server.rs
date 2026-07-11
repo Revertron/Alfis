@@ -368,7 +368,7 @@ impl DnsServer for DnsTcpServer {
                     };
 
                     // Hand it off to a worker thread
-                    let thread_no = random::<usize>() % self.thread_count;
+                    let thread_no = random::<u64>() as usize % self.thread_count;
                     match self.senders[thread_no].send(stream) {
                         Ok(_) => {}
                         Err(e) => {

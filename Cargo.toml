@@ -17,10 +17,10 @@ log = "0.4.28"
 simplelog = "0.12.2"
 toml = "1.0.7"
 sha2 = "0.11.0"
-ed25519-dalek = "2.2.0"
-x25519-dalek = { version = "2.0.1", features = ["reusable_secrets"] }
-ecies-ed25519-ng = { git = "https://github.com/Revertron/ecies-ed25519-ng", rev = "554ca29", version = "0.5.3" }
-chacha20poly1305 = "0.10.1"
+ed25519-dalek = "3.0.0"
+x25519-dalek = { version = "3.0.0", features = ["reusable_secrets"] }
+ecies-ed25519-rev = "0.5.4"
+chacha20poly1305 = "0.11.0"
 blakeout = "0.3.0"
 num_cpus = "1.17.0"
 byteorder = "1.5.0"
@@ -28,13 +28,13 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 bincode = { version = "2.0.1", features = ["serde"] }
 serde_cbor = "0.11.2"
-num-bigint = "0.4.6"
+num-bigint = "0.5.1"
 chrono = { version = "0.4.42", features = ["serde"] }
 time = "0.3.44"
-rand = { version = "0.8.5" }
+rand = { version = "0.10.2" }
 sqlite = "0.37.0"
 uuid = { version = "1.18.1", features = ["serde", "v4"] }
-mio = { version = "1.0.0", features = ["os-poll", "net"] }
+mio = { version = "1.2", features = ["os-poll", "net"] }
 ureq = { version = "3.1.4", optional = true }
 lru = "0.18"
 derive_more = { version = "2.0.1", features = ["display", "error", "from"] }

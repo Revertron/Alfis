@@ -2,7 +2,7 @@ use std::net::IpAddr;
 use std::num;
 
 pub use constants::*;
-use rand::Rng;
+use rand::RngExt;
 #[cfg(not(any(target_os = "macos", target_os = "dragonfly")))]
 use thread_priority::*;
 
@@ -93,10 +93,10 @@ fn split_n(s: &str, n: usize) -> Vec<&str> {
 /// Generates random string of given length
 pub fn random_string(length: usize) -> String {
     let chars: Vec<char> = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?".chars().collect();
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut result = String::with_capacity(length);
     for _ in 0..length {
-        let position: usize = rng.gen::<usize>() % chars.len();
+        let position: usize = rng.random::<u64>() as usize % chars.len();
         let c: char = *chars.get(position).unwrap();
         result.push(c);
     }

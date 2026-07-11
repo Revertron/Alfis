@@ -319,7 +319,7 @@ impl Chain {
         };
 
         let signers: HashSet<Bytes> = self.get_block_signers(&block).into_iter().collect();
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let keystore = keys
             .iter()
             .filter(|keystore| signers.contains(&keystore.get_public()))

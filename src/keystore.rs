@@ -15,7 +15,7 @@ use std::{fs, thread};
 use blakeout::Blakeout;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use crate::keystore::rand::RngCore;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, SecretKey};
@@ -40,7 +40,7 @@ pub struct Keystore {
 
 impl Keystore {
     pub fn new() -> Self {
-        let mut csprng = rand::thread_rng();
+        let mut csprng = rand::rng();
         let mut buf = [0u8; 32];
         csprng.fill_bytes(&mut buf);
         let secret = SecretKey::from(buf);
@@ -49,7 +49,7 @@ impl Keystore {
         Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new(), crypto_box, old: false }
     }
 
-    pub fn from_random<R>(csprng: &mut R) -> Self where R: CryptoRng + RngCore {
+    pub fn from_random<R>(csprng: &mut R) -> Self where R: CryptoRng + Rng {
         let mut buf = [0u8; 32];
         csprng.fill_bytes(&mut buf);
         let secret = SecretKey::from(buf);
@@ -62,7 +62,7 @@ impl Keystore {
         //TODO test thoroughly
         let secret_key = SecretKey::try_from(seed).expect("Can't create Keystore from bytes");
         let keypair = SigningKey::from_bytes(&secret_key);
-        let mut csprng = rand::thread_rng();
+        let mut csprng = rand::rng();
         let crypto_box = CryptoBox::generate(&mut csprng);
         Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new(), crypto_box, old: false }
     }
@@ -73,7 +73,7 @@ impl Keystore {
         let keypair = SigningKey::from_bytes(&keypair);
         //let public = PublicKey::from(&keypair);
         //let keypair = SigningKey { secret, public };
-        let mut csprng = rand::thread_rng();
+        let mut csprng = rand::rng();
         let crypto_box = CryptoBox::generate(&mut csprng);
         Keystore { keypair, hash: RefCell::new(Bytes::default()), path: String::new(), crypto_box, old: false }
     }
@@ -256,7 +256,7 @@ pub fn create_key(context: Arc<Mutex<Context>>) {
 }
 
 fn generate_key(difficulty: u32, mining: Arc<AtomicBool>) -> Option<Keystore> {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut time = Instant::now();
     let mut count = 0u128;
     let mut digest = Blakeout::default();

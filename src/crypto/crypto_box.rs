@@ -1,8 +1,8 @@
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 
-use ecies_ed25519_ng::{decrypt, encrypt, Error, PublicKey, SecretKey};
-use rand::{CryptoRng, RngCore};
+use ecies_ed25519_rev::{decrypt, encrypt, Error, PublicKey, SecretKey};
+use rand::{CryptoRng, Rng};
 
 use crate::{from_hex, to_hex};
 
@@ -18,8 +18,8 @@ impl CryptoBox {
         Self { secret, public }
     }
 
-    pub fn generate<R>(csprng: &mut R) -> Self where R: CryptoRng + RngCore {
-        let (secret, public) = ecies_ed25519_ng::generate_keypair(csprng);
+    pub fn generate<R>(csprng: &mut R) -> Self where R: CryptoRng + Rng {
+        let (secret, public) = ecies_ed25519_rev::generate_keypair(csprng);
         Self { secret, public }
     }
 
@@ -30,7 +30,7 @@ impl CryptoBox {
     }
 
     pub fn hide(&self, msg: &[u8]) -> Result<Vec<u8>, Error> {
-        let mut random = rand::thread_rng();
+        let mut random = rand::rng();
         encrypt(&self.public, msg, &mut random)
     }
 
@@ -40,7 +40,7 @@ impl CryptoBox {
 
     pub fn encrypt(public: &[u8], message: &[u8]) -> Result<Vec<u8>, Error> {
         let public = PublicKey::from_bytes(public).unwrap();
-        let mut random = rand::thread_rng();
+        let mut random = rand::rng();
         encrypt(&public, message, &mut random)
     }
 
@@ -68,7 +68,7 @@ impl Clone for CryptoBox {
 
 #[cfg(test)]
 mod tests {
-    use rand::RngCore;
+    use rand::Rng;
 
     use crate::crypto::CryptoBox;
 
@@ -76,7 +76,7 @@ mod tests {
 
     #[test]
     pub fn hide_reveal() {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut buf = [0u8; 32];
         rng.fill_bytes(&mut buf);
         let coder = CryptoBox::new(&buf);

@@ -61,7 +61,7 @@ impl<K: Eq + Hash + Clone> RttTracker<K> {
         }
         drop(stats);
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         if known.is_empty() {
             unknown.shuffle(&mut rng);

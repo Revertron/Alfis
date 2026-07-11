@@ -16,8 +16,8 @@ use log::{debug, error, info, trace, warn};
 use mio::event::Event;
 use mio::net::{TcpListener, TcpStream};
 use mio::{Events, Interest, Poll, Registry, Token};
-use rand::{random, Rng, RngCore};
-use rand::prelude::thread_rng;
+use rand::{random, Rng, RngExt};
+use rand::rng;
 use x25519_dalek::{PublicKey, ReusableSecret};
 
 use crate::blockchain::types::BlockQuality;
@@ -55,7 +55,7 @@ pub struct Network {
 impl Network {
     pub fn new(context: Arc<Mutex<Context>>) -> Self {
         // P2P encryption primitives
-        let mut thread_rng = thread_rng();
+        let mut thread_rng = rng();
         let secret_key = ReusableSecret::random_from_rng(&mut thread_rng);
         let public_key = PublicKey::from(&secret_key);
         let peers = Peers::new();
@@ -361,7 +361,7 @@ impl Network {
                                     let public_key: PublicKey = PublicKey::from(buf);
                                     let shared = self.secret_key.diffie_hellman(&public_key);
                                     let mut nonce = [0u8; 12];
-                                    let mut rng = thread_rng();
+                                    let mut rng = rng();
                                     rng.fill(&mut nonce);
                                     let chacha = Chacha::new(shared.as_bytes(), &nonce);
                                     registry.reregister(stream, event.token(), Interest::WRITABLE).unwrap();
@@ -968,8 +968,8 @@ fn read_message(stream: &mut TcpStream, buf: &mut [u8]) -> Result<usize, Error> 
 
 /// Sends one byte [garbage_size], [random bytes], and [public_key]
 fn send_client_handshake(stream: &mut TcpStream, public_key: &[u8]) -> io::Result<()> {
-    let mut rng = thread_rng();
-    let packet_size: usize = rng.gen_range(64..255);
+    let mut rng = rng();
+    let packet_size: usize = rng.random_range(64..255);
     let mut buf = vec![0u8; packet_size];
     rng.fill_bytes(&mut buf);
     let garbage_size = packet_size - 33;
@@ -1015,8 +1015,8 @@ fn read_garbage_header(stream: &mut TcpStream) -> Result<(), Error> {
 }
 
 fn send_server_handshake(peer: &mut Peer, public_key: &[u8]) -> io::Result<()> {
-    let mut rng = thread_rng();
-    let packet_size: usize = rng.gen_range(64..255);
+    let mut rng = rng();
+    let packet_size: usize = rng.random_range(64..255);
     let mut buf = vec![0u8; packet_size];
     rng.fill_bytes(&mut buf);
     let nonce = peer.get_nonce();
