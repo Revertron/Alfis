@@ -16,11 +16,11 @@ Moreover, ALFIS can forward requests of regular domains to [DNS-over-HTTPS](http
 - Convenient graphical user interface to create domains in this alternative domain system. If you want just to use it like a DNS-server you can run it with `-n` flag or just build/download the variant without GUI.
 
 
-![Screenshot](img/keys.png)
+![Screenshot](screens/main.png)
 
-![Screenshot](img/domains2.png)
+![Screenshot](screens/records.png)
 
-![Screenshot](img/domains.png)
+![Screenshot](screens/zones.png)
 
 ## How does it work?
 Every node connects to its siblings and synchronizes the domain database.
