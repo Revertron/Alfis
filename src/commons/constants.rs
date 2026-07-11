@@ -25,6 +25,26 @@ pub const LIMITED_CONFIDENCE_DEPTH: u64 = 4;
 /// We start mining signing blocks after random delay, this is the max delay
 pub const BLOCK_SIGNERS_START_RANDOM: i64 = 90;
 
+/// RFC-0002: healing rules apply to blocks with index above this height
+/// (set to the full block stuck at the 2026-07-05 stall, see RFC-0002 section 6.1)
+pub const HEALING_ACTIVATION_HEIGHT: u64 = 22521;
+/// RFC-0002: a healing signature is valid this many seconds after the full block's timestamp
+pub const HEALING_TIMEOUT: i64 = 5 * 86400;
+/// RFC-0002: lowered timeout when the chain is already in the healed regime
+pub const HEALING_TIMEOUT_FAST: i64 = 3 * 86400;
+/// RFC-0002: how many blocks before a full block are scanned for past healing signatures
+pub const HEALING_LOOKBACK: u64 = 10;
+/// RFC-0002: anchor pool size (top keys by all-time block count)
+pub const HEALING_POOL_ANCHORS: usize = 7;
+/// RFC-0002: recent pool size (top non-anchor keys of the recent window)
+pub const HEALING_POOL_RECENT: usize = 5;
+/// RFC-0002: how many recent blocks are ranked for the recent pool
+pub const HEALING_WINDOW: u64 = 5000;
+/// RFC-0002: a lock that uses healing signatures needs at least this many anchor signatures
+pub const HEALING_ANCHORS_MIN: usize = 1;
+/// RFC-0002: max random start delay for healing jobs (healing is never latency-critical)
+pub const HEALING_START_RANDOM: i64 = 900;
+
 pub const NEW_DOMAINS_INTERVAL: i64 = 86400; // One day in seconds
 pub const ONE_WEEK: i64 = 86400 * 7; // One week in seconds
 pub const DOMAIN_LIFETIME: i64 = 86400 * 365; // One year

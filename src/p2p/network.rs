@@ -847,7 +847,9 @@ impl Network {
                 let height = context.chain.get_height();
                 // Never replace blocks deeper than LIMITED_CONFIDENCE_DEPTH below our tip.
                 if block.index + LIMITED_CONFIDENCE_DEPTH < height {
-                    warn!("Refusing to replace deep fork block {} (our height: {})", block.index, height);
+                    // Somebody has an irreconcilable chain, humans must know (RFC-0002, section 3.7)
+                    error!("Deep fork detected at block {} (our height: {})! Refusing to replace it.", block.index, height);
+                    post(crate::event::Event::ForkDetected { index: block.index, hash: block.hash.to_string() });
                     let bad_hash = block.hash.clone();
                     drop(context);
                     self.remember_bad(bad_hash);
@@ -1111,17 +1113,18 @@ fn write_all(connection: &mut TcpStream, mut buf: &[u8]) -> io::Result<()> {
 }
 
 fn version_compatible(version: &str) -> bool {
-    // Require >= 0.8.10 — 0.8.9 and earlier are vulnerable and must upgrade.
-    const MIN_PATCH: u32 = 10;
+    // Require >= 0.9.0 — older nodes do not understand healing signatures (RFC-0002)
+    // and would freeze at the first healed lock window.
+    const MIN_VERSION: (u32, u32, u32) = (0, 9, 0);
+    let number = |s: &str| s.split(|c: char| !c.is_ascii_digit()).next().unwrap_or("").parse::<u32>().ok();
     let mut parts = version.split('.');
     let (Some(major), Some(minor), Some(patch)) = (parts.next(), parts.next(), parts.next()) else {
         return false;
     };
-    if major != "0" || minor != "8" {
+    let (Some(major), Some(minor), Some(patch)) = (number(major), number(minor), number(patch)) else {
         return false;
-    }
-    let patch_num = patch.split(|c: char| !c.is_ascii_digit()).next().unwrap_or("");
-    patch_num.parse::<u32>().map_or(false, |p| p >= MIN_PATCH)
+    };
+    (major, minor, patch) >= MIN_VERSION
 }
 
 #[cfg(test)]
@@ -1130,19 +1133,20 @@ mod version_tests {
 
     #[test]
     fn accepts_supported_versions() {
-        assert!(version_compatible("0.8.10"));
-        assert!(version_compatible("0.8.11"));
-        assert!(version_compatible("0.8.99"));
-        assert!(version_compatible("0.8.10-rc1"));
+        assert!(version_compatible("0.9.0"));
+        assert!(version_compatible("0.9.1"));
+        assert!(version_compatible("0.9.0-rc1"));
+        assert!(version_compatible("0.10.0"));
+        assert!(version_compatible("1.0.0"));
     }
 
     #[test]
-    fn rejects_old_or_foreign_versions() {
+    fn rejects_old_versions() {
+        assert!(!version_compatible("0.8.11"));
+        assert!(!version_compatible("0.8.10"));
         assert!(!version_compatible("0.8.9"));
-        assert!(!version_compatible("0.8.0"));
         assert!(!version_compatible("0.7.20"));
-        assert!(!version_compatible("1.0.0"));
-        assert!(!version_compatible("0.8"));
+        assert!(!version_compatible("0.9"));
         assert!(!version_compatible(""));
         assert!(!version_compatible("garbage"));
     }

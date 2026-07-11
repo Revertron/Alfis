@@ -151,10 +151,12 @@ impl Miner {
                         if let Ok(context) = context.lock() {
                             let keystores = context.get_keystores();
                             // Ask the blockchain if we have to sign something
-                            if let Some((block, keystore)) = context.chain.get_sign_block(keystores) {
+                            if let Some((block, keystore, healing)) = context.chain.get_sign_block(keystores) {
                                 info!("Got signing job, adding to queue");
-                                // We start mining sign block after some time, not everyone in the same time
-                                let start = Utc::now().timestamp() + (rand::random::<i64>() % BLOCK_SIGNERS_START_RANDOM);
+                                // We start mining sign block after some time, not everyone in the same time.
+                                // Healing blocks are never urgent, they get a much larger delay (RFC-0002).
+                                let delay = if healing { HEALING_START_RANDOM } else { BLOCK_SIGNERS_START_RANDOM };
+                                let start = Utc::now().timestamp() + (rand::random::<i64>() % delay);
                                 jobs.push(MineJob { start, block, keystore });
                             }
                         }
@@ -179,10 +181,12 @@ impl Miner {
                     if let Ok(context) = context.lock() {
                         let keystores = context.get_keystores();
                         // Ask the blockchain if we have to sign something
-                        if let Some((block, keystore)) = context.chain.get_sign_block(keystores) {
+                        if let Some((block, keystore, healing)) = context.chain.get_sign_block(keystores) {
                             info!("Got signing job, adding to queue");
-                            // We start mining sign block after some time, not everyone in the same time
-                            let start = Utc::now().timestamp() + (rand::random::<i64>() % BLOCK_SIGNERS_START_RANDOM);
+                            // We start mining sign block after some time, not everyone in the same time.
+                            // Healing blocks are never urgent, they get a much larger delay (RFC-0002).
+                            let delay = if healing { HEALING_START_RANDOM } else { BLOCK_SIGNERS_START_RANDOM };
+                            let start = Utc::now().timestamp() + (rand::random::<i64>() % delay);
                             jobs.push(MineJob { start, block, keystore });
                         }
                     }

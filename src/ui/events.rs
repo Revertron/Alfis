@@ -154,6 +154,13 @@ pub fn register_bus_listener(handle: UiHandle, context: Arc<Mutex<Context>>, sta
                     show_toast(ui, Severity::Fail, &text);
                 });
             }
+            Event::ForkDetected { index, hash } => {
+                handle.run_on_ui_thread(move |ui| {
+                    let text = format!("Deep fork detected at block {} (hash {})! Some node's chain has diverged beyond repair.", index, hash);
+                    add_event_row(ui, Severity::Fail, &text);
+                    show_toast(ui, Severity::Fail, &text);
+                });
+            }
             _ => {}
         }
         true

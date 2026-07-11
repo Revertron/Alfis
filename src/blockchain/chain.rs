@@ -17,6 +17,8 @@ use crate::blockchain::types::BlockQuality::*;
 use crate::blockchain::types::MineResult::*;
 use crate::blockchain::types::{BlockQuality, MineResult, Options, ZoneData};
 use crate::commons::constants::*;
+use crate::event::Event;
+use crate::eventbus::post;
 use crate::keystore::check_public_key_strength;
 use crate::settings::Settings;
 use crate::{check_domain, get_domain_zone, is_yggdrasil_record, Block, Bytes, Keystore, Transaction, from_hex};
@@ -42,6 +44,7 @@ const SQL_GET_DOMAINS_COUNT: &str = "SELECT count(DISTINCT identity) FROM domain
 const SQL_GET_USERS_COUNT: &str = "SELECT count(DISTINCT pub_key) FROM blocks;";
 const SQL_GET_USER_BLOCK_COUNT: &str = "SELECT count(pub_key) FROM blocks WHERE pub_key = ? AND id < ?";
 const SQL_GET_DOMAIN_UPDATE_TIME: &str = "SELECT domains.timestamp FROM blocks JOIN domains ON blocks.id = domains.id WHERE difficulty >= 23 AND identity = ? ORDER BY domains.id DESC LIMIT 1;";
+const SQL_GET_TOP_KEYS: &str = "SELECT pub_key FROM blocks WHERE id > ? AND id <= ? GROUP BY pub_key ORDER BY COUNT(*) DESC, pub_key ASC LIMIT ?;";
 
 const SQL_GET_OPTIONS: &str = "SELECT * FROM options;";
 
@@ -63,7 +66,8 @@ pub struct Chain {
     max_height: u64,
     db: Connection,
     zones: Vec<ZoneData>,
-    signers: RefCell<SignersCache>
+    signers: RefCell<SignersCache>,
+    healing: RefCell<HealingCache>
 }
 
 impl Chain {
@@ -72,7 +76,7 @@ impl Chain {
 
         let db = sqlite::open(db_name).expect("Unable to open blockchain DB");
         let zones = Self::load_zones();
-        let mut chain = Chain { origin, last_block: None, last_full_block: None, max_height: 0, db, zones, signers: SignersCache::new() };
+        let mut chain = Chain { origin, last_block: None, last_full_block: None, max_height: 0, db, zones, signers: SignersCache::new(), healing: HealingCache::new() };
         chain.init_db();
         chain
     }
@@ -276,12 +280,15 @@ impl Chain {
     pub fn replace_block(&mut self, block: Block) -> sqlite::Result<()> {
         info!("Replacing block {} with:\n{:?}", block.index, &block);
         self.signers.borrow_mut().clear();
+        self.healing.borrow_mut().clear();
         self.truncate_db_from_block(block.index)?;
         self.add_block(block);
         Ok(())
     }
 
-    pub fn get_sign_block(&self, keys: &[Keystore]) -> Option<(Block, Keystore)> {
+    /// Gets a signing (or healing, RFC-0002) job for one of our keys.
+    /// The returned flag is true for a healing job.
+    pub fn get_sign_block(&self, keys: &[Keystore]) -> Option<(Block, Keystore, bool)> {
         if self.get_height() < BLOCK_SIGNERS_START {
             trace!("Too early to start block signings");
             return None;
@@ -302,8 +309,7 @@ impl Chain {
             Some(ref block) => block.clone()
         };
         // TODO maybe make some config option to mine signing blocks above?
-        let sign_count = self.get_height() - block.index;
-        if sign_count >= BLOCK_SIGNERS_MIN {
+        if self.is_locked(&block) {
             trace!("Block {} has enough signing blocks", block.index);
             return None;
         }
@@ -319,26 +325,51 @@ impl Chain {
         };
 
         let signers: HashSet<Bytes> = self.get_block_signers(&block).into_iter().collect();
+        let activated = last_index + 1 > HEALING_ACTIVATION_HEIGHT;
+        let pool = if activated { Some(self.get_healing_pool(&block)) } else { None };
+        // If four signatures are there but the block is still not locked, another
+        // non-anchor healing signature cannot advance the lock (RFC-0002, section 3.5)
+        let sign_count = self.get_height() - block.index;
+        let need_anchor = sign_count >= BLOCK_SIGNERS_MIN;
+        let not_signed = |keystore: &Keystore| -> bool {
+            for index in block.index..=self.get_height() {
+                let b = self.get_block(index).unwrap();
+                if b.pub_key == keystore.get_public() {
+                    debug!("We already mined signing block for block {} by {:?}", block.index, &b.pub_key);
+                    return false;
+                }
+            }
+            true
+        };
         let mut rng = rand::rng();
         let keystore = keys
             .iter()
             .filter(|keystore| signers.contains(&keystore.get_public()))
-            .filter(|keystore| {
-                for index in block.index..=self.get_height() {
-                    let b = self.get_block(index).unwrap();
-                    if b.pub_key == keystore.get_public() {
-                        debug!("We already mined signing block for block {} by {:?}", block.index, &b.pub_key);
-                        return false;
-                    }
-                }
-                true
-            })
+            .filter(|keystore| not_signed(keystore))
             .choose(&mut rng);
         if let Some(keystore) = keystore {
             info!("We have an honor to mine signing block!");
             let mut block = Block::new(None, Bytes::default(), last_hash, SIGNER_DIFFICULTY);
             block.index = last_index + 1;
-            return Some((block, keystore.clone()));
+            return Some((block, keystore.clone(), false));
+        }
+        // Healing signatures from the standby pool (RFC-0002, section 3.6)
+        if let Some(pool) = &pool {
+            if Utc::now().timestamp() - block.timestamp >= pool.timeout {
+                let keystore = keys
+                    .iter()
+                    .filter(|keystore| !signers.contains(&keystore.get_public()))
+                    .filter(|keystore| pool.contains(&keystore.get_public()))
+                    .filter(|keystore| !need_anchor || pool.is_anchor(&keystore.get_public()))
+                    .filter(|keystore| not_signed(keystore))
+                    .choose(&mut rng);
+                if let Some(keystore) = keystore {
+                    info!("We have an honor to mine a healing block for block {}!", block.index);
+                    let mut block = Block::new(None, Bytes::default(), last_hash, SIGNER_DIFFICULTY);
+                    block.index = last_index + 1;
+                    return Some((block, keystore.clone(), true));
+                }
+            }
         }
         if !signers.is_empty() {
             info!("Signing block must be mined by other nodes");
@@ -348,8 +379,7 @@ impl Chain {
 
     pub fn update_sign_block_for_mining(&self, mut block: Block) -> Option<Block> {
         if let Some(full_block) = &self.last_full_block {
-            let sign_count = self.get_height() - full_block.index;
-            if sign_count >= BLOCK_SIGNERS_MIN {
+            if self.is_locked(full_block) {
                 return None;
             }
             if let Some(last) = &self.last_block {
@@ -366,10 +396,7 @@ impl Chain {
             return false;
         }
         if let Some(full_block) = &self.last_full_block {
-            let sign_count = self.get_height() - full_block.index;
-            if sign_count < BLOCK_SIGNERS_MIN {
-                return true;
-            }
+            return !self.is_locked(full_block);
         }
 
         false
@@ -772,13 +799,136 @@ impl Chain {
         match self.last_full_block {
             None => self.get_height() + 1,
             Some(ref block) => {
-                if block.index < BLOCK_SIGNERS_START {
+                if block.index < BLOCK_SIGNERS_START || self.is_locked(block) {
                     self.get_height() + 1
                 } else {
                     max(block.index + BLOCK_SIGNERS_MIN, self.get_height() + 1)
                 }
             }
         }
+    }
+
+    /// Checks if this full block is locked by enough signature blocks (RFC-0002, section 3.5)
+    pub fn is_locked(&self, full_block: &Block) -> bool {
+        self.is_locked_before(full_block, MAX)
+    }
+
+    /// Checks the lock of a full block counting only signature blocks with index below `before`,
+    /// so that validation of a block sees the same window state as when that block arrived
+    fn is_locked_before(&self, full_block: &Block, before: u64) -> bool {
+        if full_block.index < BLOCK_SIGNERS_START {
+            return true;
+        }
+        if full_block.index < HEALING_ACTIVATION_HEIGHT {
+            // Pre-activation rule: enough blocks above the full block
+            let mut count = 0;
+            let mut index = full_block.index + 1;
+            while index < before {
+                match self.get_block(index) {
+                    Some(b) if b.transaction.is_none() => count += 1,
+                    _ => break
+                }
+                if count >= BLOCK_SIGNERS_MIN {
+                    return true;
+                }
+                index += 1;
+            }
+            return false;
+        }
+
+        let signers: HashSet<Bytes> = self.get_block_signers(full_block).into_iter().collect();
+        let pool = self.get_healing_pool(full_block);
+        let mut count = 0;
+        let mut drawn = 0;
+        let mut anchors = 0;
+        let mut index = full_block.index + 1;
+        while index < before {
+            let block = match self.get_block(index) {
+                Some(b) if b.transaction.is_none() => b,
+                _ => break
+            };
+            count += 1;
+            if signers.contains(&block.pub_key) {
+                drawn += 1;
+            }
+            if pool.is_anchor(&block.pub_key) {
+                anchors += 1;
+            }
+            index += 1;
+        }
+        // Either a purely drawn lock, or a lock that relies on healing signatures
+        // and then needs at least one anchor signature among the counted ones
+        count >= BLOCK_SIGNERS_MIN && (drawn >= BLOCK_SIGNERS_MIN || anchors >= HEALING_ANCHORS_MIN)
+    }
+
+    /// Gets the standby pool for a full block (RFC-0002, section 3.2), cached per block index
+    pub fn get_healing_pool(&self, full_block: &Block) -> HealingPool {
+        if let Some(pool) = self.healing.borrow().get_for(full_block.index) {
+            return pool;
+        }
+        let anchors = self.get_top_keys(1, full_block.index, HEALING_POOL_ANCHORS);
+        let window_start = max(1, full_block.index.saturating_sub(HEALING_WINDOW));
+        let candidates = self.get_top_keys(window_start, full_block.index, HEALING_POOL_ANCHORS + HEALING_POOL_RECENT);
+        let mut recent = Vec::new();
+        for key in candidates {
+            if recent.len() >= HEALING_POOL_RECENT {
+                break;
+            }
+            if !anchors.contains(&key) {
+                recent.push(key);
+            }
+        }
+        let timeout = self.get_healing_timeout(full_block);
+        debug!("Standby pool for block {}: anchors {:?}, recent {:?}, timeout {}", full_block.index, &anchors, &recent, timeout);
+        let pool = HealingPool { anchors, recent, timeout };
+        let mut cache = self.healing.borrow_mut();
+        cache.index = full_block.index;
+        cache.pool = Some(pool.clone());
+        pool
+    }
+
+    /// Ranks keys by the number of blocks authored with `after < index <= until`,
+    /// ties broken by ascending key bytes
+    fn get_top_keys(&self, after: u64, until: u64, limit: usize) -> Vec<Bytes> {
+        let mut result = Vec::new();
+        let mut statement = self.db.prepare(SQL_GET_TOP_KEYS).expect("Unable to prepare");
+        statement.bind((1, after as i64)).expect("Error in bind");
+        statement.bind((2, until as i64)).expect("Error in bind");
+        statement.bind((3, limit as i64)).expect("Error in bind");
+        while let State::Row = statement.next().unwrap() {
+            result.push(Bytes::from_bytes(&statement.read::<Vec<u8>, usize>(0).unwrap()));
+        }
+        result
+    }
+
+    /// Gets the healing timeout for a full block (RFC-0002, section 3.4): lowered if any of the
+    /// preceding HEALING_LOOKBACK blocks is a healing signature (an empty block whose author
+    /// is not among the drawn signers of its window's full block)
+    fn get_healing_timeout(&self, full_block: &Block) -> i64 {
+        let start = max(full_block.index.saturating_sub(HEALING_LOOKBACK), HEALING_ACTIVATION_HEIGHT + 1);
+        if start >= full_block.index {
+            return HEALING_TIMEOUT;
+        }
+        let mut current_full = self.get_last_full_block(start, None);
+        for index in start..full_block.index {
+            let block = match self.get_block(index) {
+                Some(block) => block,
+                None => break
+            };
+            if block.transaction.is_some() {
+                current_full = Some(block);
+                continue;
+            }
+            if let Some(full) = &current_full {
+                if full.index >= BLOCK_SIGNERS_START {
+                    let signers = self.get_block_signers(full);
+                    if !signers.contains(&block.pub_key) {
+                        return HEALING_TIMEOUT_FAST;
+                    }
+                }
+            }
+        }
+        HEALING_TIMEOUT
     }
 
     pub fn get_max_height(&self) -> u64 {
@@ -945,7 +1095,9 @@ impl Chain {
                             // Refuse forks deeper than LIMITED_CONFIDENCE_DEPTH below our tip:
                             // we never want to rewrite history beyond a few blocks back.
                             if block.index + LIMITED_CONFIDENCE_DEPTH < last_block.index {
-                                warn!("Ignoring deep fork block {} (our tip: {}):\n{:?}", block.index, last_block.index, &block);
+                                // Somebody has an irreconcilable chain, humans must know (RFC-0002, section 3.7)
+                                error!("Deep fork detected at block {} (our tip: {})! Someone's chain has diverged beyond repair:\n{:?}", block.index, last_block.index, &block);
+                                post(Event::ForkDetected { index: block.index, hash: block.hash.to_string() });
                                 return Bad;
                             }
                             warn!("Got forked block {} with hash {:?} instead of {:?}", block.index, block.hash, last_block.hash);
@@ -967,34 +1119,45 @@ impl Chain {
 
     /// Checks if this block is a good signature block
     fn is_good_sign_block(&self, block: &Block, last_full_block: &Option<Block>) -> bool {
-        // If this is not a signing block
+        let full_block = match last_full_block {
+            Some(block) => block,
+            None => return true
+        };
+        let activated = block.index > HEALING_ACTIVATION_HEIGHT;
         if block.transaction.is_some() {
-            return true;
-        }
-        if let Some(full_block) = &last_full_block {
-            let sign_count = self.get_height() - full_block.index;
-            if sign_count < BLOCK_SIGNERS_MIN {
-                // Last full block is not locked enough
-                if block.index > full_block.index && block.transaction.is_some() {
-                    warn!("Not enough signing blocks over full {} block!", full_block.index);
-                    return false;
-                } else if !self.is_good_signer_for_block(block, full_block) {
-                    return false;
-                }
-            } else if sign_count < BLOCK_SIGNERS_ALL && block.transaction.is_none()
-                && !self.is_good_signer_for_block(block, full_block) {
+            // A full block is valid only over a locked full block (RFC-0002, fix 3.7.1)
+            if activated && block.index > full_block.index && !self.is_locked_before(full_block, block.index) {
+                warn!("Ignoring full block {} over unlocked full block {}!", block.index, full_block.index);
                 return false;
             }
+            return true;
         }
-        true
+        if !activated {
+            // Pre-activation behavior, kept intact for historical blocks
+            let sign_count = self.get_height() - full_block.index;
+            if sign_count < BLOCK_SIGNERS_ALL && !self.is_good_signer_for_block(block, full_block) {
+                return false;
+            }
+            return true;
+        }
+        // Signature blocks over an already locked window are valid up to seven in total
+        // to tolerate signing races; further ones are spam (RFC-0002, fix 3.7.2).
+        // An unlocked window accepts every valid signer: it is bounded by one block
+        // per drawn or standby key, and capping it could make the lock unreachable.
+        let sign_count = block.index.saturating_sub(full_block.index + 1);
+        if sign_count >= BLOCK_SIGNERS_ALL && self.is_locked_before(full_block, block.index) {
+            warn!("Ignoring block {}, signature window of block {} is complete!", block.index, full_block.index);
+            return false;
+        }
+        self.is_good_signer_for_block(block, full_block)
     }
 
     /// Check if this block's owner is a good candidate to sign last full block
     fn is_good_signer_for_block(&self, block: &Block, full_block: &Block) -> bool {
-        // If we got a signing block
-        let signers: HashSet<Bytes> = self.get_block_signers(full_block).into_iter().collect();
-        if !signers.contains(&block.pub_key) {
-            warn!("Ignoring block {} from '{:?}', as wrong signer!", block.index, &block.pub_key);
+        let activated = block.index > HEALING_ACTIVATION_HEIGHT;
+        // Signature blocks must be signed with strong keys too (RFC-0002, fix 3.7.3)
+        if activated && !check_public_key_strength(&block.pub_key, KEYSTORE_DIFFICULTY) {
+            warn!("Ignoring block {} from '{:?}', public key is too weak!", block.index, &block.pub_key);
             return false;
         }
         // If this signers' public key has already locked/signed that block we return error
@@ -1005,7 +1168,21 @@ impl Chain {
                 return false;
             }
         }
-        true
+        // If we got a signing block
+        let signers: HashSet<Bytes> = self.get_block_signers(full_block).into_iter().collect();
+        if signers.contains(&block.pub_key) {
+            return true;
+        }
+        // A healing signature from the standby pool (RFC-0002, sections 3.3-3.4)
+        if activated && block.pub_key != full_block.pub_key {
+            let pool = self.get_healing_pool(full_block);
+            if pool.contains(&block.pub_key) && block.timestamp - full_block.timestamp >= pool.timeout {
+                info!("Accepting healing signature {} from '{:?}' for block {}", block.index, &block.pub_key, full_block.index);
+                return true;
+            }
+        }
+        warn!("Ignoring block {} from '{:?}', as wrong signer!", block.index, &block.pub_key);
+        false
     }
 
     fn get_difficulty_for_transaction(&self, transaction: &Transaction, height: u64, time: i64) -> u32 {
@@ -1110,6 +1287,50 @@ impl Chain {
     }
 }
 
+/// The standby pool for one full block (RFC-0002, section 3.2)
+#[derive(Clone, Debug)]
+pub struct HealingPool {
+    /// Top keys by all-time block count
+    pub anchors: Vec<Bytes>,
+    /// Top non-anchor keys of the recent window
+    pub recent: Vec<Bytes>,
+    /// Healing timeout for this lock window, in seconds (RFC-0002, section 3.4)
+    pub timeout: i64
+}
+
+impl HealingPool {
+    pub fn contains(&self, key: &Bytes) -> bool {
+        self.anchors.contains(key) || self.recent.contains(key)
+    }
+
+    pub fn is_anchor(&self, key: &Bytes) -> bool {
+        self.anchors.contains(key)
+    }
+}
+
+struct HealingCache {
+    index: u64,
+    pool: Option<HealingPool>
+}
+
+impl HealingCache {
+    pub fn new() -> RefCell<HealingCache> {
+        RefCell::new(HealingCache { index: 0, pool: None })
+    }
+
+    pub fn get_for(&self, index: u64) -> Option<HealingPool> {
+        if self.index == index {
+            return self.pool.clone();
+        }
+        None
+    }
+
+    pub fn clear(&mut self) {
+        self.index = 0;
+        self.pool = None;
+    }
+}
+
 struct SignersCache {
     index: u64,
     signers: Vec<Bytes>
@@ -1162,6 +1383,58 @@ pub mod tests {
         let mut chain = Chain::new(&settings, "./tests/blockchain.db");
         chain.check_chain(u64::MAX);
         assert_eq!(chain.get_height(), 149);
+    }
+
+    #[test]
+    pub fn healing_pool() {
+        use crate::commons::constants::*;
+
+        let settings = Settings::default();
+        let chain = Chain::new(&settings, "./tests/blockchain.db");
+        let full = chain.get_last_full_block(u64::MAX, None).unwrap();
+
+        let pool = chain.get_healing_pool(&full);
+        assert!(!pool.anchors.is_empty());
+        assert!(pool.anchors.len() <= HEALING_POOL_ANCHORS);
+        assert!(pool.recent.len() <= HEALING_POOL_RECENT);
+        // The pools must not intersect
+        for key in &pool.recent {
+            assert!(!pool.anchors.contains(key));
+        }
+        // The whole test chain is below the activation height: baseline timeout
+        assert_eq!(pool.timeout, HEALING_TIMEOUT);
+
+        // The pool must be deterministic: a cached call and a fresh chain must agree
+        let cached = chain.get_healing_pool(&full);
+        let fresh = Chain::new(&settings, "./tests/blockchain.db").get_healing_pool(&full);
+        assert_eq!(pool.anchors, cached.anchors);
+        assert_eq!(pool.recent, cached.recent);
+        assert_eq!(pool.anchors, fresh.anchors);
+        assert_eq!(pool.recent, fresh.recent);
+    }
+
+    #[test]
+    pub fn lock_matches_legacy_rule() {
+        use crate::commons::constants::*;
+
+        let settings = Settings::default();
+        let chain = Chain::new(&settings, "./tests/blockchain.db");
+        // Below the activation height the lock predicate must match the old arithmetic
+        // for every full block in the signed part of the chain
+        for index in BLOCK_SIGNERS_START..=chain.get_height() {
+            let block = chain.get_block(index).unwrap();
+            if block.transaction.is_none() {
+                continue;
+            }
+            let mut sign_count = 0;
+            for i in (index + 1)..=chain.get_height() {
+                if chain.get_block(i).unwrap().transaction.is_some() {
+                    break;
+                }
+                sign_count += 1;
+            }
+            assert_eq!(chain.is_locked(&block), sign_count >= BLOCK_SIGNERS_MIN, "block {}", index);
+        }
     }
 
     #[test]
