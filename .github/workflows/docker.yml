@@ -1,16 +1,20 @@
 name: Docker
 
 # Builds a multi-arch (amd64 + arm64) image from source and pushes it to GHCR.
-# Runs on every release tag, and can be triggered manually to (re)build an
-# existing tag - handy for publishing an image for an already-released version.
+# Runs on every release tag. Can also be run manually from the default branch to
+# publish an image for the current source (e.g. the current release).
+#
+# It always builds the ref it runs from - the pushed tag, or the branch selected
+# for a manual run - so the Dockerfile and the source it builds stay in sync.
+# (Never check out an older tag here: old tags carry the old build tooling.)
 on:
   push:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:
     inputs:
-      ref:
-        description: 'Tag to build, e.g. v0.9.0 (blank = current branch/tag)'
+      version:
+        description: 'Image version tag (blank = read from Cargo.toml)'
         required: false
         default: ''
       latest:
@@ -22,7 +26,7 @@ env:
   IMAGE: ghcr.io/${{ github.repository }}
 
 concurrency:
-  group: docker-${{ github.ref }}-${{ inputs.ref }}
+  group: docker-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -33,33 +37,27 @@ jobs:
       contents: read
       packages: write        # lets GITHUB_TOKEN push to GHCR
     steps:
-      - name: Resolve ref to build
-        id: ref
-        run: |
-          if [ -n "${{ inputs.ref }}" ]; then
-            echo "value=${{ inputs.ref }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "value=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Checkout ${{ steps.ref.outputs.value }}
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ steps.ref.outputs.value }}
 
-      - name: Derive version tags
+      - name: Resolve version
         id: ver
         run: |
-          REF="${{ steps.ref.outputs.value }}"
-          V="${REF#v}"        # 0.9.0
-          MM="${V%.*}"        # 0.9
-          {
-            echo "full=$V"
-            echo "minor=$MM"
-          } >> "$GITHUB_OUTPUT"
+          if [ -n "${{ inputs.version }}" ]; then
+            V="${{ inputs.version }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            V="${GITHUB_REF_NAME}"
+          else
+            V="$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+          fi
+          V="${V#v}"          # strip a leading v if present
+          MM="${V%.*}"        # major.minor
+          echo "full=$V" >> "$GITHUB_OUTPUT"
+          echo "minor=$MM" >> "$GITHUB_OUTPUT"
+          echo "Building image version $V"
 
-      # QEMU is registered as a fallback; the actual compile is native cross,
-      # and the runtime stage only COPYs files, so no foreign code is executed.
+      # QEMU is a fallback only; the compile is native cross and the runtime
+      # stage only COPYs files, so no foreign code is executed.
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
