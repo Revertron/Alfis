@@ -20,7 +20,10 @@ pub struct Settings {
     #[serde(default)]
     pub dns: Dns,
     #[serde(default)]
-    pub mining: Mining
+    pub mining: Mining,
+    /// Render the GUI with the dark palette.
+    #[serde(default)]
+    pub dark_theme: bool
 }
 
 impl Settings {
@@ -79,7 +82,8 @@ impl Default for Settings {
             check_blocks: default_check_blocks(),
             net: Net::default(),
             dns: Default::default(),
-            mining: Mining::default()
+            mining: Mining::default(),
+            dark_theme: false
         }
     }
 }

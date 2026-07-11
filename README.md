@@ -46,7 +46,7 @@ You don't need any additional steps to build Alfis, just stick to the MSVC versi
 
 If you see an error about missing `VCRUNTIME140.dll` when running alfis you will need to install [VC Redistributable](https://www.microsoft.com/en-us/download/details.aspx?id=52685) from Microsoft.
 
-The GUI version uses WebView2 (Edge-based rendering engine), which is included by default on Windows 10/11. If you're on an older system, you may need to install [WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/).
+The GUI version renders with OpenGL (through the Lumio GUI framework), so no browser engine or WebView2 runtime is needed.
 
 ### ![Windows Logo](/img/windows.svg) On Windows (MINGW64)
 If you'd rather use Gnu version of Rust you can build Alfis by these steps:
@@ -58,8 +58,8 @@ cargo build
 ```
 
 ### ![Linux Logo](/img/linux.svg) On Linux
-If you are building on Linux, you must ensure that you have `libwebkitgtk` and `libxdo` libraries installed (for UI and tray icon respectively).
-You can do it by issuing this command: `sudo apt install libwebkit2gtk-4.1-dev libxdo-dev` (on Debian/Ubuntu and derivatives).
+If you are building on Linux with GUI, you must ensure that you have `fontconfig` development files installed (the UI resolves system fonts through it).
+You can do it by issuing this command: `sudo apt install libfontconfig-dev` (on Debian/Ubuntu and derivatives). The GUI renders with OpenGL, so working GL drivers and an X11 or Wayland session are needed at runtime.
 
 #### ![Arch Linux Logo](/img/archlinux.svg) On Arch Linux
 

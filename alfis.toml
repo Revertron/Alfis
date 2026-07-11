@@ -4,6 +4,8 @@ origin = "0000001D2A77D63477172678502E51DE7F346061FF7EB188A2445ECA3FC0780E"
 key_files = ["key1.toml", "key2.toml", "key3.toml", "key4.toml", "key5.toml"]
 # How many last blocks to check on start
 check_blocks = 8
+# Render the GUI with the dark theme
+dark_theme = true
 
 # Network settings
 [net]

@@ -1,0 +1,24 @@
+<Frame id="dlg_root" direction="vertical" width="max" height="max" padding="10">
+    <Label text="Domain name:" font_style="Bold" height="min" margin_bottom="4"/>
+    <Frame direction="horizontal" width="max" height="min" margin_bottom="6">
+        <Edit id="domain_name" width="max" height="28" placeholder="example" margin_right="4"/>
+        <ComboBox id="zone_combo" width="90" height="28" text="" margin_right="4"/>
+        <Button id="btn_advanced" text="Advanced" height="28" padding_left="8" padding_right="8"/>
+    </Frame>
+    <Label width="max" height="min" margin_bottom="8"
+           text="Enter domain name, choose domain zone, add some DNS-records, then hit the &quot;Mine domain&quot; button! Note: zones with * are restricted to Yggdrasil only."/>
+    <Frame direction="horizontal" width="max" height="min" margin_bottom="4">
+        <Label text="Records:" font_style="Bold" height="min"/>
+        <Frame width="max" height="min"/>
+        <Button id="btn_add_record" text="Add record" height="28" margin_right="4" padding_left="8" padding_right="8"/>
+        <Button id="btn_del_record" text="Delete record" height="28" padding_left="8" padding_right="8"/>
+    </Frame>
+    <TableView id="records_table" width="max" height="max" margin_bottom="6"
+               headers="Name,Type,TTL,Data" widths="130,70,70,*"/>
+    <CheckBox id="renewal" text="Renew domain by using higher difficulty while mining." height="min" margin_bottom="4"/>
+    <Frame direction="horizontal" width="max" height="min">
+        <Frame width="max" height="min"/>
+        <Button id="btn_mine" text="Mine domain" height="28" margin_right="4" padding_left="8" padding_right="8"/>
+        <Button id="btn_cancel" text="Cancel" height="28" padding_left="8" padding_right="8"/>
+    </Frame>
+</Frame>

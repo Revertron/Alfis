@@ -38,13 +38,13 @@
         guiRuntimeTools = lib.optionals isLinux [ pkgs.kdePackages.kdialog ];
         guiRuntimeLibPath = lib.optionalString isLinux (lib.makeLibraryPath guiBuildInputs);
 
-        alfis = { webgui ? true, doh ? true }:
+        alfis = { gui ? true, doh ? true }:
           let
             features = builtins.concatStringsSep " " (builtins.concatMap
               ({ option, features }: lib.optionals option features) [
                 {
-                  option = webgui;
-                  features = [ "webgui" ];
+                  option = gui;
+                  features = [ "gui" ];
                 }
                 {
                   option = doh;
@@ -67,11 +67,11 @@
       in rec {
         packages = {
           alfis = alfis {
-            webgui = true;
+            gui = true;
             doh = true;
           };
           alfisWithoutGUI = alfis {
-            webgui = false;
+            gui = false;
             doh = true;
           };
         };

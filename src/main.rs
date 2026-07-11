@@ -29,8 +29,8 @@ use alfis::{dns_utils, Block, Bytes, Chain, Context, Keystore, Miner, Network, S
 #[cfg(windows)]
 use crate::win_service::start_service;
 
-#[cfg(feature = "webgui")]
-mod web_ui;
+#[cfg(feature = "gui")]
+mod ui;
 #[cfg(windows)]
 mod win_service;
 
@@ -46,7 +46,7 @@ fn main() {
     #[cfg(windows)]
     unsafe {
         console_attached = AttachConsole(ATTACH_PARENT_PROCESS) != 0;
-        #[cfg(feature = "webgui")]
+        #[cfg(feature = "gui")]
         winapi::um::shellscalingapi::SetProcessDpiAwareness(2);
     }
 
@@ -59,7 +59,7 @@ fn main() {
     opts.optflag("v", "version", "Print version and exit");
     opts.optflag("d", "debug", "Show debug messages, more than usual");
     opts.optflag("t", "trace", "Show trace messages, more than debug");
-    opts.optflag("", "hide", "Hide UI, show only tray icon.");
+    opts.optflag("", "hide", "Start hidden in the system tray (Windows only).");
     opts.optflag("b", "blocks", "List blocks from DB and exit");
     opts.optflag("g", "generate", "Generate new config file. Generated config will be printed to console.");
     #[cfg(windows)]
@@ -143,12 +143,12 @@ fn main() {
     };
 
     let mut no_gui = opt_matches.opt_present("n");
-    if !cfg!(feature = "webgui")
+    if !cfg!(feature = "gui")
     {
         no_gui = true;
     }
 
-    #[cfg(all(feature = "webgui", target_os = "linux"))]
+    #[cfg(all(feature = "gui", target_os = "linux"))]
     if !no_gui {
         let running_via_sudo = env::var_os("SUDO_UID").is_some();
         let has_graphical_session = env::var_os("DISPLAY").is_some() || env::var_os("WAYLAND_DISPLAY").is_some();
@@ -262,11 +262,11 @@ fn main() {
         if !dns_server_ok {
             thread::spawn(|| {
                 thread::sleep(Duration::from_millis(500));
-                post(Event::Error { text: String::from("Error starting DNS-server. Please, check that it&rsquo;s port is not busy.") });
+                post(Event::Error { text: String::from("Error starting DNS-server. Please, check that its port is not busy.") });
             });
         }
-        #[cfg(feature = "webgui")]
-        web_ui::run_interface(Arc::clone(&context), miner, opt_matches.opt_present("hide"));
+        #[cfg(feature = "gui")]
+        ui::run_interface(Arc::clone(&context), miner, opt_matches.opt_present("hide"));
     }
 
     // Without explicitly detaching the console cmd won't redraw it's prompt.
@@ -357,6 +357,7 @@ fn setup_logger(opt_matches: &Matches, console_attached: bool) {
         .add_filter_ignore_str("rustls::")
         .add_filter_ignore_str("ureq::")
         .add_filter_ignore_str("ureq_proto::")
+        .add_filter_ignore_str("speedy2d::")
         .set_thread_level(LevelFilter::Error)
         .set_location_level(LevelFilter::Off)
         .set_target_level(LevelFilter::Error)
