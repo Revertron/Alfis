@@ -112,6 +112,7 @@ fn make_toast(message: &str, bg: u32, border: u32) -> Element {
     {
         let mut b = close.borrow_mut();
         b.set_any("text", "x");
+        b.set_content_description(Some("Close notification".to_owned()));
         b.set_width(Dimension::Dip(28));
         b.set_height(Dimension::Dip(28));
         b.set_margin(0, 8, 0, 0);

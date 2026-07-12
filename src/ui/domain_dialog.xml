@@ -1,8 +1,8 @@
 <Frame id="dlg_root" direction="vertical" width="max" height="max" padding="10">
-    <Label text="Domain name:" font_style="Bold" height="min" margin_bottom="4"/>
+    <Label id="lbl_domain_name" text="Domain name:" font_style="Bold" height="min" margin_bottom="4"/>
     <Frame direction="horizontal" width="max" height="min" margin_bottom="6">
-        <Edit id="domain_name" width="max" height="28" placeholder="example" margin_right="4"/>
-        <ComboBox id="zone_combo" width="90" height="28" text="" margin_right="4"/>
+        <Edit id="domain_name" width="max" height="28" placeholder="example" margin_right="4" labelled_by="lbl_domain_name"/>
+        <ComboBox id="zone_combo" width="90" height="28" text="" margin_right="4" content_description="Domain zone"/>
         <Button id="btn_advanced" text="Advanced" height="28" padding_left="8" padding_right="8"/>
     </Frame>
     <Label width="max" height="min" margin_bottom="8"

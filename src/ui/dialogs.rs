@@ -25,11 +25,11 @@ use super::toasts::{add_event_row, show_toast, Severity};
 
 const OWNER_XML: &str = r#"
 <Frame direction="vertical" width="max" height="max" padding="10">
-    <Label text="Signing public key" font_style="Bold" height="min" margin_bottom="2"/>
-    <Edit id="owner_signing" width="max" height="28" placeholder="Signing public key"
+    <Label id="lbl_owner_signing" text="Signing public key" font_style="Bold" height="min" margin_bottom="2"/>
+    <Edit id="owner_signing" width="max" height="28" placeholder="Signing public key" labelled_by="lbl_owner_signing"
           allowed_chars="0123456789abcdefABCDEF" margin_bottom="6"/>
-    <Label text="Encryption public key" font_style="Bold" height="min" margin_bottom="2"/>
-    <Edit id="owner_encryption" width="max" height="28" placeholder="Encryption public key"
+    <Label id="lbl_owner_encryption" text="Encryption public key" font_style="Bold" height="min" margin_bottom="2"/>
+    <Edit id="owner_encryption" width="max" height="28" placeholder="Encryption public key" labelled_by="lbl_owner_encryption"
           allowed_chars="0123456789abcdefABCDEF" margin_bottom="6"/>
     <Label width="max" height="min" margin_bottom="8"
            text="If you wish to transfer this domain to another owner, you need to set new owners public keys. Signing public key to the first field. And encryption public key to the second field. If you don't want to transfer just leave both fields empty."/>
@@ -46,18 +46,18 @@ const CONTACTS_XML: &str = r#"
 <Frame direction="vertical" width="max" height="max" padding="10">
     <Label text="One" font_style="Bold" height="min" margin_bottom="2"/>
     <Frame direction="horizontal" width="max" height="min" margin_bottom="6">
-        <Edit id="contact1_name" width="150" height="28" placeholder="Name" margin_right="6"/>
-        <Edit id="contact1_value" width="max" height="28" placeholder="Text or link"/>
+        <Edit id="contact1_name" width="150" height="28" placeholder="Name" margin_right="6" content_description="First contact name"/>
+        <Edit id="contact1_value" width="max" height="28" placeholder="Text or link" content_description="First contact text or link"/>
     </Frame>
     <Label text="Two" font_style="Bold" height="min" margin_bottom="2"/>
     <Frame direction="horizontal" width="max" height="min" margin_bottom="6">
-        <Edit id="contact2_name" width="150" height="28" placeholder="Name" margin_right="6"/>
-        <Edit id="contact2_value" width="max" height="28" placeholder="Text or link"/>
+        <Edit id="contact2_name" width="150" height="28" placeholder="Name" margin_right="6" content_description="Second contact name"/>
+        <Edit id="contact2_value" width="max" height="28" placeholder="Text or link" content_description="Second contact text or link"/>
     </Frame>
     <Label text="Three" font_style="Bold" height="min" margin_bottom="2"/>
     <Frame direction="horizontal" width="max" height="min" margin_bottom="6">
-        <Edit id="contact3_name" width="150" height="28" placeholder="Name" margin_right="6"/>
-        <Edit id="contact3_value" width="max" height="28" placeholder="Text or link"/>
+        <Edit id="contact3_name" width="150" height="28" placeholder="Name" margin_right="6" content_description="Third contact name"/>
+        <Edit id="contact3_value" width="max" height="28" placeholder="Text or link" content_description="Third contact text or link"/>
     </Frame>
     <Label width="max" height="min" margin_bottom="8"
            text="You can add some contacts to your domain if you wish to be contacted regarding your services."/>
@@ -72,8 +72,8 @@ const CONTACTS_XML: &str = r#"
 
 const INFO_XML: &str = r#"
 <Frame direction="vertical" width="max" height="max" padding="10">
-    <Label text="Some description about your domain" font_style="Bold" height="min" margin_bottom="4"/>
-    <Memo id="info_text" width="max" height="max" margin_bottom="6"/>
+    <Label id="lbl_info_text" text="Some description about your domain" font_style="Bold" height="min" margin_bottom="4"/>
+    <Memo id="info_text" width="max" height="max" margin_bottom="6" labelled_by="lbl_info_text"/>
     <Label width="max" height="min" margin_bottom="8"
            text="You can add some description to your domain if you wish for users or search engines to know what is it about."/>
     <Frame direction="horizontal" width="max" height="min">
