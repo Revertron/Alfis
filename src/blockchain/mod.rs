@@ -4,6 +4,7 @@ pub use transaction::Transaction;
 
 pub mod block;
 pub mod chain;
+mod compact;
 pub mod filter;
 pub mod hash_utils;
 pub mod transaction;

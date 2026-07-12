@@ -3,6 +3,7 @@ use std::fmt::{Display, Formatter};
 
 use serde::{Deserialize, Serialize};
 
+use crate::blockchain::compact::{put_bytes, put_str};
 use crate::blockchain::hash_utils::*;
 use crate::bytes::Bytes;
 use crate::dns::protocol::DnsRecord;
@@ -69,6 +70,30 @@ impl Transaction {
             }
         }
         None
+    }
+
+    /// Appends this transaction to a block's compact hashing/signing preimage.
+    ///
+    /// Field order and skip rules mirror the previous bincode-legacy `serde` encoding
+    /// (see [`crate::blockchain::compact`]); `class` is always present, the `Bytes` fields
+    /// are omitted when zero, and `data` is omitted when empty.
+    pub(crate) fn encode_compact(&self, out: &mut Vec<u8>) {
+        put_str(out, &self.class);
+        if !self.identity.is_zero() {
+            put_bytes(out, &self.identity);
+        }
+        if !self.confirmation.is_zero() {
+            put_bytes(out, &self.confirmation);
+        }
+        if !self.signing.is_zero() {
+            put_bytes(out, &self.signing);
+        }
+        if !self.encryption.is_zero() {
+            put_bytes(out, &self.encryption);
+        }
+        if !self.data.is_empty() {
+            put_str(out, &self.data);
+        }
     }
 
     /// Gets a type of transaction

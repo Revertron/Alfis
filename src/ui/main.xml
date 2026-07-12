@@ -69,10 +69,10 @@
                    tooltip="Get source code and contribute!"/>
         </Frame>
     </TabView>
-    <Frame id="status_row" direction="horizontal" width="max" height="26" padding="4">
-        <Frame id="busy_box" width="90" height="max" visibility="gone" margin_right="6">
-            <ProgressBar id="busy" width="max" height="14" indeterminate="true"
-                         tooltip="Mining in progress. Click to stop mining."/>
+    <Frame id="status_row" direction="horizontal" width="max" height="26" padding="4" gravity="center_vertical">
+        <Frame id="busy_box" width="90" height="max" visibility="gone" margin_right="6" gravity="center_vertical">
+            <ProgressBar id="busy" width="max" height="18" indeterminate="true"
+                         tooltip="Mining (or sync) in progress. Click to stop mining."/>
         </Frame>
         <Label id="status_text" text="Idle" width="max" height="max"/>
         <Label id="status_stats" text="" height="max"/>
