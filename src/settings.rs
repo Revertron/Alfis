@@ -21,8 +21,9 @@ pub struct Settings {
     pub dns: Dns,
     #[serde(default)]
     pub mining: Mining,
-    /// Render the GUI with the dark palette.
-    #[serde(default)]
+    /// Render the GUI with the dark palette. Defaults to `true`; set to
+    /// `false` in the config to use the light theme.
+    #[serde(default = "default_dark_theme")]
     pub dark_theme: bool
 }
 
@@ -83,7 +84,7 @@ impl Default for Settings {
             net: Net::default(),
             dns: Default::default(),
             mining: Mining::default(),
-            dark_theme: false
+            dark_theme: default_dark_theme()
         }
     }
 }
@@ -183,6 +184,10 @@ fn default_dns_bootstraps() -> Vec<String> {
 }
 
 fn default_dns_0x20() -> bool {
+    true
+}
+
+fn default_dark_theme() -> bool {
     true
 }
 
