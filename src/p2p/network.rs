@@ -1113,9 +1113,9 @@ fn write_all(connection: &mut TcpStream, mut buf: &[u8]) -> io::Result<()> {
 }
 
 fn version_compatible(version: &str) -> bool {
-    // Require >= 0.9.0 — older nodes do not understand healing signatures (RFC-0002)
-    // and would freeze at the first healed lock window.
-    const MIN_VERSION: (u32, u32, u32) = (0, 9, 0);
+    // Require >= 0.10.0 — older nodes draw dead banned keys as signers (RFC-0003)
+    // and would fork at the first post-activation window where the draws differ.
+    const MIN_VERSION: (u32, u32, u32) = (0, 10, 0);
     let number = |s: &str| s.split(|c: char| !c.is_ascii_digit()).next().unwrap_or("").parse::<u32>().ok();
     let mut parts = version.split('.');
     let (Some(major), Some(minor), Some(patch)) = (parts.next(), parts.next(), parts.next()) else {
@@ -1133,15 +1133,17 @@ mod version_tests {
 
     #[test]
     fn accepts_supported_versions() {
-        assert!(version_compatible("0.9.0"));
-        assert!(version_compatible("0.9.1"));
-        assert!(version_compatible("0.9.0-rc1"));
         assert!(version_compatible("0.10.0"));
+        assert!(version_compatible("0.10.1"));
+        assert!(version_compatible("0.10.0-rc1"));
+        assert!(version_compatible("0.11.0"));
         assert!(version_compatible("1.0.0"));
     }
 
     #[test]
     fn rejects_old_versions() {
+        assert!(!version_compatible("0.9.1"));
+        assert!(!version_compatible("0.9.0"));
         assert!(!version_compatible("0.8.11"));
         assert!(!version_compatible("0.8.10"));
         assert!(!version_compatible("0.8.9"));

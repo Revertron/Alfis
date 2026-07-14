@@ -161,6 +161,13 @@ pub fn register_bus_listener(handle: UiHandle, context: Arc<Mutex<Context>>, sta
                     show_toast(ui, Severity::Fail, &text);
                 });
             }
+            Event::KeysBanned { window, keys } => {
+                handle.run_on_ui_thread(move |ui| {
+                    let text = format!("Dead signers of healed window {} are banned from future draws: {}", window, keys);
+                    add_event_row(ui, Severity::Warn, &text);
+                    show_toast(ui, Severity::Warn, &text);
+                });
+            }
             _ => {}
         }
         true

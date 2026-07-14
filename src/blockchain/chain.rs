@@ -45,6 +45,7 @@ const SQL_GET_USERS_COUNT: &str = "SELECT count(DISTINCT pub_key) FROM blocks;";
 const SQL_GET_USER_BLOCK_COUNT: &str = "SELECT count(pub_key) FROM blocks WHERE pub_key = ? AND id < ?";
 const SQL_GET_DOMAIN_UPDATE_TIME: &str = "SELECT domains.timestamp FROM blocks JOIN domains ON blocks.id = domains.id WHERE difficulty >= 23 AND identity = ? ORDER BY domains.id DESC LIMIT 1;";
 const SQL_GET_TOP_KEYS: &str = "SELECT pub_key FROM blocks WHERE id > ? AND id <= ? GROUP BY pub_key ORDER BY COUNT(*) DESC, pub_key ASC LIMIT ?;";
+const SQL_GET_ELIGIBLE_COUNT: &str = "SELECT COUNT(*) FROM (SELECT pub_key FROM blocks WHERE id < ? GROUP BY pub_key HAVING COUNT(*) >= ?);";
 
 const SQL_GET_OPTIONS: &str = "SELECT * FROM options;";
 
@@ -67,7 +68,8 @@ pub struct Chain {
     db: Connection,
     zones: Vec<ZoneData>,
     signers: RefCell<SignersCache>,
-    healing: RefCell<HealingCache>
+    healing: RefCell<HealingCache>,
+    bans: RefCell<BansCache>
 }
 
 impl Chain {
@@ -76,7 +78,7 @@ impl Chain {
 
         let db = sqlite::open(db_name).expect("Unable to open blockchain DB");
         let zones = Self::load_zones();
-        let mut chain = Chain { origin, last_block: None, last_full_block: None, max_height: 0, db, zones, signers: SignersCache::new(), healing: HealingCache::new() };
+        let mut chain = Chain { origin, last_block: None, last_full_block: None, max_height: 0, db, zones, signers: SignersCache::new(), healing: HealingCache::new(), bans: BansCache::new() };
         chain.init_db();
         chain
     }
@@ -281,6 +283,7 @@ impl Chain {
         info!("Replacing block {} with:\n{:?}", block.index, &block);
         self.signers.borrow_mut().clear();
         self.healing.borrow_mut().clear();
+        self.bans.borrow_mut().clear();
         self.truncate_db_from_block(block.index)?;
         self.add_block(block);
         Ok(())
@@ -866,15 +869,22 @@ impl Chain {
         if let Some(pool) = self.healing.borrow().get_for(full_block.index) {
             return pool;
         }
-        let anchors = self.get_top_keys(1, full_block.index, HEALING_POOL_ANCHORS);
+        // Banned keys are skipped in both rankings, the next keys move up (RFC-0003, section 3.5)
+        let banned: HashSet<Bytes> = if full_block.index > BAN_ACTIVATION_HEIGHT {
+            self.get_banned_keys(full_block.index).into_iter().collect()
+        } else {
+            HashSet::new()
+        };
+        let candidates = self.get_top_keys(1, full_block.index, HEALING_POOL_ANCHORS + banned.len());
+        let anchors: Vec<Bytes> = candidates.into_iter().filter(|key| !banned.contains(key)).take(HEALING_POOL_ANCHORS).collect();
         let window_start = max(1, full_block.index.saturating_sub(HEALING_WINDOW));
-        let candidates = self.get_top_keys(window_start, full_block.index, HEALING_POOL_ANCHORS + HEALING_POOL_RECENT);
+        let candidates = self.get_top_keys(window_start, full_block.index, HEALING_POOL_ANCHORS + HEALING_POOL_RECENT + banned.len());
         let mut recent = Vec::new();
         for key in candidates {
             if recent.len() >= HEALING_POOL_RECENT {
                 break;
             }
-            if !anchors.contains(&key) {
+            if !anchors.contains(&key) && !banned.contains(&key) {
                 recent.push(key);
             }
         }
@@ -929,6 +939,166 @@ impl Chain {
             }
         }
         HEALING_TIMEOUT
+    }
+
+    /// Gets the keys banned by crystallizations at closing full blocks with index <= height
+    /// (RFC-0003, section 3.3), in crystallization order
+    pub fn get_banned_keys(&self, height: u64) -> Vec<Bytes> {
+        self.crystallize_bans(height);
+        self.bans.borrow().bans.iter()
+            .filter(|(closing, _)| *closing <= height)
+            .map(|(_, key)| key.clone())
+            .collect()
+    }
+
+    /// Evaluates all lock windows closed by full blocks with index <= until and bans the drawn
+    /// signers of healed windows that authored nothing in them (RFC-0003, sections 3.2-3.3).
+    /// The cache borrow is never held across block walks: computing a window's drawn signers
+    /// may recursively consult the bans crystallized so far.
+    fn crystallize_bans(&self, until: u64) {
+        let until = min(until, self.get_height());
+        if self.bans.borrow().processed_full == 0 {
+            // Position at the first full block that can open a healed window
+            let mut index = HEALING_ACTIVATION_HEIGHT;
+            let start = loop {
+                if index > until {
+                    return;
+                }
+                match self.get_block(index) {
+                    Some(block) if block.transaction.is_some() => break block.index,
+                    Some(_) => index += 1,
+                    None => return
+                }
+            };
+            self.bans.borrow_mut().processed_full = start;
+        }
+        loop {
+            let opening = self.bans.borrow().processed_full;
+            // Walk the window up to its closing full block, collecting the authors
+            let mut authors = HashSet::new();
+            let mut empty_authors = Vec::new();
+            let mut index = opening + 1;
+            let closing = loop {
+                if index > until {
+                    return; // The window is not closed yet, nothing more to crystallize
+                }
+                let block = match self.get_block(index) {
+                    Some(block) => block,
+                    None => return
+                };
+                authors.insert(block.pub_key.clone());
+                if block.transaction.is_some() {
+                    break block;
+                }
+                empty_authors.push(block.pub_key.clone());
+                index += 1;
+            };
+            // Only a closed window computes its drawn signers: that call may recurse into
+            // get_banned_keys, which sees this window as not yet processed and returns at once
+            let opening_block = match self.get_block(opening) {
+                Some(block) => block,
+                None => return
+            };
+            let drawn = self.get_block_signers(&opening_block);
+            let healed = !drawn.is_empty() && empty_authors.iter().any(|key| !drawn.contains(key));
+            if healed {
+                // The closing block's author and late signers are all in `authors` and thus
+                // alive; keys already banned by an earlier window are not banned twice
+                let banned_already: HashSet<Bytes> = self.bans.borrow().bans.iter().map(|(_, key)| key.clone()).collect();
+                let candidates: Vec<Bytes> = drawn.iter()
+                    .filter(|key| !authors.contains(*key) && !banned_already.contains(*key))
+                    .cloned()
+                    .collect();
+                let new_bans = self.apply_ban_floor(candidates, closing.index);
+                if !new_bans.is_empty() {
+                    let keys = new_bans.iter().map(|key| format!("{:?}", key)).collect::<Vec<String>>().join(", ");
+                    warn!("Banning dead signers of healed window {}..{} (RFC-0003): {}", opening, closing.index, &keys);
+                    post(Event::KeysBanned { window: opening, keys });
+                    let mut cache = self.bans.borrow_mut();
+                    for key in new_bans {
+                        cache.bans.push((closing.index, key));
+                    }
+                }
+            }
+            self.bans.borrow_mut().processed_full = closing.index;
+        }
+    }
+
+    /// Orders no-show candidates by descending authored-block count (the heaviest dead key
+    /// poisons the most draws) and bans those that keep the eligible un-banned population
+    /// at or above BAN_POOL_FLOOR; the rest stay eligible with no state (RFC-0003, section 3.3)
+    fn apply_ban_floor(&self, candidates: Vec<Bytes>, closing: u64) -> Vec<Bytes> {
+        if candidates.is_empty() {
+            return candidates;
+        }
+        let minimum = Self::minimum_block_count(closing);
+        let mut candidates: Vec<(Bytes, i64)> = candidates.into_iter()
+            .map(|key| { let count = self.get_user_block_count(&key, closing); (key, count) })
+            .collect();
+        candidates.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.as_slice().cmp(b.0.as_slice())));
+        let existing: Vec<Bytes> = self.bans.borrow().bans.iter().map(|(_, key)| key.clone()).collect();
+        let eligible = self.get_eligible_count(closing, minimum);
+        let banned_eligible = existing.iter().filter(|key| self.get_user_block_count(key, closing) >= minimum).count();
+        let mut remaining = eligible.saturating_sub(banned_eligible);
+        let mut result = Vec::new();
+        for (key, count) in candidates {
+            let after = if count >= minimum { remaining.saturating_sub(1) } else { remaining };
+            if after >= BAN_POOL_FLOOR {
+                result.push(key);
+                remaining = after;
+            } else {
+                debug!("Skipping ban of {:?}: eligible population would fall below {}", &key, BAN_POOL_FLOOR);
+            }
+        }
+        result
+    }
+
+    /// Gets the ban set effective for the draw of a full block: the banned keys, minus
+    /// re-admissions (for this draw only) that keep at least BAN_DRAW_MIN eligible keys
+    /// drawable, so the draw walk always terminates (RFC-0003, section 3.4)
+    fn get_draw_bans(&self, block: &Block, minimum: i64) -> HashSet<Bytes> {
+        if block.index <= BAN_ACTIVATION_HEIGHT {
+            return HashSet::new();
+        }
+        let bans = self.get_banned_keys(block.index);
+        if bans.is_empty() {
+            return HashSet::new();
+        }
+        let eligible = self.get_eligible_count(block.index, minimum);
+        let banned_eligible: Vec<bool> = bans.iter().map(|key| self.get_user_block_count(key, block.index) >= minimum).collect();
+        let mut remaining = eligible.saturating_sub(banned_eligible.iter().filter(|e| **e).count());
+        let mut banned: HashSet<Bytes> = bans.iter().cloned().collect();
+        for (i, key) in bans.iter().enumerate().rev() {
+            if remaining >= BAN_DRAW_MIN {
+                break;
+            }
+            if banned_eligible[i] {
+                warn!("Draw for block {} is starved, re-admitting banned key {:?} (RFC-0003, section 3.4)", block.index, key);
+                banned.remove(key);
+                remaining += 1;
+            }
+        }
+        banned
+    }
+
+    /// The drawn-signer eligibility threshold at a given height, as used by the draw walk
+    fn minimum_block_count(index: u64) -> i64 {
+        if index < 855 {
+            1i64
+        } else {
+            index as i64 / 100
+        }
+    }
+
+    /// Counts the keys that pass the drawn-signer eligibility filter at a given height
+    fn get_eligible_count(&self, height: u64, minimum: i64) -> usize {
+        let mut statement = self.db.prepare(SQL_GET_ELIGIBLE_COUNT).expect("Unable to prepare");
+        statement.bind((1, height as i64)).expect("Error in bind");
+        statement.bind((2, minimum)).expect("Error in bind");
+        if let State::Row = statement.next().unwrap() {
+            return statement.read::<i64, usize>(0).unwrap() as usize;
+        }
+        0
     }
 
     pub fn get_max_height(&self) -> u64 {
@@ -1223,11 +1393,7 @@ impl Chain {
     /// Gets public keys of a node that needs to mine "signature" block above this block
     /// block - last full block
     pub fn get_block_signers(&self, block: &Block) -> Vec<Bytes> {
-        let minimum_block_count = if block.index < 855 {
-            1i64
-        } else {
-            block.index as i64 / 100
-        };
+        let minimum_block_count = Self::minimum_block_count(block.index);
         let mut result = Vec::new();
         if block.index < BLOCK_SIGNERS_START || self.get_height() < block.index {
             return result;
@@ -1238,6 +1404,8 @@ impl Chain {
             return self.signers.borrow().signers.clone();
         }
 
+        // Proven-dead keys are not drawn anymore (RFC-0003, section 3.4)
+        let banned = self.get_draw_bans(block, minimum_block_count);
         let mut set = HashSet::new();
         let mut tail = block.signature.get_tail_u64();
         let mut count = 1;
@@ -1248,7 +1416,7 @@ impl Chain {
             let index = (tail.wrapping_mul(count) % window) + 1; // We want it to start from 1
             if let Some(b) = self.get_block(index) {
                 let block_count = self.get_user_block_count(&b.pub_key, block.index);
-                if block_count < minimum_block_count {
+                if block_count < minimum_block_count || banned.contains(&b.pub_key) {
                     //debug!("Skipping public key {:?} from block {}, it has too little {} blocks", &b.pub_key, index, block_count);
                     count += 1;
                     continue;
@@ -1328,6 +1496,26 @@ impl HealingCache {
     pub fn clear(&mut self) {
         self.index = 0;
         self.pool = None;
+    }
+}
+
+/// Permanent bans of proven-dead drawn signers (RFC-0003, section 3.3), in crystallization
+/// order, extended lazily as full blocks close healed windows and cleared on rewinds
+struct BansCache {
+    /// (index of the closing full block, banned key)
+    bans: Vec<(u64, Bytes)>,
+    /// Index of the full block opening the next window to evaluate (0 = not positioned yet)
+    processed_full: u64
+}
+
+impl BansCache {
+    pub fn new() -> RefCell<BansCache> {
+        RefCell::new(BansCache { bans: Vec::new(), processed_full: 0 })
+    }
+
+    pub fn clear(&mut self) {
+        self.bans.clear();
+        self.processed_full = 0;
     }
 }
 
@@ -1411,6 +1599,39 @@ pub mod tests {
         assert_eq!(pool.recent, cached.recent);
         assert_eq!(pool.anchors, fresh.anchors);
         assert_eq!(pool.recent, fresh.recent);
+    }
+
+    #[test]
+    pub fn bans_inert_below_activation() {
+        // No healed windows exist below HEALING_ACTIVATION_HEIGHT: nothing crystallizes
+        // and the draw of a historical full block sees no ban set at all (RFC-0003)
+        let settings = Settings::default();
+        let chain = Chain::new(&settings, "./tests/blockchain.db");
+        assert!(chain.get_banned_keys(u64::MAX).is_empty());
+        let full = chain.get_last_full_block(u64::MAX, None).unwrap();
+        assert!(chain.get_draw_bans(&full, 1).is_empty());
+    }
+
+    #[test]
+    pub fn ban_floor_orders_and_cuts() {
+        use crate::commons::constants::*;
+
+        let settings = Settings::default();
+        let chain = Chain::new(&settings, "./tests/blockchain.db");
+        let height = chain.get_height();
+        let minimum = Chain::minimum_block_count(height);
+        // Pass the top three keys as candidates, deliberately in ascending order
+        let mut candidates = chain.get_top_keys(0, height, 3);
+        candidates.reverse();
+        let eligible = chain.get_eligible_count(height, minimum);
+        let banned = chain.apply_ban_floor(candidates.clone(), height);
+        // Only as many bans as keep the eligible population at BAN_POOL_FLOOR (RFC-0003, section 3.3)
+        let expected = eligible.saturating_sub(BAN_POOL_FLOOR).min(candidates.len());
+        assert_eq!(banned.len(), expected);
+        // Applied bans come in descending authored-block-count order
+        for pair in banned.windows(2) {
+            assert!(chain.get_user_block_count(&pair[0], height) >= chain.get_user_block_count(&pair[1], height));
+        }
     }
 
     #[test]

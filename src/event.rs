@@ -15,6 +15,8 @@ pub enum Event {
     NetworkStatus { blocks: u64, domains: i64, keys: i64, nodes: usize },
     /// Somebody serves a chain forked beyond LIMITED_CONFIDENCE_DEPTH (RFC-0002, section 3.7)
     ForkDetected { index: u64, hash: String },
+    /// Dead drawn signers of a healed window were banned from future draws (RFC-0003, section 3.7)
+    KeysBanned { window: u64, keys: String },
     Syncing { have: u64, height: u64 },
     SyncFinished,
     Error { text: String }

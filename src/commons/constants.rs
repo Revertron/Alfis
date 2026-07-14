@@ -45,6 +45,14 @@ pub const HEALING_ANCHORS_MIN: usize = 1;
 /// RFC-0002: max random start delay for healing jobs (healing is never latency-critical)
 pub const HEALING_START_RANDOM: i64 = 900;
 
+/// RFC-0003: bans apply to the draws and standby pools of full blocks above this height
+/// (set to the tip of the chain stalled at the 2026-07-11 window, see RFC-0003 section 6)
+pub const BAN_ACTIVATION_HEIGHT: u64 = 22529;
+/// RFC-0003: crystallization never shrinks the eligible un-banned population below this
+pub const BAN_POOL_FLOOR: usize = 10;
+/// RFC-0003: a draw re-admits banned keys until it sees at least this many eligible keys
+pub const BAN_DRAW_MIN: usize = 8;
+
 pub const NEW_DOMAINS_INTERVAL: i64 = 86400; // One day in seconds
 pub const ONE_WEEK: i64 = 86400 * 7; // One week in seconds
 pub const DOMAIN_LIFETIME: i64 = 86400 * 365; // One year

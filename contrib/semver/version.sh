@@ -22,12 +22,9 @@ MAJOR=$(echo $TAG | cut -c 2- | cut -d "." -f 1)
 MINOR=$(echo $TAG | cut -c 2- | cut -d "." -f 2)
 PATCH=$(echo $TAG | cut -c 2- | cut -d "." -f 3)
 
-# Output in the desired format
-if [ $((PATCH)) -eq 0 ]; then
-  printf '%s%d.%d' "$PREPEND" "$((MAJOR))" "$((MINOR))"
-else
-  printf '%s%d.%d.%d' "$PREPEND" "$((MAJOR))" "$((MINOR))" "$((PATCH))"
-fi
+# Output all three components: a zero patch must not be dropped
+# (v0.10.0 was released as "0.10" by the old two-component format)
+printf '%s%d.%d.%d' "$PREPEND" "$((MAJOR))" "$((MINOR))" "$((PATCH))"
 
 # Add the build tag on non-master branches
 if [ "$BRANCH" != "master" ]; then

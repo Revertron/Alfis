@@ -191,7 +191,7 @@ dependencies = [
 
 [[package]]
 name = "alfis"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "blakeout",
  "byteorder",
@@ -2632,9 +2632,9 @@ dependencies = [
 
 [[package]]
 name = "lumio-gui"
-version = "0.2.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a89cf3c428c46e8a67ddec865221cdb261b4dd31eb6fa7936fb3192a7f297e7"
+checksum = "73cbc47d6c9975c3208731729c0845e508a1643f43d14ce1a6aad495ff34cdb8"
 dependencies = [
  "accesskit",
  "accesskit_winit",
