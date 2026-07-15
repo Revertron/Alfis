@@ -75,6 +75,7 @@ fn main() {
     opts.optopt("w", "work-dir", "Path to working directory", "DIRECTORY");
     opts.optopt("u", "upgrade", "Path to config file that you want to upgrade. Upgraded config will be printed to console.", "FILE");
     opts.optopt("", "v6", "Convert an IPv6 address to its .v6 domain name and exit", "IPV6");
+    opts.optopt("", "q6", "Convert an IPv6 address to its .q6 domain name and exit", "IPV6");
 
     let opt_matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
@@ -105,6 +106,24 @@ fn main() {
                 println!("{}.v6", &short);
                 if short != full {
                     println!("{}.v6", &full);
+                }
+                exit(0);
+            }
+            Err(_) => {
+                println!("'{}' is not a valid IPv6 address", &address);
+                exit(1);
+            }
+        }
+    }
+
+    if let Some(address) = opt_matches.opt_str("q6") {
+        match address.parse::<std::net::Ipv6Addr>() {
+            Ok(addr) => {
+                let short = alfis::codec::proquint::encode_with_gap(&addr);
+                let full = alfis::codec::proquint::encode(&addr);
+                println!("{}.q6", &short);
+                if short != full {
+                    println!("{}.q6", &full);
                 }
                 exit(0);
             }

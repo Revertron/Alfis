@@ -1,4 +1,4 @@
-use crate::codec::syllabic;
+use crate::codec::{proquint, syllabic};
 use crate::dns::filter::DnsFilter;
 use crate::dns::protocol::{DnsPacket, DnsQuestion, DnsRecord, QueryType, ResultCode, TransientTtl};
 
@@ -10,7 +10,8 @@ const CODEC_TTL: u32 = 86400;
 const CODEC_SOA_SERIAL: u32 = 1;
 
 /// Answers queries in codec zones whose names are not registered on the blockchain
-/// but deterministically encode an IP address: `.v6` (syllabic IPv6).
+/// but deterministically encode an IP address: `.v6` (syllabic IPv6) and
+/// `.q6` (proquint IPv6).
 pub struct CodecFilter;
 
 impl CodecFilter {
@@ -42,7 +43,7 @@ impl Default for CodecFilter {
 impl DnsFilter for CodecFilter {
     fn lookup(&self, qname: &str, qtype: QueryType, _recursive: bool) -> Option<DnsPacket> {
         let qname_lower = qname.to_lowercase();
-        if qname_lower == "v6" {
+        if qname_lower == "v6" || qname_lower == "q6" {
             // Zone apex: authoritative NODATA with SOA
             let mut packet = DnsPacket::new();
             packet.header.authoritative_answer = true;
@@ -56,7 +57,8 @@ impl DnsFilter for CodecFilter {
         }
         let (zone, name) = (parts[0], parts[1]);
         let decoded = match zone {
-            "v6" => syllabic::decode(name),
+            "v6" => syllabic::decode(name).ok(),
+            "q6" => proquint::decode(name).ok(),
             _ => return None
         };
         // From here on we always answer: falling through would leak the query upstream
@@ -64,14 +66,14 @@ impl DnsFilter for CodecFilter {
         packet.header.authoritative_answer = true;
         packet.questions.push(DnsQuestion::new(String::from(qname), qtype));
         match decoded {
-            Ok(addr) if qtype == QueryType::AAAA => {
+            Some(addr) if qtype == QueryType::AAAA => {
                 packet.answers.push(DnsRecord::AAAA { domain: String::from(qname), addr, ttl: TransientTtl(CODEC_TTL) });
             }
-            Ok(_) => {
+            Some(_) => {
                 // The name is valid but only AAAA exists: NODATA
                 CodecFilter::add_soa_record(zone, &mut packet);
             }
-            Err(_) => {
+            None => {
                 packet.header.rescode = ResultCode::NXDOMAIN;
                 CodecFilter::add_soa_record(zone, &mut packet);
             }
@@ -139,10 +141,46 @@ mod tests {
 
     #[test]
     fn apex_gets_soa() {
-        let packet = lookup("v6", QueryType::AAAA).unwrap();
+        for apex in ["v6", "q6"] {
+            let packet = lookup(apex, QueryType::AAAA).unwrap();
+            assert_eq!(packet.header.rescode, ResultCode::NOERROR);
+            assert!(packet.answers.is_empty());
+            assert!(matches!(packet.authorities[..], [DnsRecord::SOA { .. }]));
+        }
+    }
+
+    #[test]
+    fn q6_aaaa_query_is_answered() {
+        let packet = lookup("bamag-dohah-ygg-babad.q6", QueryType::AAAA).unwrap();
+        assert!(packet.header.authoritative_answer);
         assert_eq!(packet.header.rescode, ResultCode::NOERROR);
+        match &packet.answers[..] {
+            [DnsRecord::AAAA { domain, addr, ttl }] => {
+                assert_eq!(domain, "bamag-dohah-ygg-babad.q6");
+                assert_eq!(*addr, Ipv6Addr::from_str("203:1904::1").unwrap());
+                assert_eq!(ttl.0, CODEC_TTL);
+            }
+            answers => panic!("Expected one AAAA record, got {:?}", answers)
+        }
+    }
+
+    #[test]
+    fn q6_bad_name_is_nxdomain() {
+        // Two non-proquint tokens make two gaps: an error, hence NXDOMAIN
+        let packet = lookup("qqqq-zzzz.q6", QueryType::AAAA).unwrap();
+        assert_eq!(packet.header.rescode, ResultCode::NXDOMAIN);
         assert!(packet.answers.is_empty());
         assert!(matches!(packet.authorities[..], [DnsRecord::SOA { .. }]));
+    }
+
+    #[test]
+    fn zones_do_not_cross_decode() {
+        // A syllabic name is not a proquint name: every token becomes a gap
+        let packet = lookup("ygpo-napu-ygg-pape.q6", QueryType::AAAA).unwrap();
+        assert_eq!(packet.header.rescode, ResultCode::NXDOMAIN);
+        // A proquint name in .v6: "bamag" etc. are odd-length, so all gaps
+        let packet = lookup("bamag-dohah-ygg-babad.v6", QueryType::AAAA).unwrap();
+        assert_eq!(packet.header.rescode, ResultCode::NXDOMAIN);
     }
 
     #[test]
@@ -150,5 +188,7 @@ mod tests {
         assert!(lookup("something.ygg", QueryType::AAAA).is_none());
         assert!(lookup("ygpo-napu-ygg-pape.anon", QueryType::AAAA).is_none());
         assert!(lookup("v6.example.com", QueryType::AAAA).is_none());
+        assert!(lookup("q6.example.com", QueryType::AAAA).is_none());
+        assert!(lookup("bamag-dohah-ygg-babad.anon", QueryType::AAAA).is_none());
     }
 }
