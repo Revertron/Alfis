@@ -13,6 +13,7 @@ pub use crate::settings::Settings;
 
 pub mod blockchain;
 pub mod bytes;
+pub mod codec;
 pub mod commons;
 pub mod context;
 pub mod crypto;

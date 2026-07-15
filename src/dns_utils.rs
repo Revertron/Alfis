@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use log::{debug, error, info, trace, warn, LevelFilter};
 
 use crate::blockchain::filter::BlockchainFilter;
+use crate::codec::CodecFilter;
 use crate::dns::context::{ResolveStrategy, ServerContext};
 use crate::dns::hosts::HostsFilter;
 use crate::dns::server::{DnsServer, DnsTcpServer, DnsUdpServer};
@@ -77,6 +78,7 @@ fn create_server_context(context: Arc<Mutex<Context>>, settings: &Settings) -> A
             server_context.filters.push(Box::new(HostsFilter::new(host)));
         }
     }
+    server_context.filters.push(Box::new(CodecFilter::new()));
     server_context.filters.push(Box::new(BlockchainFilter::new(context)));
     match server_context.initialize() {
         Ok(_) => {}
