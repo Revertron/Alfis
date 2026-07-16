@@ -148,7 +148,11 @@ fn main() {
         file.write_all(CONFIG.as_bytes()).expect("Failed to write alfis.toml");
 
         use crate::win_service::*;
-        install_service(SERVICE_NAME, &program);
+        // Register the service with the full absolute path to the executable.
+        // `program` (args[0]) is only the invocation name, so the service would
+        // otherwise be installed with a bare binary name and fail to start.
+        let exe_path = env::current_exe().expect("Failed to get current executable path");
+        install_service(SERVICE_NAME, &exe_path.to_string_lossy());
         // Without explicitly detaching the console cmd won't redraw it's prompt.
         unsafe {
             FreeConsole();
