@@ -2632,9 +2632,9 @@ dependencies = [
 
 [[package]]
 name = "lumio-gui"
-version = "0.3.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73cbc47d6c9975c3208731729c0845e508a1643f43d14ce1a6aad495ff34cdb8"
+checksum = "98907dd2254a055af912eae545804f1074892c28cd3f5c69f95db3eddb75f74a"
 dependencies = [
  "accesskit",
  "accesskit_winit",
@@ -2645,6 +2645,7 @@ dependencies = [
  "glutin",
  "glutin-winit",
  "image",
+ "log",
  "quick-xml 0.41.0",
  "rand 0.8.7",
  "raw-window-handle",
