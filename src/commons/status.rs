@@ -1,5 +1,5 @@
 /// Cross-event UI state, mutated on the event-bus thread and used to compose
-/// status-bar text. Only ready-to-display strings cross to the UI thread.
+/// status text for the desktop GUI and the web UI.
 pub struct UiStatus {
     pub mining: bool,
     pub syncing: bool,

@@ -45,6 +45,8 @@ thread-priority = "3.1"
 lumio-gui = { version="0.5.1", optional = true, features = ["backend-software"] }
 tinyfiledialogs = { version = "3.9.1", optional = true }
 open = { version = "5.4.0", optional = true }
+tiny_http = { version = "0.12", optional = true }
+subtle = { version = "2.6", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = ["impl-default", "wincon", "shellscalingapi"] }
@@ -75,4 +77,5 @@ FileDescription="Alternative Free Identity System"
 [features]
 gui = ["lumio-gui", "tinyfiledialogs", "open"]
 doh = ["ureq"]
-default = ["gui", "doh"]
+webui = ["tiny_http", "subtle"]
+default = ["gui", "doh", "webui"]

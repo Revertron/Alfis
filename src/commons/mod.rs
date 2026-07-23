@@ -12,6 +12,7 @@ pub mod constants;
 pub mod eventbus;
 pub mod rtt_tracker;
 pub mod simplebus;
+pub mod status;
 
 /// Convert bytes array to HEX format
 pub fn to_hex(buf: &[u8]) -> String {

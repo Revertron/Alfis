@@ -54,3 +54,12 @@ enable_0x20 = true
 threads = 0
 # Set a lower priority for mining threads
 lower = true
+
+# Web UI server for headless (server) installations, started by `alfis --web-ui`.
+# It speaks plain HTTP: bind it to localhost and use an SSH tunnel, or put
+# a TLS reverse proxy (nginx, caddy) in front of it for remote access.
+#[webui]
+# Address and port to serve the web UI on
+#listen = "127.0.0.1:8082"
+# Login password, the web UI refuses to start when it is empty
+#password = ""

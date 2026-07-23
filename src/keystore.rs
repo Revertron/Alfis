@@ -107,16 +107,30 @@ impl Keystore {
         }
     }
 
-    pub fn save(&mut self, filename: &str, _password: &str) {
+    /// Saves the keys to a file; returns `false` (after logging) when the
+    /// file cannot be written. Must not panic: it is called with the global
+    /// `Context` lock held, and unwinding there would poison it.
+    pub fn save(&mut self, filename: &str, _password: &str) -> bool {
         match File::create(Path::new(filename)) {
             Ok(mut f) => {
                 //TODO implement key encryption
                 let keys = self.get_keys();
                 let data = toml::to_string(&keys).unwrap();
-                f.write_all(data.trim().as_bytes()).expect("Error saving keystore");
-                self.path = filename.to_owned();
+                match f.write_all(data.trim().as_bytes()) {
+                    Ok(()) => {
+                        self.path = filename.to_owned();
+                        true
+                    }
+                    Err(e) => {
+                        error!("Error saving keystore to {}: {}", filename, e);
+                        false
+                    }
+                }
             }
-            Err(_) => { error!("Error saving key file!"); }
+            Err(e) => {
+                error!("Error saving key file {}: {}", filename, e);
+                false
+            }
         }
     }
 

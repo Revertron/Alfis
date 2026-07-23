@@ -21,6 +21,8 @@ pub struct Settings {
     pub dns: Dns,
     #[serde(default)]
     pub mining: Mining,
+    #[serde(default)]
+    pub webui: WebUi,
     /// Render the GUI with the dark palette. Defaults to `true`; set to
     /// `false` in the config to use the light theme.
     #[serde(default = "default_dark_theme")]
@@ -84,6 +86,7 @@ impl Default for Settings {
             net: Net::default(),
             dns: Default::default(),
             mining: Mining::default(),
+            webui: WebUi::default(),
             dark_theme: default_dark_theme()
         }
     }
@@ -130,6 +133,24 @@ pub struct Mining {
     pub lower: bool
 }
 
+/// Web UI server, started by the `--web-ui` command line switch.
+/// The server speaks plain HTTP; for remote access put a TLS reverse proxy
+/// (nginx, caddy) in front of it or use an SSH tunnel.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WebUi {
+    #[serde(default = "default_listen_webui")]
+    pub listen: String,
+    /// Login password; the web UI refuses to start when it is empty.
+    #[serde(default)]
+    pub password: String
+}
+
+impl Default for WebUi {
+    fn default() -> Self {
+        WebUi { listen: default_listen_webui(), password: String::new() }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Net {
     #[serde(default)]
@@ -159,6 +180,10 @@ fn default_listen() -> String {
 
 fn default_listen_dns() -> String {
     String::from("127.0.0.3:53")
+}
+
+fn default_listen_webui() -> String {
+    String::from("127.0.0.1:8082")
 }
 
 fn default_threads() -> usize {

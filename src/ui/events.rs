@@ -13,7 +13,7 @@ use log::{debug, error, info, trace, warn};
 use lumio::prelude::UiHandle;
 
 use super::actions::{keystore_changed, load_domains, set_stats};
-use super::state::UiStatus;
+use alfis::commons::status::UiStatus;
 use super::toasts::{add_event_row, show_toast, Severity};
 use super::{set_label, set_visible};
 

@@ -31,6 +31,8 @@ use crate::win_service::start_service;
 
 #[cfg(feature = "gui")]
 mod ui;
+#[cfg(feature = "webui")]
+mod webui;
 #[cfg(windows)]
 mod win_service;
 
@@ -61,6 +63,7 @@ fn main() {
     opts.optflag("t", "trace", "Show trace messages, more than debug");
     opts.optflag("", "hide", "Start hidden in the system tray (Windows only).");
     opts.optflag("b", "blocks", "List blocks from DB and exit");
+    opts.optflag("", "web-ui", "Start web UI server (needs password in [webui] section of config)");
     opts.optflag("g", "generate", "Generate new config file. Generated config will be printed to console.");
     #[cfg(windows)]
     {
@@ -297,6 +300,18 @@ fn main() {
     let (dns_server_ok, miner, network) = start_services(&settings_copy, &context);
 
     create_genesis_if_needed(&context, &miner);
+    if opt_matches.opt_present("web-ui") {
+        #[cfg(feature = "webui")]
+        if let Err(e) = webui::start_web_ui(Arc::clone(&context), Arc::clone(&miner)) {
+            error!(target: LOG_TARGET_MAIN, "Unable to start web UI: {}", e);
+            exit(1);
+        }
+        #[cfg(not(feature = "webui"))]
+        {
+            error!(target: LOG_TARGET_MAIN, "This build of ALFIS has no web UI support!");
+            exit(1);
+        }
+    }
     if no_gui {
         print_my_domains(&context);
         let _ = network.join();

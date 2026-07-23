@@ -12,7 +12,6 @@ extern crate tinyfiledialogs as tfd;
 mod actions;
 mod dialogs;
 mod events;
-mod state;
 mod toasts;
 
 use std::sync::{Arc, Mutex};
@@ -30,7 +29,7 @@ use log::{debug, error, info, trace, warn};
 use lumio::prelude::*;
 
 use actions::{action_load_key, action_save_key, action_select_key};
-use state::UiStatus;
+use alfis::commons::status::UiStatus;
 use toasts::{add_event_row, Severity};
 
 const WIDTH: u32 = 800;

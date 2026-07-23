@@ -11,6 +11,7 @@ pub use crate::miner::Miner;
 pub use crate::p2p::Network;
 pub use crate::settings::Settings;
 
+pub mod actions;
 pub mod blockchain;
 pub mod bytes;
 pub mod codec;

@@ -140,11 +140,36 @@ Just unzip that archive in some directory and run `alfis` (or `alfis.exe`) binar
 By default, it searches for a config file, named `alfis.toml` in current working directory, and creates/changes `blockchain.db` file in the same directory.
 If you want it to load config from another file you can command it so: `alfis -c /etc/alfis.conf`.
 
+### Web UI (manage a headless node from your browser)
+If you run ALFIS on a server (with `-n`), you can manage keys and domains through a browser instead of the desktop GUI.
+Set a password in the `[webui]` section of `alfis.toml` and start ALFIS with the `--web-ui` switch:
+```toml
+[webui]
+listen = "127.0.0.1:8082"
+password = "your-strong-password"
+```
+```shell
+alfis -n --web-ui
+```
+Then open `http://127.0.0.1:8082` in a browser. The web UI refuses to start without a password.
+
+The server speaks plain HTTP, so keep it bound to localhost and access it through an SSH tunnel
+(`ssh -L 8082:127.0.0.1:8082 your-server`), or put a TLS reverse proxy in front of it, for example nginx:
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8082;
+    proxy_buffering off;    # needed for the live event stream
+    proxy_read_timeout 90;
+}
+```
+New keys mined through the web UI are saved in the working directory of the server;
+add them to `key_files` in the config to load them after a restart, and back them up.
+
 ## Roadmap
 1. Stabilize blockchain functions (domain transfer, info & contacts in UI), bug hunting and fixing. ✅
 2. ~~Change DNS server/proxy to own resource saving implementation (using trust-dns-proto for RR parsing).~~
 3. P2P traffic encryption (ECDH). ✅
-4. ~~Web-GUI to manage your node from browser.~~
+4. Web-GUI to manage your node from browser. ✅
 
 ## Remarkable contributions
 * [@umasterov](https://github.com/umasterov) contributed fantastic logo for this project.
