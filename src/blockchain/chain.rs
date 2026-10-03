@@ -55,6 +55,12 @@ lazy_static! {
         Bytes::from_bytes(&from_hex("4448E0582878FCB982C0DDAFEB441A03A30FB62FA6ECD1EA4D51C29A30980000").unwrap()),
         Bytes::from_bytes(&from_hex("0000010771885DE68AEF3CE0A590E4C2E087CE00723B927342A3C23E5A23A8C8").unwrap())
     ];
+    /// Blocks of the network's chain at heights where stray side branches are known to exist.
+    /// A different block at such height is ejected with everything above it.
+    static ref CHECKPOINTS: Vec<(u64, Bytes)> = vec![
+        // Pre-0.10 nodes reject this block (no RFC-0003 bans) and could build their own branch from here
+        (22534, Bytes::from_bytes(&from_hex("00FAF6041263E7CF26AA3D489E204487AB53E409039088338D85D387E93DAD00").unwrap()))
+    ];
 }
 
 /// Max possible block index
@@ -108,6 +114,7 @@ impl Chain {
     }
 
     pub fn check_chain(&mut self, count: u64) {
+        self.eject_off_checkpoint_branch();
         let height = self.get_height();
         let start = if height > count {
             info!("Checking last {} blocks...", count);
@@ -184,7 +191,31 @@ impl Chain {
         debug!("Last block after chain check: {:?}", &self.last_block);
     }
 
+    /// Truncates the chain at the first checkpoint our block disagrees with, whatever the check depth is
+    fn eject_off_checkpoint_branch(&mut self) {
+        for (index, hash) in CHECKPOINTS.iter() {
+            let block = match self.get_block(*index) {
+                Some(block) => block,
+                None => break
+            };
+            if &block.hash != hash {
+                warn!("Block {} is not on the network's chain, truncating database from it...", index);
+                if let Err(e) = self.truncate_db_from_block(*index) {
+                    error!("{}", e);
+                    panic!("Error truncating database! Please, delete 'blockchain.db' and restart.");
+                }
+                self.last_full_block = None;
+                self.last_block = self.load_last_block();
+                self.last_full_block = self.get_last_full_block(MAX, None);
+                break;
+            }
+        }
+    }
+
     fn truncate_db_from_block(&mut self, index: u64) -> sqlite::Result<State> {
+        self.signers.borrow_mut().clear();
+        self.healing.borrow_mut().clear();
+        self.bans.borrow_mut().clear();
         let mut statement = self.db.prepare(SQL_TRUNCATE_BLOCKS)?;
         statement.bind((1, index as i64))?;
         statement.next()?;
@@ -281,9 +312,6 @@ impl Chain {
 
     pub fn replace_block(&mut self, block: Block) -> sqlite::Result<()> {
         info!("Replacing block {} with:\n{:?}", block.index, &block);
-        self.signers.borrow_mut().clear();
-        self.healing.borrow_mut().clear();
-        self.bans.borrow_mut().clear();
         self.truncate_db_from_block(block.index)?;
         self.add_block(block);
         Ok(())
@@ -1128,6 +1156,10 @@ impl Chain {
             warn!("Got block with hash from wrong hashes.");
             return Bad;
         }
+        if CHECKPOINTS.iter().any(|(index, hash)| *index == block.index && *hash != block.hash) {
+            warn!("Ignoring block {} off the network's chain checkpoint", block.index);
+            return Bad;
+        }
         let timestamp = Utc::now().timestamp();
         if block.timestamp > timestamp + 60 {
             warn!("Ignoring block from the future:\n{:?}", &block);
@@ -1248,9 +1280,24 @@ impl Chain {
                     warn!("Block {} arrived too early.", block.index);
                     return Future;
                 }
+                if block.index <= last_block.index {
+                    // A block we already have is not re-judged against a window it does not belong to
+                    if let Some(my_block) = self.get_block(block.index) {
+                        if my_block.hash == block.hash {
+                            debug!("Ignoring block {}, we already have it", block.index);
+                            return Twin;
+                        }
+                    }
+                }
                 if block.index > BLOCK_SIGNERS_START {
+                    // A fork candidate belongs to the window of the full block preceding it, not of our tip
+                    let window_full_block = if block.index <= last_block.index {
+                        self.get_last_full_block(block.index, None)
+                    } else {
+                        last_full_block.clone()
+                    };
                     // If this block is main, signed part of blockchain
-                    if !self.is_good_sign_block(block, last_full_block) {
+                    if !self.is_good_sign_block(block, &window_full_block) {
                         return Bad;
                     }
                 }
@@ -1548,6 +1595,7 @@ pub mod tests {
     use simplelog::{ColorChoice, ConfigBuilder, TermLogger, TerminalMode, LevelPadding, format_description};
 
     use crate::{Block, Chain, Settings};
+    use crate::blockchain::types::BlockQuality;
 
     fn init_logger() {
         let config = ConfigBuilder::new()
@@ -1571,6 +1619,17 @@ pub mod tests {
         let mut chain = Chain::new(&settings, "./tests/blockchain.db");
         chain.check_chain(u64::MAX);
         assert_eq!(chain.get_height(), 149);
+    }
+
+    #[test]
+    pub fn resubmitted_blocks_are_twins() {
+        // Blocks we already have must not be judged against the signing window of our tip
+        let settings = Settings::default();
+        let chain = Chain::new(&settings, "./tests/blockchain.db");
+        for index in 2..=chain.get_height() {
+            let block = chain.get_block(index).unwrap();
+            assert!(chain.check_new_block(&block) == BlockQuality::Twin, "block {}", index);
+        }
     }
 
     #[test]
