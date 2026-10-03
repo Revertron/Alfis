@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 
-# Multi-arch, build-from-source image for Alfis (server / no-GUI, DoH enabled).
+# Multi-arch, build-from-source image for Alfis (server / no desktop GUI,
+# DoH and the optional Web UI enabled).
 #
 # linux/amd64 and linux/arm64 are cross-compiled with cargo-zigbuild, so both
 # are built natively on the (amd64) runner with no QEMU emulation. The runtime
@@ -23,10 +24,12 @@ RUN curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${Z
 RUN cargo install cargo-zigbuild --locked \
  && rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
 
-# Alfis cargo features to build with. Default: DoH on, GUI off (a server image).
-# Set FEATURES="" for a plain-DNS build with no bundled TLS stack.
+# Alfis cargo features to build with. Default: DoH and Web UI support on,
+# desktop GUI off (a server image). The Web UI is still disabled at runtime
+# unless Alfis is started with --web-ui and a password is configured.
+# Set FEATURES="" for a plain-DNS build with no bundled TLS or Web UI support.
 # (SQLite is always statically bundled below, independent of this.)
-ARG FEATURES=doh
+ARG FEATURES=doh,webui
 
 # Target glibc, pinned at/below the distroless runtime's glibc (2.36) so the
 # binary stays forward-compatible.
@@ -64,7 +67,7 @@ RUN --mount=type=cache,target=/root/.cargo/registry,sharing=locked \
 FROM gcr.io/distroless/cc-debian13 AS runtime
 
 LABEL org.opencontainers.image.title="Alfis"
-LABEL org.opencontainers.image.description="Alfis - peer-to-peer blockchain DNS (server, no-GUI)"
+LABEL org.opencontainers.image.description="Alfis - peer-to-peer blockchain DNS server with optional Web UI"
 LABEL org.opencontainers.image.source="https://github.com/Revertron/Alfis"
 LABEL org.opencontainers.image.url="https://alfis.name"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
@@ -74,10 +77,11 @@ COPY --from=builder /alfis /usr/bin/alfis
 # your own config over /etc/alfis.conf.
 COPY contrib/docker/alfis.toml /etc/alfis.conf
 
-# P2P (4244) and DNS (53 tcp + udp).
+# P2P (4244), DNS (53 tcp + udp), and the optional Web UI (8082).
 EXPOSE 4244
 EXPOSE 53/tcp
 EXPOSE 53/udp
+EXPOSE 8082/tcp
 
 # Blockchain DB and any key files live here; mount a volume to persist them.
 VOLUME /var/lib/alfis
