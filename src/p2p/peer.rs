@@ -74,6 +74,11 @@ impl Peer {
         self.requested_blocks.insert(index);
     }
 
+    /// Whether a `GetBlock { index }` to this peer is still unanswered.
+    pub fn has_requested_block(&self, index: u64) -> bool {
+        self.requested_blocks.contains(&index)
+    }
+
     /// Consume the entry for `index`. Returns `true` if we actually asked for it.
     /// A `false` return means the reply was unsolicited.
     pub fn take_requested_block(&mut self, index: u64) -> bool {
