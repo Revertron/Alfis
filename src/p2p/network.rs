@@ -709,10 +709,15 @@ impl Network {
             }
             Message::Block { index, block } => {
                 let peer = self.peers.get_mut_peer(token).unwrap();
-                // Only accept blocks we asked *this* peer for. Unsolicited ones are dropped, but the
-                // peer is not banned: all nodes up to now push their block when they find it better
+                // Only accept blocks we asked *this* peer for. Unsolicited ones are dropped unparsed.
+                // A few are tolerated: all nodes up to now push their block when they find it better
                 // than our fork, and a late reply to a duplicate request looks just the same.
+                // A peer that keeps sending them is flooding us and gets banned.
                 if !peer.take_requested_block(index) {
+                    if peer.add_unsolicited_block() {
+                        warn!("Too many unsolicited blocks from {}, banning", peer.get_addr().ip());
+                        return State::Banned;
+                    }
                     debug!("Unsolicited Block {} from {}, dropping", index, peer.get_addr().ip());
                     return State::idle();
                 }
