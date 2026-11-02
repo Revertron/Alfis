@@ -47,9 +47,19 @@ pub struct Network {
     /// that bottomed at Bad, or deep Fork). Any peer sending one of these is banned
     /// on sight without re-running validation or walking the parent chain again.
     bad_blocks: HashSet<Bytes>,
-    /// Per-peer Vec of block hashes the peer has served us as Rewind, in order.
-    /// On Bad we promote the whole Vec to `bad_blocks`; on Good we drop it.
-    rewind_walks: HashMap<Token, Vec<Bytes>>,
+    /// Per-peer walk down the parent chain of blocks the peer has served us as Rewind.
+    /// On Bad we promote the whole walk to `bad_blocks`; on Good we drop it.
+    rewind_walks: HashMap<Token, RewindWalk>,
+}
+
+/// A chain of blocks served by one peer as Rewind, each one the parent of the previous.
+struct RewindWalk {
+    /// Index of the first (highest) block of the walk
+    top_index: u64,
+    /// Hashes of all blocks of the walk, from top to bottom
+    hashes: Vec<Bytes>,
+    /// Hash of the block we requested to continue the walk
+    parent_hash: Bytes,
 }
 
 impl Network {
@@ -83,8 +93,8 @@ impl Network {
 
     /// Promote every hash a peer served us during a Rewind walk into `bad_blocks`.
     fn promote_rewind_walk_to_bad(&mut self, token: &Token) {
-        if let Some(hashes) = self.rewind_walks.remove(token) {
-            for h in hashes {
+        if let Some(walk) = self.rewind_walks.remove(token) {
+            for h in walk.hashes {
                 self.remember_bad(h);
             }
         }
@@ -637,11 +647,11 @@ impl Network {
                 if seen_blocks.contains(&hash) {
                     return State::message(Message::pong(my_height, my_hash));
                 }
-                if peer.is_higher(my_height) {
+                if peer.is_higher(my_height) && !peer.has_requested_block(my_height + 1) {
                     info!("Peer is higher, requesting block {} from {}", my_height + 1, peer.get_addr().ip());
                     peer.add_requested_block(my_height + 1);
                     State::message(Message::GetBlock { index: my_height + 1 })
-                } else if my_height == height && hash.ne(&my_hash) {
+                } else if my_height == height && hash.ne(&my_hash) && !peer.has_requested_block(my_height) {
                     info!("Hashes are different, requesting block {} from {}", my_height, peer.get_addr().ip());
                     info!("My hash: {:?}, their hash: {:?}", &my_hash, &hash);
                     peer.add_requested_block(my_height);
@@ -658,11 +668,11 @@ impl Network {
                 if seen_blocks.contains(&hash) {
                     return State::idle();
                 }
-                if peer.is_higher(my_height) {
+                if peer.is_higher(my_height) && !peer.has_requested_block(my_height + 1) {
                     info!("Peer is higher, requesting block {} from {}", my_height + 1, peer.get_addr().ip());
                     peer.add_requested_block(my_height + 1);
                     State::message(Message::GetBlock { index: my_height + 1 })
-                } else if my_height == height && hash.ne(&my_hash) {
+                } else if my_height == height && hash.ne(&my_hash) && !peer.has_requested_block(my_height) {
                     info!("Hashes are different, requesting block {} from {}", my_height, peer.get_addr().ip());
                     info!("My hash: {:?}, their hash: {:?}", &my_hash, &hash);
                     peer.add_requested_block(my_height);
@@ -699,10 +709,17 @@ impl Network {
             }
             Message::Block { index, block } => {
                 let peer = self.peers.get_mut_peer(token).unwrap();
-                // only accept blocks we asked *this* peer for
+                // Only accept blocks we asked *this* peer for. Unsolicited ones are dropped unparsed.
+                // A few are tolerated: all nodes up to now push their block when they find it better
+                // than our fork, and a late reply to a duplicate request looks just the same.
+                // A peer that keeps sending them is flooding us and gets banned.
                 if !peer.take_requested_block(index) {
-                    warn!("Unsolicited Block {} from {}, dropping", index, peer.get_addr().ip());
-                    return State::Banned;
+                    if peer.add_unsolicited_block() {
+                        warn!("Too many unsolicited blocks from {}, banning", peer.get_addr().ip());
+                        return State::Banned;
+                    }
+                    debug!("Unsolicited Block {} from {}, dropping", index, peer.get_addr().ip());
+                    return State::idle();
                 }
                 peer.set_active(true);
                 let block: Block = match Block::from_bytes(block.as_slice()) {
@@ -837,8 +854,19 @@ impl Network {
                 // Track this block in the peer's Rewind walk. If the walk eventually
                 // bottoms at Bad, the whole walk is promoted to bad_blocks so future
                 // peers serving the same fork-chain are banned on first contact.
-                if self.rewind_walks.len() < MAX_REWIND_WALKS || self.rewind_walks.contains_key(token) {
-                    self.rewind_walks.entry(*token).or_default().push(block_hash);
+                let parent_hash = block.prev_block_hash.clone();
+                match self.rewind_walks.get_mut(token) {
+                    // This block continues the walk, it is the parent we've asked for
+                    Some(walk) if walk.parent_hash == block_hash => {
+                        walk.hashes.push(block_hash);
+                        walk.parent_hash = parent_hash;
+                    }
+                    _ => {
+                        if self.rewind_walks.len() < MAX_REWIND_WALKS || self.rewind_walks.contains_key(token) {
+                            let walk = RewindWalk { top_index: block.index, hashes: vec![block_hash], parent_hash };
+                            self.rewind_walks.insert(*token, walk);
+                        }
+                    }
                 }
                 return State::message(Message::GetBlock { index: parent });
             }
@@ -857,14 +885,38 @@ impl Network {
                 }
                 // If we are very much behind of blockchain
                 let lagged = block.index == height && block.index + LIMITED_CONFIDENCE_DEPTH <= max_height;
+                // If this fork block is the bottom of a walk this peer started above our tip, the peer
+                // has a longer chain than ours. We go with it, or we'd refuse it forever whenever our
+                // block at the fork point happens to be "better", and never sync past our own tip.
+                let longer = match self.rewind_walks.get(token) {
+                    Some(walk) => walk.parent_hash == block.hash && walk.top_index > height,
+                    None => false
+                };
                 let our_block = context.chain.get_block(block.index).unwrap();
-                if block.is_better_than(&our_block) || lagged {
+                if longer || lagged || block.is_better_than(&our_block) {
+                    if longer {
+                        info!("Peer has a longer chain forked at block {}, switching to it", block.index);
+                    }
+                    let next = block.index + 1;
                     context.chain.replace_block(block).expect("Error replacing block with fork");
                     let index = context.chain.get_height();
                     post(crate::event::Event::BlockchainChanged { index });
+                    drop(context);
+                    // Blocks we kept for the abandoned branch are of no use now
+                    self.future_blocks.clear();
+                    self.rewind_walks.remove(token);
+                    if longer {
+                        // The peer has the rest of its chain, continue right away
+                        if let Some(peer) = self.peers.get_mut_peer(token) {
+                            peer.add_requested_block(next);
+                        }
+                        return State::message(Message::GetBlock { index: next });
+                    }
                 } else {
                     debug!("Fork in not better than our block, dropping.");
-                    return State::message(Message::block(our_block.index, our_block.as_bytes()));
+                    // Pushing our block unasked gets us banned by the peer, so we only ping it with our
+                    // tip. If it has the same height it will request our block and judge it by itself.
+                    return State::message(Message::ping(height, context.chain.get_last_hash()));
                 }
             }
         }

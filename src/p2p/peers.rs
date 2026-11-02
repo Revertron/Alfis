@@ -56,17 +56,19 @@ impl Peers {
     }
 
     /// Trusted network height.
-    /// - Post-bootstrap: among active peers with at least one served-Good block,
-    ///   return the height of the one that served the most. Sybils that never
-    ///   produced a valid block for us are excluded entirely.
+    /// - Post-bootstrap: the highest height among active peers that served us at least
+    ///   one Good block. Sybils that never produced a valid block for us are excluded
+    ///   entirely. Taking the most prolific server instead pinned us to the height of
+    ///   whichever peer fed us the bulk of the chain, even after it got stuck (e.g. an
+    ///   old node sitting on a side branch), and sync stopped there.
     /// - During bootstrap (no peer has earned trust yet): fall back to the highest
     ///   claim among active peers so initial sync can start. Once the first Good
     ///   block lands, we exit bootstrap and Sybils stop influencing the value.
     pub fn corroborated_max_height(&self) -> Option<u64> {
         let trusted = self.peers.values()
             .filter(|p| p.active() && p.served_good_blocks() > 0)
-            .max_by_key(|p| p.served_good_blocks())
-            .map(|p| p.get_height());
+            .map(|p| p.get_height())
+            .max();
         if let Some(h) = trusted {
             return Some(h);
         }
@@ -339,8 +341,11 @@ impl Peers {
         // Just purging ignored/banned IPs every 10 minutes
         self.ignored.retain(|_addr, time| { time.elapsed().as_secs() < 600 });
 
-        // If someone has more blocks we sync
-        if nodes >= MIN_CONNECTED_NODES_START_SYNC && height < max_height {
+        // If someone has more blocks we sync. Once some peer has proven itself by serving a Good
+        // block we don't wait for more peers: with many old nodes banned by version, a node can
+        // have fewer than MIN_CONNECTED_NODES_START_SYNC usable peers for a long time.
+        let enough_nodes = nodes >= MIN_CONNECTED_NODES_START_SYNC || (nodes > 0 && !self.bootstrap_phase);
+        if enough_nodes && height < max_height {
             // Give some opportunity to get more peers instead of requests for blocks only
             let request_blocks = nodes >= 10 || random::<bool>();
             if request_blocks {

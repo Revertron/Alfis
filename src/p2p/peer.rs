@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::net::SocketAddr;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use mio::net::TcpStream;
 
@@ -10,6 +10,11 @@ use crate::p2p::State;
 
 /// Cap per-peer requested-blocks set so a misbehaving peer can't bloat memory.
 const MAX_REQUESTED_PER_PEER: usize = 256;
+/// How many unsolicited blocks a peer may send us within `UNSOLICITED_WINDOW` before we ban it.
+/// Honest nodes send a few: they push their block when they find it better than our fork,
+/// and replies to duplicate requests arrive after the first one was consumed.
+const MAX_UNSOLICITED_BLOCKS: u32 = 3;
+const UNSOLICITED_WINDOW: Duration = Duration::from_secs(60);
 
 #[derive(Debug)]
 pub struct Peer {
@@ -31,6 +36,9 @@ pub struct Peer {
     /// Number of blocks this peer has served us that we accepted as Good.
     /// Used to weight which peers' height claims drive `max_height`.
     served_good_blocks: u64,
+    /// Start of the current unsolicited blocks counting window, and the count in it.
+    unsolicited_since: Instant,
+    unsolicited_count: u32,
 }
 
 impl Peer {
@@ -51,6 +59,8 @@ impl Peer {
             cipher: None,
             requested_blocks: HashSet::new(),
             served_good_blocks: 0,
+            unsolicited_since: Instant::now(),
+            unsolicited_count: 0,
         }
     }
 
@@ -72,6 +82,22 @@ impl Peer {
             }
         }
         self.requested_blocks.insert(index);
+    }
+
+    /// Registers a block this peer sent us without our request.
+    /// Returns `true` if the peer has exceeded the allowed rate and has to be banned.
+    pub fn add_unsolicited_block(&mut self) -> bool {
+        if self.unsolicited_since.elapsed() >= UNSOLICITED_WINDOW {
+            self.unsolicited_since = Instant::now();
+            self.unsolicited_count = 0;
+        }
+        self.unsolicited_count = self.unsolicited_count.saturating_add(1);
+        self.unsolicited_count > MAX_UNSOLICITED_BLOCKS
+    }
+
+    /// Whether a `GetBlock { index }` to this peer is still unanswered.
+    pub fn has_requested_block(&self, index: u64) -> bool {
+        self.requested_blocks.contains(&index)
     }
 
     /// Consume the entry for `index`. Returns `true` if we actually asked for it.
@@ -243,5 +269,41 @@ impl Display for Peer {
             State::Offline { .. } => "Offline"
         };
         write!(f, "{:?} {}", &self.addr, state)
+    }
+}
+#[cfg(test)]
+mod tests {
+    use std::net::{SocketAddr, TcpListener};
+    use std::time::{Duration, Instant};
+
+    use mio::net::TcpStream;
+
+    use super::{Peer, MAX_UNSOLICITED_BLOCKS, UNSOLICITED_WINDOW};
+    use crate::p2p::State;
+
+    fn make_peer() -> (Peer, TcpListener) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr: SocketAddr = listener.local_addr().unwrap();
+        let stream = TcpStream::connect(addr).unwrap();
+        (Peer::new(addr, stream, State::idle(), false), listener)
+    }
+
+    #[test]
+    fn unsolicited_blocks_are_rate_limited() {
+        let (mut peer, _listener) = make_peer();
+        for _ in 0..MAX_UNSOLICITED_BLOCKS {
+            assert!(!peer.add_unsolicited_block());
+        }
+        assert!(peer.add_unsolicited_block());
+    }
+
+    #[test]
+    fn unsolicited_window_resets() {
+        let (mut peer, _listener) = make_peer();
+        for _ in 0..MAX_UNSOLICITED_BLOCKS {
+            assert!(!peer.add_unsolicited_block());
+        }
+        peer.unsolicited_since = Instant::now() - UNSOLICITED_WINDOW - Duration::from_secs(1);
+        assert!(!peer.add_unsolicited_block());
     }
 }
