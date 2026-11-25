@@ -17,3 +17,28 @@ Or publish only the ports you need instead of --net=host:
 
 Provide your own config by mounting it over /etc/alfis.conf. To build the image
 locally from source instead of pulling, run `make build` in this directory.
+
+## Web UI
+
+The image includes Web UI support, but it remains disabled unless Alfis is
+started with `--web-ui` and a non-empty password is configured. Copy
+`contrib/docker/alfis.toml`, uncomment its `[webui]` section, and replace the
+example password. Keep `listen = "0.0.0.0:8082"`: this makes the service
+reachable through Docker's port mapping, while the host-side `127.0.0.1`
+binding below prevents direct LAN access.
+
+    docker run -d --name alfis \
+      -p 127.0.0.1:8082:8082 \
+      -p 4244:4244 \
+      -v $(pwd)/cache:/var/lib/alfis \
+      -v $(pwd)/alfis.toml:/etc/alfis.conf:ro \
+      ghcr.io/revertron/alfis:latest \
+      -n --web-ui -c /etc/alfis.conf
+
+Access it from another machine through an SSH tunnel:
+
+    ssh -L 8082:127.0.0.1:8082 user@server
+
+Then open http://127.0.0.1:8082 in a browser. The Web UI uses plain HTTP, so do
+not publish port 8082 on all host interfaces unless a TLS reverse proxy and
+appropriate access controls are in place.

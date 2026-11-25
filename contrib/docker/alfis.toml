@@ -41,3 +41,11 @@ enable_0x20 = true
 threads = 0
 # Lower priority for mining threads
 lower = true
+
+# Optional password-protected Web UI. It is only started when Alfis is run
+# with --web-ui. Inside a container, listen on all container interfaces and
+# restrict access with a localhost-only Docker port publication such as
+# `-p 127.0.0.1:8082:8082`.
+#[webui]
+#listen = "0.0.0.0:8082"
+#password = "replace-with-a-strong-password"
